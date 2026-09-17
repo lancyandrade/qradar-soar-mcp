@@ -52,7 +52,6 @@ class Fault:
     body: Any = None
     raw_body: bytes | None = None
     exc: type[httpx.HTTPError] | None = None
-    exc_cause: BaseException | None = None
     headers: dict[str, str] = field(default_factory=dict)
     times: int | None = None  # None = every time
     chunked: bool = False  # stream raw_body without a Content-Length header
@@ -186,10 +185,9 @@ class FakeSoar:
                         continue
                     fault.times -= 1
                 if fault.exc is not None:
-                    exc = fault.exc("injected", request=request)
-                    if fault.exc_cause is not None:
-                        exc.__cause__ = fault.exc_cause
-                    raise exc
+                    # Note: respx rewrites __cause__ on the way out; a TLS cause cannot be
+                    # modelled here (see test_client_base.test_tls_failure_is_reported_as_tls).
+                    raise fault.exc("injected", request=request)
                 if fault.raw_body is not None:
                     if fault.chunked:
                         return httpx.Response(
