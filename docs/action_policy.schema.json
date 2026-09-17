@@ -1,0 +1,173 @@
+{
+  "$defs": {
+    "Constraints": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_values": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allow Values",
+          "type": "array"
+        },
+        "artifact_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Types",
+          "type": "array"
+        },
+        "deny_values": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Deny Values",
+          "type": "array"
+        }
+      },
+      "title": "Constraints",
+      "type": "object"
+    },
+    "DefaultSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "default": "deny",
+          "enum": [
+            "allow",
+            "deny",
+            "require_approval"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "tier": {
+          "default": 5,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Tier",
+          "type": "integer"
+        }
+      },
+      "title": "DefaultSpec",
+      "type": "object"
+    },
+    "MatchSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "name_regex": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name Regex"
+        }
+      },
+      "title": "MatchSpec",
+      "type": "object"
+    },
+    "RuleSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "$ref": "#/$defs/Constraints"
+        },
+        "decision": {
+          "enum": [
+            "allow",
+            "deny",
+            "require_approval"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "destructive": {
+          "default": false,
+          "title": "Destructive",
+          "type": "boolean"
+        },
+        "match": {
+          "$ref": "#/$defs/MatchSpec"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "tier": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Tier",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "match",
+        "tier",
+        "decision"
+      ],
+      "title": "RuleSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The JSON Schema of the policy file is emitted from this model.",
+  "properties": {
+    "actions": {
+      "items": {
+        "$ref": "#/$defs/RuleSpec"
+      },
+      "title": "Actions",
+      "type": "array"
+    },
+    "default": {
+      "$ref": "#/$defs/DefaultSpec"
+    },
+    "version": {
+      "const": 1,
+      "title": "Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "title": "PolicyDocument",
+  "type": "object"
+}
