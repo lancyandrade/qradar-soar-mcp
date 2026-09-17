@@ -231,8 +231,20 @@ error text.
 ## 14. Configuration parsing details (P1-02)
 
 - Booleans: exactly `true`/`1`/`yes`/`on` (case-insensitive, **no whitespace
-  trimming**) ⇒ true; everything else ⇒ false. Empty-but-present or
-  unrecognised values log a warning naming the variable; absent values do not.
+  trimming**) ⇒ true; `false`/`0`/`no`/`off` ⇒ false; anything else resolves
+  to the **safe** side — `false` for every capability flag (`SOAR_ALLOW_*`,
+  `SOAR_LAB_MODE`, `SOAR_HTTP_ACKNOWLEDGE_EXPOSURE`), `true` for the safety
+  switches (`SOAR_REQUIRE_ACTION_CONFIRMATION`,
+  `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION`, `SOAR_AUDIT_REQUIRED`). Empty-but-present
+  or unrecognised values log a warning naming the variable; absent values do
+  not.
+- `SOAR_ORG_ID`: unparseable or non-positive ⇒ connection disabled plus a
+  warning (every tool that reaches SOAR then fails with `not_configured`).
+- `SOAR_MAX_MUTATIONS_PER_CALL`: values other than `1` are clamped to `1` with
+  a warning (`05 U10`: bulk mutation is a Tier-5 non-goal).
+- Code defaults for the state paths are relative (`approvals`, `audit.jsonl`,
+  `snapshots`, `HALT`, `out/playbooks`); `env.example` shows the recommended
+  absolute locations.
 - `SOAR_VERIFY_SSL`: `true`, `false`, or a CA-bundle path that must exist;
   anything else refuses to start (a misread TLS setting must not pick a side).
 - Integers: unparseable or out-of-range ⇒ documented default plus a warning.

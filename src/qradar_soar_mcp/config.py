@@ -26,14 +26,14 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BeforeValidator, SecretStr, ValidationError, model_validator
+from pydantic import BeforeValidator, SecretStr, ValidationError, ValidationInfo, model_validator
 from pydantic_settings import (
     BaseSettings,
     EnvSettingsSource,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
-from pydantic_settings.sources import parse_env_vars
+from pydantic_settings.sources.utils import parse_env_vars
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +144,20 @@ def _float_parser(name: str, *, default: float, minimum: float) -> Callable[[Any
     return parse
 
 
+def _org_id(value: Any) -> int | None:
+    if value is None or (isinstance(value, str) and value.strip() == ""):
+        return None
+    try:
+        number = int(str(value).strip())
+    except ValueError:
+        _warn(f"SOAR_ORG_ID={value!r} is not an integer; connection disabled")
+        return None
+    if number <= 0:
+        _warn(f"SOAR_ORG_ID={number} is not positive; connection disabled")
+        return None
+    return number
+
+
 def _verify_ssl(value: Any) -> bool | Path:
     if isinstance(value, bool):
         return value
@@ -226,12 +240,21 @@ def is_loopback_host(host: str) -> bool:
         return False
 
 
-def Cap(name: str) -> Any:  # noqa: N802 - reads as a type constructor
-    return Annotated[bool, BeforeValidator(_bool_parser(name, safe=False))]
+def _env_name(info: ValidationInfo) -> str:
+    return f"SOAR_{(info.field_name or 'unknown').upper()}"
 
 
-def Safety(name: str) -> Any:  # noqa: N802
-    return Annotated[bool, BeforeValidator(_bool_parser(name, safe=True))]
+def _parse_capability(value: Any, info: ValidationInfo) -> bool:
+    return _bool_parser(_env_name(info), safe=False)(value)
+
+
+def _parse_safety(value: Any, info: ValidationInfo) -> bool:
+    return _bool_parser(_env_name(info), safe=True)(value)
+
+
+# A capability flag: unparseable ⇒ false. A safety switch: unparseable ⇒ true.
+Cap = Annotated[bool, BeforeValidator(_parse_capability)]
+Safety = Annotated[bool, BeforeValidator(_parse_safety)]
 
 
 # ------------------------------------------------------------------ source
@@ -239,8 +262,8 @@ class _MappingEnvSource(EnvSettingsSource):
     """The env source, reading from a supplied mapping instead of os.environ."""
 
     def __init__(self, settings_cls: type[BaseSettings], mapping: Mapping[str, str]) -> None:
+        self._mapping = dict(mapping)  # must exist before super().__init__ loads env vars
         super().__init__(settings_cls)
-        self._mapping = dict(mapping)
 
     def _load_env_vars(self) -> Mapping[str, str | None]:
         return parse_env_vars(
@@ -262,9 +285,7 @@ class Settings(BaseSettings):
 
     # ── connection ─────────────────────────────────────────────────────
     base_url: str = ""
-    org_id: Annotated[
-        int | None, BeforeValidator(_int_parser("SOAR_ORG_ID", default=0, minimum=1))
-    ] = None
+    org_id: Annotated[int | None, BeforeValidator(_org_id)] = None
     api_key_id: str = ""
     api_key_secret: Annotated[SecretStr, BeforeValidator(_secret)] = SecretStr("")
     verify_ssl: Annotated[bool | Path, BeforeValidator(_verify_ssl)] = True
@@ -276,36 +297,36 @@ class Settings(BaseSettings):
     ] = 50
 
     # ── Tier 1 ─────────────────────────────────────────────────────────
-    allow_comments: Cap("SOAR_ALLOW_COMMENTS") = False
-    allow_artifacts: Cap("SOAR_ALLOW_ARTIFACTS") = False
+    allow_comments: Cap = False
+    allow_artifacts: Cap = False
 
     # ── Tier 2 ─────────────────────────────────────────────────────────
-    allow_incident_writes: Cap("SOAR_ALLOW_INCIDENT_WRITES") = False
-    allow_task_writes: Cap("SOAR_ALLOW_TASK_WRITES") = False
-    allow_incident_close: Cap("SOAR_ALLOW_INCIDENT_CLOSE") = False
+    allow_incident_writes: Cap = False
+    allow_task_writes: Cap = False
+    allow_incident_close: Cap = False
 
     # ── Tier 3 ─────────────────────────────────────────────────────────
-    allow_actions: Cap("SOAR_ALLOW_ACTIONS") = False
-    allow_destructive_actions: Cap("SOAR_ALLOW_DESTRUCTIVE_ACTIONS") = False
+    allow_actions: Cap = False
+    allow_destructive_actions: Cap = False
     action_policy_file: Annotated[Path | None, BeforeValidator(_optional_path)] = None
 
     # ── Tier 4 (parsed and held; no Phase-1 consumer) ─────────────────
-    allow_playbook_draft: Cap("SOAR_ALLOW_PLAYBOOK_DRAFT") = False
-    allow_playbook_export: Cap("SOAR_ALLOW_PLAYBOOK_EXPORT") = False
-    allow_playbook_create: Cap("SOAR_ALLOW_PLAYBOOK_CREATE") = False
-    allow_playbook_modify: Cap("SOAR_ALLOW_PLAYBOOK_MODIFY") = False
-    allow_playbook_deploy: Cap("SOAR_ALLOW_PLAYBOOK_DEPLOY") = False
-    allow_playbook_enable: Cap("SOAR_ALLOW_PLAYBOOK_ENABLE") = False
+    allow_playbook_draft: Cap = False
+    allow_playbook_export: Cap = False
+    allow_playbook_create: Cap = False
+    allow_playbook_modify: Cap = False
+    allow_playbook_deploy: Cap = False
+    allow_playbook_enable: Cap = False
     playbook_export_dir: Annotated[Path, BeforeValidator(_path("out/playbooks"))] = Path(
         "out/playbooks"
     )
     # Reserved; must stay false (02 §2, 05 U4). True refuses to start.
-    allow_script_writes: Cap("SOAR_ALLOW_SCRIPT_WRITES") = False
+    allow_script_writes: Cap = False
 
     # ── approval ───────────────────────────────────────────────────────
     approval_mode: Annotated[str, BeforeValidator(_approval_mode)] = "out_of_band"
-    require_action_confirmation: Safety("SOAR_REQUIRE_ACTION_CONFIRMATION") = True
-    require_playbook_confirmation: Safety("SOAR_REQUIRE_PLAYBOOK_CONFIRMATION") = True
+    require_action_confirmation: Safety = True
+    require_playbook_confirmation: Safety = True
     approval_broker_path: Annotated[Path, BeforeValidator(_path("approvals"))] = Path("approvals")
     approval_public_key_file: Annotated[Path | None, BeforeValidator(_optional_path)] = None
     approval_ttl_seconds: Annotated[
@@ -331,7 +352,7 @@ class Settings(BaseSettings):
 
     # ── audit & safety ─────────────────────────────────────────────────
     audit_log_path: Annotated[Path, BeforeValidator(_path("audit.jsonl"))] = Path("audit.jsonl")
-    audit_required: Safety("SOAR_AUDIT_REQUIRED") = True
+    audit_required: Safety = True
     snapshot_dir: Annotated[Path, BeforeValidator(_path("snapshots"))] = Path("snapshots")
     kill_switch_file: Annotated[Path, BeforeValidator(_path("HALT"))] = Path("HALT")
     log_level: Annotated[str, BeforeValidator(_log_level)] = "INFO"
@@ -349,13 +370,13 @@ class Settings(BaseSettings):
         int, BeforeValidator(_int_parser("SOAR_MCP_PORT", default=8090, minimum=1, maximum=65535))
     ] = 8090
     http_auth_token: Annotated[SecretStr, BeforeValidator(_secret)] = SecretStr("")
-    http_acknowledge_exposure: Cap("SOAR_HTTP_ACKNOWLEDGE_EXPOSURE") = False
+    http_acknowledge_exposure: Cap = False
 
     # ── lab only ───────────────────────────────────────────────────────
-    lab_mode: Cap("SOAR_LAB_MODE") = False
+    lab_mode: Cap = False
 
     # ── deprecated ─────────────────────────────────────────────────────
-    allow_writes: Cap("SOAR_ALLOW_WRITES") = False
+    allow_writes: Cap = False
 
     # Warnings produced while parsing this instance (for `--check`).
     warnings: tuple[str, ...] = ()
@@ -382,9 +403,8 @@ class Settings(BaseSettings):
         if not isinstance(data, dict):
             return data
         raw = data.get("allow_writes")
-        if raw is None:
-            return data
-        if not _bool_parser("SOAR_ALLOW_WRITES", safe=False)(raw):
+        # Parsed silently here; the field validator reports any garbage once.
+        if raw is None or str(raw).lower() not in TRUE_VALUES:
             return data
         data = dict(data)
         for env_name in LEGACY_WRITES_TARGETS:
