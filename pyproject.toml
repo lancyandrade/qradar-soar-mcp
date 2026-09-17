@@ -1,0 +1,145 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qradar-soar-mcp"
+version = "0.2.0"
+description = "A security-first MCP server that connects Claude to IBM QRadar SOAR"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+authors = [{ name = "Lancy Andrade" }]
+keywords = ["mcp", "qradar", "soar", "resilient", "ibm", "claude", "security"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Information Technology",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Security",
+]
+dependencies = [
+  "mcp>=2.2,<3",
+  "httpx>=0.28,<1",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.15,<3",
+  "pyyaml>=6.0,<7",
+  "cryptography>=45,<51",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9.0",
+  "pytest-asyncio>=1.4",
+  "pytest-cov>=7.0",
+  "respx>=0.23",
+  "hypothesis>=6.100",
+  "syrupy>=6.0",
+  "freezegun>=1.5",
+  "ruff>=0.16",
+  "mypy>=2.0",
+  "types-PyYAML>=6.0",
+  "pip-audit>=2.9",
+  "pre-commit>=4.0",
+]
+
+[project.scripts]
+qradar-soar-mcp = "qradar_soar_mcp.cli:main"
+qradar-soar-approve = "qradar_soar_mcp.cli_approve:main"
+qradar-soar-audit = "qradar_soar_mcp.cli_audit:main"
+
+[project.urls]
+Homepage = "https://github.com/lancyandrade/qradar-soar-mcp"
+Issues = "https://github.com/lancyandrade/qradar-soar-mcp/issues"
+Security = "https://github.com/lancyandrade/qradar-soar-mcp/blob/main/SECURITY.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qradar_soar_mcp"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/scripts/probe/raw", "/tests/fixtures/raw", "/.github"]
+
+# ---------------------------------------------------------------------------
+# ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W",      # pycodestyle / pyflakes
+  "I",                # isort
+  "B",                # bugbear
+  "UP",               # pyupgrade
+  "S",                # bandit (security)
+  "T20",              # flake8-print: no print() — stdout is the MCP channel
+  "RUF",
+  "ANN",              # annotations
+  "SIM",
+  "PTH",
+  "N",
+  "ASYNC",
+  "LOG",
+  "G",
+]
+ignore = [
+  "ANN401",  # Any is sometimes the honest type for JSON
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S104", "S105", "S106", "S108", "ANN", "T20", "S603", "S607"]
+"scripts/**" = ["T20"]
+# The approval and audit CLIs are operator tools; printing is their job.
+"src/qradar_soar_mcp/cli_approve.py" = ["T20"]
+"src/qradar_soar_mcp/cli_audit.py" = ["T20"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ---------------------------------------------------------------------------
+# mypy
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+mypy_path = "src"
+packages = ["qradar_soar_mcp"]
+
+[[tool.mypy.overrides]]
+module = ["mcp.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# pytest / coverage
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
+markers = [
+  "contract: T2 contract tests against the mocked SOAR (respx + FakeSoar)",
+  "golden: T3 golden-file tests",
+  "lab: T4 read-only tests against a real SOAR (needs SOAR_TEST_BASE_URL)",
+  "lab_write: T5 mutating lab tests (disposable org)",
+  "lab_destructive: T6 destructive lab tests (mock AppHost only)",
+]
+filterwarnings = ["error::DeprecationWarning:qradar_soar_mcp.*"]
+
+[tool.coverage.run]
+source = ["qradar_soar_mcp"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "@overload",
+]
