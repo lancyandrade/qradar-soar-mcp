@@ -1,0 +1,50 @@
+{
+  "_fixture": "synthetic",
+  "_note": "Subset of GET /types/incident/fields. Built-in fields have no prefix; custom fields have prefix 'properties'. required is null | 'always' | 'close'.",
+  "data": [
+    {"id": 1, "name": "name", "text": "Name", "input_type": "text", "required": "always", "read_only": false, "internal": false},
+    {"id": 2, "name": "description", "text": "Description", "input_type": "textarea", "required": null, "read_only": false, "internal": false},
+    {"id": 3, "name": "severity_code", "text": "Severity", "input_type": "select", "required": null, "read_only": false, "internal": false,
+     "values": [
+       {"value": 4, "label": "Low", "enabled": true, "default": false},
+       {"value": 5, "label": "Medium", "enabled": true, "default": true},
+       {"value": 6, "label": "High", "enabled": true, "default": false}
+     ]},
+    {"id": 4, "name": "plan_status", "text": "Status", "input_type": "select", "required": null, "read_only": false, "internal": false,
+     "values": [
+       {"value": "A", "label": "Active", "enabled": true, "default": true},
+       {"value": "C", "label": "Closed", "enabled": true, "default": false}
+     ]},
+    {"id": 5, "name": "incident_type_ids", "text": "Incident Type", "input_type": "multiselect", "required": null, "read_only": false, "internal": false,
+     "values": [
+       {"value": 21, "label": "Phishing", "enabled": true, "default": false},
+       {"value": 22, "label": "Malware", "enabled": true, "default": false},
+       {"value": 23, "label": "Suspicious activity", "enabled": true, "default": false}
+     ]},
+    {"id": 6, "name": "owner_id", "text": "Owner", "input_type": "select_owner", "required": null, "read_only": false, "internal": false},
+    {"id": 7, "name": "phase_id", "text": "Phase", "input_type": "select", "required": null, "read_only": false, "internal": false,
+     "values": [
+       {"value": 1, "label": "Initial", "enabled": true, "default": true},
+       {"value": 2, "label": "Engage", "enabled": true, "default": false},
+       {"value": 3, "label": "Post-Incident", "enabled": true, "default": false}
+     ]},
+    {"id": 8, "name": "discovered_date", "text": "Date Discovered", "input_type": "datetimepicker", "required": "always", "read_only": false, "internal": false},
+    {"id": 9, "name": "create_date", "text": "Date Created", "input_type": "datetimepicker", "required": null, "read_only": true, "internal": true},
+    {"id": 10, "name": "start_date", "text": "Start Date", "input_type": "datetimepicker", "required": null, "read_only": false, "internal": false},
+    {"id": 11, "name": "due_date", "text": "Due Date", "input_type": "datetimepicker", "required": null, "read_only": false, "internal": false},
+    {"id": 12, "name": "end_date", "text": "Date Closed", "input_type": "datetimepicker", "required": null, "read_only": true, "internal": true},
+    {"id": 13, "name": "inc_last_modified_date", "text": "Last Modified", "input_type": "datetimepicker", "required": null, "read_only": true, "internal": true},
+    {"id": 14, "name": "resolution_id", "text": "Resolution", "input_type": "select", "required": "close", "read_only": false, "internal": false,
+     "values": [
+       {"value": 51, "label": "Not an Issue", "enabled": true, "default": false},
+       {"value": 52, "label": "Duplicate", "enabled": true, "default": false},
+       {"value": 53, "label": "Resolved", "enabled": true, "default": false},
+       {"value": 54, "label": "Unresolved", "enabled": true, "default": false}
+     ]},
+    {"id": 15, "name": "resolution_summary", "text": "Resolution Summary", "input_type": "textarea", "required": "close", "read_only": false, "internal": false},
+    {"id": 101, "name": "triage_summary", "prefix": "properties", "text": "Triage Summary", "input_type": "textarea", "required": null, "read_only": false, "internal": false},
+    {"id": 102, "name": "threat_source", "prefix": "properties", "text": "Threat Source", "input_type": "text", "required": null, "read_only": false, "internal": false},
+    {"id": 103, "name": "asset_count", "prefix": "properties", "text": "Asset Count", "input_type": "number", "required": null, "read_only": false, "internal": false},
+    {"id": 104, "name": "root_cause", "prefix": "properties", "text": "Root Cause", "input_type": "text", "required": "close", "read_only": false, "internal": false}
+  ]
+}

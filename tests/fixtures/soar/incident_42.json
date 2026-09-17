@@ -1,0 +1,29 @@
+{
+  "_fixture": "synthetic",
+  "_note": "Hand-written. Shape follows the SOAR IncidentDTO with handle_format=names; every value is invented. Only fields the Phase-1 contract relies on are present.",
+  "data": {
+    "id": 42,
+    "vers": 3,
+    "name": "Suspicious login from unusual location",
+    "description": "User jdoe signed in from a country not seen before. Please review.",
+    "plan_status": "A",
+    "severity_code": "Medium",
+    "incident_type_ids": ["Suspicious activity"],
+    "owner_id": "analyst.one",
+    "phase_id": "Engage",
+    "discovered_date": 1758000000000,
+    "create_date": 1758000060000,
+    "start_date": 1757999000000,
+    "due_date": null,
+    "end_date": null,
+    "inc_last_modified_date": 1758003700000,
+    "resolution_id": null,
+    "resolution_summary": null,
+    "properties": {
+      "triage_summary": null,
+      "threat_source": "unknown",
+      "asset_count": 1,
+      "root_cause": null
+    }
+  }
+}
