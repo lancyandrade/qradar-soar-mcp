@@ -159,6 +159,16 @@ def test_repr_str_and_dumps_never_contain_the_secret():
     assert Settings.load({}).safe_dump()["api_key_secret"] == ""
 
 
+def test_startup_self_test_passes_and_detects_leaks(monkeypatch):
+    s = Settings.load({"SOAR_API_KEY_SECRET": SENTINEL, "SOAR_HTTP_AUTH_TOKEN": SENTINEL})
+    s.assert_secrets_hidden()
+    # Simulate a future regression that renders the secret somewhere.
+    monkeypatch.setattr(Settings, "startup_summary", lambda self: f"caps {SENTINEL}")
+    with pytest.raises(ConfigError, match="self-test failed") as info:
+        s.assert_secrets_hidden()
+    assert SENTINEL not in str(info.value)
+
+
 def test_config_error_never_echoes_the_secret():
     with pytest.raises(ConfigError) as info:
         Settings.load({"SOAR_BASE_URL": "ftp://x", "SOAR_API_KEY_SECRET": SENTINEL})

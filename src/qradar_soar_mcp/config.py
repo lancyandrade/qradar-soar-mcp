@@ -522,6 +522,32 @@ class Settings(BaseSettings):
         data["http_auth_token"] = "***" if self.http_auth_token.get_secret_value() else ""
         return data
 
+    def assert_secrets_hidden(self) -> None:
+        """Startup self-test (02 §7): no secret may appear in the rendered configuration.
+
+        Raises:
+            ConfigError: if any configured secret is visible in ``repr``, ``str``,
+                ``model_dump`` or ``safe_dump``. The message names nothing sensitive.
+        """
+        import json
+
+        rendered = "\n".join(
+            (
+                repr(self),
+                str(self),
+                repr(self.model_dump()),
+                json.dumps(self.model_dump(mode="json"), default=str),
+                json.dumps(self.safe_dump(), default=str),
+                self.startup_summary(),
+            )
+        )
+        for secret in self.secret_values():
+            if secret in rendered:
+                raise ConfigError(
+                    "startup self-test failed: a configured secret is visible in the rendered "
+                    "configuration; refusing to start"
+                )
+
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     """Module-level convenience; ``env=None`` reads ``os.environ``."""
