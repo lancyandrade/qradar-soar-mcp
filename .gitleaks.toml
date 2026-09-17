@@ -1,0 +1,17 @@
+# gitleaks configuration (P1-12). Extends the default ruleset; the allowlist
+# covers the deliberately fake values the offline test suite uses.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic test values that must never be mistaken for real credentials"
+regexes = [
+  '''SENTINEL-SECRET-DO-NOT-LEAK-7f3a''',
+  '''WRONG-SECRET-VALUE-0000''',
+  '''fake-key-id''',
+  '''soar\.example\.internal''',
+]
+paths = [
+  '''tests/fixtures/.*\.json''',
+  '''docs/action_policy\.schema\.json''',
+]

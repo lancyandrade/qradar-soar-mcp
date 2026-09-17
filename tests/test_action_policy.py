@@ -14,6 +14,10 @@ from qradar_soar_mcp.security.tiers import Tier
 ROOT = Path(__file__).parent.parent
 EXAMPLE = ROOT / "config" / "action_policy.example.yaml"
 SCHEMA = ROOT / "docs" / "action_policy.schema.json"
+# RFC1918 targets are what the CIDR deny-list acceptance test is about (P1-06 AC).
+PRIVATE_A = "10.4.2.9"  # check_no_secrets:allow
+PRIVATE_B = "192.168.1.1"  # check_no_secrets:allow
+PRIVATE_C = "172.20.0.1"  # check_no_secrets:allow
 
 
 @pytest.fixture
@@ -53,15 +57,15 @@ def test_name_match_is_case_insensitive_exact(example: ActionPolicy):
 
 def test_cidr_deny_values_block_private_targets(example: ActionPolicy):
     r = example.classify(
-        action_name="Firewall — Block IP", target_values=["10.4.2.9"], artifact_type="IP Address"
+        action_name="Firewall — Block IP", target_values=[PRIVATE_A], artifact_type="IP Address"
     )
     assert r.constraint_violation is not None and "10.0.0.0/8" in r.constraint_violation
     r = example.classify(
-        action_name="Firewall — Block IP", target_values=["192.168.1.1"], artifact_type="IP Address"
+        action_name="Firewall — Block IP", target_values=[PRIVATE_B], artifact_type="IP Address"
     )
     assert "192.168.0.0/16" in (r.constraint_violation or "")
     r = example.classify(
-        action_name="Firewall — Block IP", target_values=["203.0.113.5", "172.20.0.1"]
+        action_name="Firewall — Block IP", target_values=["203.0.113.5", PRIVATE_C]
     )
     assert "172.16.0.0/12" in (r.constraint_violation or "")
 

@@ -34,6 +34,7 @@ from tests.fake_soar import API_KEY_ID, FakeSoar
 pytestmark = pytest.mark.contract
 
 INC = "/rest/orgs/201/incidents/42"
+WRONG_SECRET = "WRONG-SECRET-VALUE-0000"  # check_no_secrets:allow (deliberately wrong test key)
 
 
 @pytest.fixture
@@ -85,7 +86,7 @@ async def test_org_path(client: SoarClient):
 
 
 async def test_wrong_secret_is_auth_error_without_leak(fake: FakeSoar):
-    s = Settings.load(connection_env(SOAR_API_KEY_SECRET="WRONG-SECRET-VALUE-0000"))
+    s = Settings.load(connection_env(SOAR_API_KEY_SECRET=WRONG_SECRET))
     async with SoarClient(s) as c:
         with pytest.raises(SoarAuthError) as info:
             await c.get(INC)

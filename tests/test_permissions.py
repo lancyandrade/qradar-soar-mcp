@@ -218,7 +218,9 @@ def test_constraint_violation_denies_even_with_everything_on(policy_file):
         config=cfg,
         transport="stdio",
         policy=_policy(
-            3, "allow", violation="target '10.4.2.9' is denied by deny_values entry '10.0.0.0/8'"
+            3,
+            "allow",
+            violation="target '<private address>' is denied by deny_values entry '10.0.0.0/8'",
         ),
     )
     assert d.code is Code.DENY_TARGET and "10.0.0.0/8" in d.reason
