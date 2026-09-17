@@ -6,6 +6,21 @@
 *.key
 *.p12
 *.pfx
+*.crt
+config/action_policy.yaml
+config/*.local.yaml
+
+# SOAR exports, snapshots, approvals, audit — never commit runtime state
+*.resz
+*.res
+snapshots/
+approvals/
+*.jsonl
+out/
+
+# Unsanitised appliance captures (Phase 2 probes)
+scripts/probe/raw/
+tests/fixtures/raw/
 
 # Python
 __pycache__/
@@ -20,7 +35,9 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
 .coverage
+coverage.xml
 htmlcov/
 
 # IDE / OS
