@@ -6,9 +6,9 @@ conflicts with `00-` to `07-`, this document wins *for that point only*. It
 does not license any other redesign; anything not listed here is governed by
 `00-` to `07-` unchanged.
 
-`00-` to `07-` are the baseline and are not edited, with one exception made
-before first publication: the private lab topology was replaced by generic
-placeholders (§17).
+`00-` to `07-` are the baseline and are not edited, with two recorded
+exceptions: before first publication the private lab topology was replaced by
+generic placeholders (§17), and P2-00 added a status pointer to `05` (§20).
 
 ---
 
@@ -326,3 +326,12 @@ Mock AppHost and `tests/lab/` (`07 §7`), T4–T6 test tiers (registered as
 markers, skipped without `SOAR_TEST_BASE_URL`), the startup key-capability
 probe (`01 §6`; the introspection endpoint is ❓ U12), attachment contents, and
 every ⚠️/❓ endpoint of `05 §2–3`.
+
+## 20. P2-00 pointer in `05` (second baseline exception)
+
+Ticket `P2-00` requires `05-SOAR-API-SURFACE.md` to point at the verified
+record. On 2026-09-18 one status note was added under the confidence legend of
+`05`, naming `docs/soar-api-verified.md` as authoritative for QRadar SOAR
+`51.0.9.0.20848`. Nothing else in `05` was changed: its marks and research text
+are preserved as the pre-verification history, and the verified record states
+where it disagrees. No other baseline document was touched by P2-00.

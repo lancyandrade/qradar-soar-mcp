@@ -1,0 +1,41 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "is_list": false,
+    "paging_keys": [
+      "recordsTotal"
+    ],
+    "row_keys": [],
+    "rows": "0",
+    "rows_returned_at_most_one": true,
+    "wrapper_keys": [
+      "data",
+      "recordsFiltered",
+      "recordsTotal"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "two conditions in ONE filter",
+  "_question": "P1",
+  "_request": {
+    "method": "POST",
+    "path": "/rest/orgs/{org_id}/incidents/query_paged",
+    "query_keys": [
+      "handle_format",
+      "return_level",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<1KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "data": [],
+    "recordsFiltered": "int",
+    "recordsTotal": "int"
+  }
+}

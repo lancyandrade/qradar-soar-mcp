@@ -1,0 +1,86 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "status": [
+      "O"
+    ]
+  },
+  "_error": null,
+  "_facts": {},
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "OQ1",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/tasks/{task_id}",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "actions": [],
+    "active": "bool",
+    "at_id": "str",
+    "attachments_count": "int",
+    "auto_deactivate": "bool",
+    "cat_name": "str",
+    "category_id": "null",
+    "closed_date": "null",
+    "creator_principal": {
+      "display_name": "str",
+      "id": "int",
+      "name": "str",
+      "type": "str"
+    },
+    "custom": "bool",
+    "description": "null",
+    "due_date": "null",
+    "form": "null",
+    "frozen": "bool",
+    "id": "int",
+    "inc_id": "int",
+    "inc_name": "str",
+    "inc_owner_id": "str",
+    "inc_training": "bool",
+    "init_date": "int",
+    "instr_text": "str",
+    "instructions": "str",
+    "manual_predefined": "bool",
+    "members": "null",
+    "name": "str",
+    "notes": [],
+    "notes_count": "int",
+    "owner_fname": "null",
+    "owner_id": "null",
+    "owner_lname": "null",
+    "perms": {
+      "assign": "bool",
+      "attach_file": "bool",
+      "change_header": "bool",
+      "change_members": "bool",
+      "close": "bool",
+      "comment": "bool",
+      "delete_attachments": "bool",
+      "playbook_progress_enabled": "bool",
+      "read": "bool",
+      "read_attachments": "bool",
+      "write": "bool"
+    },
+    "phase_id": "str",
+    "playbooks": [],
+    "private": "null",
+    "regs": {},
+    "required": "bool",
+    "src_name": "null",
+    "status": "str",
+    "task_layout": [],
+    "timeframe_name": "null",
+    "user_notes": "null"
+  }
+}

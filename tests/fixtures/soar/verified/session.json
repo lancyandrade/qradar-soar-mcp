@@ -1,0 +1,84 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "permission_like_keys": [
+      "effective_permissions",
+      "perms",
+      "role_handles"
+    ],
+    "perms_false": "0",
+    "perms_map_present": false,
+    "perms_true": "0",
+    "rows": "0",
+    "top_level_keys": [
+      "api_key_handle",
+      "client_id",
+      "display_name",
+      "orgs",
+      "password_expiration_date"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "Q6",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/session",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<1KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "api_key_handle": "null",
+    "client_id": "str",
+    "display_name": "str",
+    "orgs": [
+      {
+        "addr": "null",
+        "addr2": "null",
+        "attachments_enabled": "bool",
+        "authorized_ldap_group": "null",
+        "city": "null",
+        "cloud_account": "null",
+        "configuration_type": "str",
+        "effective_permissions": [],
+        "enabled": "bool",
+        "final_phase_required": "bool",
+        "has_available_twofactor": "bool",
+        "has_saml": "bool",
+        "id": "int",
+        "incident_deletion_allowed": "bool",
+        "last_modified_by": {
+          "display_name": "str",
+          "id": "int",
+          "name": "str",
+          "type": "str"
+        },
+        "last_modified_time": "int",
+        "name": "str",
+        "parent_org": "null",
+        "perms": "null",
+        "require_saml": "bool",
+        "role_handles": [],
+        "session_timeout": "int",
+        "state": "null",
+        "supports_ldap": "bool",
+        "tasks_private": "bool",
+        "timezone": "null",
+        "twofactor_auth_domain": "null",
+        "twofactor_cookie_lifetime_secs": "int",
+        "uuid": "str",
+        "zip": "null"
+      }
+    ],
+    "password_expiration_date": "int"
+  }
+}

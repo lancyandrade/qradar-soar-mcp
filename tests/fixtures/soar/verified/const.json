@@ -1,0 +1,407 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "matches_expected_version": true,
+    "server_version_keys": [
+      "build_number",
+      "f",
+      "m",
+      "major",
+      "minor",
+      "r",
+      "v",
+      "version"
+    ],
+    "top_level_keys": "10-99"
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "version",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/const",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<1MB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "action_object_types": {
+      "<name>": "str"
+    },
+    "action_types": {
+      "<name>": "str"
+    },
+    "actions_framework": {
+      "action_invocation_message_types": {
+        "<name>": "str"
+      },
+      "action_invocation_statuses": {
+        "<name>": "str"
+      },
+      "action_object_types": {
+        "<name>": "str"
+      },
+      "action_types": {
+        "<name>": "str"
+      },
+      "destination_types": {
+        "<name>": "str"
+      },
+      "enabled": "bool"
+    },
+    "crime_statuses": {
+      "<name>": {
+        "description": "null",
+        "enabled": "bool",
+        "id": "int",
+        "name": "str"
+      }
+    },
+    "data_formats": {
+      "<name>": {
+        "id": "int",
+        "name": "str"
+      }
+    },
+    "data_types": {
+      "<name>": {
+        "category_id": "int",
+        "default_checked": "null",
+        "description": "null|str",
+        "enabled": "bool",
+        "id": "int",
+        "name": "str"
+      }
+    },
+    "gdpr_risk_types": {
+      "<name>": {
+        "id": "int",
+        "name": "str"
+      }
+    },
+    "geos": {
+      "<name>": {
+        "abbreviation": "str",
+        "allow_counts": "bool",
+        "children": [
+          "int"
+        ],
+        "display_name": "str",
+        "id": "int",
+        "is_privacy_region": "bool",
+        "name": "str",
+        "parent_id": "int|null",
+        "type": "str"
+      }
+    },
+    "harm_statuses": {
+      "<name>": {
+        "id": "int",
+        "name": "str"
+      }
+    },
+    "incident_statuses": {
+      "A": {
+        "description": "null",
+        "enabled": "bool",
+        "id": "str",
+        "isclosed": "bool",
+        "name": "str"
+      },
+      "C": {
+        "description": "null",
+        "enabled": "bool",
+        "id": "str",
+        "isclosed": "bool",
+        "name": "str"
+      }
+    },
+    "input_types": {
+      "<name>": {
+        "can_use": "bool",
+        "name": "str",
+        "supported_methods": [
+          "str"
+        ],
+        "supports_rich_text": "bool",
+        "valid_transformations": [
+          "str"
+        ]
+      }
+    },
+    "json_types": {
+      "array": {
+        "name": "str",
+        "supported_methods": [
+          "str"
+        ]
+      },
+      "boolean": {
+        "name": "str",
+        "supported_methods": [
+          "str"
+        ]
+      },
+      "integer": {
+        "name": "str",
+        "supported_methods": [
+          "str"
+        ]
+      },
+      "number": {
+        "name": "str",
+        "supported_methods": [
+          "str"
+        ]
+      },
+      "object": {
+        "name": "str",
+        "supported_methods": []
+      },
+      "string": {
+        "name": "str",
+        "supported_methods": [
+          "str"
+        ]
+      }
+    },
+    "max_artifact_mb": "int",
+    "max_artifacts": "int",
+    "max_attachment_mb": "int",
+    "max_img_mb": "int",
+    "max_page_size": "int",
+    "max_session_timeout": "int",
+    "max_show_relate_incidents": "int",
+    "message_destination_types": {
+      "<name>": "str"
+    },
+    "min_session_timeout": "int",
+    "nist_attack_vectors": {
+      "<name>": {
+        "id": "int",
+        "name": "str"
+      }
+    },
+    "period_types": [
+      "str"
+    ],
+    "pivot": {
+      "bucket_bys": {
+        "<name>": {
+          "bucket_values": [
+            "str"
+          ],
+          "label": "str",
+          "value": "str"
+        }
+      },
+      "field_types": {
+        "average_time_difference": {
+          "bucket_bys": [
+            "str"
+          ],
+          "input_types": [
+            "str"
+          ],
+          "label": "str",
+          "time_unit_types": [
+            "str"
+          ],
+          "value": "str"
+        },
+        "date_difference": {
+          "bucket_bys": [
+            "str"
+          ],
+          "input_types": [
+            "str"
+          ],
+          "label": "str",
+          "time_unit_types": [
+            "str"
+          ],
+          "value": "str"
+        },
+        "field": {
+          "bucket_bys": [
+            "str"
+          ],
+          "input_types": [
+            "str"
+          ],
+          "label": "str",
+          "time_unit_types": [],
+          "value": "str"
+        },
+        "number_difference": {
+          "bucket_bys": [],
+          "input_types": [
+            "str"
+          ],
+          "label": "str",
+          "time_unit_types": [],
+          "value": "str"
+        },
+        "timer": {
+          "bucket_bys": [
+            "str"
+          ],
+          "input_types": [
+            "str"
+          ],
+          "label": "str",
+          "time_unit_types": [
+            "str"
+          ],
+          "value": "str"
+        }
+      },
+      "function_types": {
+        "average": {
+          "field_types": [
+            "str"
+          ],
+          "label": "str",
+          "value": "str"
+        },
+        "average_time_difference": {
+          "field_types": [
+            "str"
+          ],
+          "label": "str",
+          "value": "str"
+        },
+        "count": {
+          "field_types": [
+            "str"
+          ],
+          "label": "str",
+          "value": "str"
+        },
+        "timer": {
+          "field_types": [
+            "str"
+          ],
+          "label": "str",
+          "value": "str"
+        }
+      },
+      "time_units": {
+        "day": {
+          "label": "str",
+          "value": "str"
+        },
+        "hour": {
+          "label": "str",
+          "value": "str"
+        },
+        "minute": {
+          "label": "str",
+          "value": "str"
+        },
+        "month": {
+          "label": "str",
+          "value": "str"
+        },
+        "second": {
+          "label": "str",
+          "value": "str"
+        },
+        "week": {
+          "label": "str",
+          "value": "str"
+        },
+        "year": {
+          "label": "str",
+          "value": "str"
+        }
+      }
+    },
+    "predefined_items": [
+      {
+        "layout_type": "int",
+        "name": "str",
+        "predefined_uuid": "str"
+      }
+    ],
+    "regulators": {
+      "<name>": {
+        "description": "null|str",
+        "enabled": "bool",
+        "geo_id": "int",
+        "id": "int",
+        "name": "str",
+        "regulator_category_id": "int",
+        "tooltip": "null|str"
+      }
+    },
+    "script_languages": {
+      "python": {
+        "name": "str"
+      },
+      "python3": {
+        "name": "str"
+      }
+    },
+    "server_version": {
+      "build_number": "int",
+      "f": "int",
+      "m": "int",
+      "major": "int",
+      "minor": "int",
+      "r": "int",
+      "v": "int",
+      "version": "str"
+    },
+    "states": {
+      "<name>": {
+        "abbrev": "str",
+        "id": "int",
+        "name": "str"
+      }
+    },
+    "task_statuses": {
+      "C": {
+        "closed": "bool",
+        "description": "null",
+        "enabled": "bool",
+        "id": "str",
+        "name": "str"
+      },
+      "O": {
+        "closed": "bool",
+        "description": "null",
+        "enabled": "bool",
+        "id": "str",
+        "name": "str"
+      }
+    },
+    "time_units": [
+      {
+        "name": "str",
+        "value": "str"
+      }
+    ],
+    "timeframes": {
+      "<name>": {
+        "default_offset": "int",
+        "default_units": "str",
+        "description": "null",
+        "enabled": "bool",
+        "id": "int",
+        "name": "str"
+      }
+    },
+    "timezones": {
+      "<name>": "str"
+    }
+  }
+}

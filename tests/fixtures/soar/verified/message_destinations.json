@@ -1,0 +1,64 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "is_list": false,
+    "paging_keys": [],
+    "row_keys": [
+      "api_keys",
+      "destination_type",
+      "expect_ack",
+      "export_key",
+      "id",
+      "name",
+      "programmatic_name",
+      "tags",
+      "users",
+      "uuid"
+    ],
+    "rows": "1-9",
+    "wrapper_keys": [
+      "entities"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "05§2",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/message_destinations",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "entities": [
+      {
+        "api_keys": [
+          "str"
+        ],
+        "destination_type": "int",
+        "expect_ack": "bool",
+        "export_key": "str",
+        "id": "int",
+        "name": "str",
+        "programmatic_name": "str",
+        "tags": [
+          {
+            "tag_handle": "str",
+            "value": "null|str"
+          }
+        ],
+        "users": [],
+        "uuid": "str"
+      }
+    ]
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "object_type": [
+      "artifact"
+    ]
+  },
+  "_error": null,
+  "_facts": {},
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "05§2",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/actions/{action_id}",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<1KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "automations": [],
+    "conditions": [],
+    "enabled": "bool",
+    "export_key": "str",
+    "id": "int",
+    "logic_type": "str",
+    "message_destinations": [
+      "str"
+    ],
+    "name": "str",
+    "object_type": "str",
+    "tags": [],
+    "timeout_seconds": "int",
+    "type": "int",
+    "uuid": "str",
+    "view_items": [
+      {
+        "content": "str",
+        "element": "str",
+        "field_type": "str",
+        "show_if": "null",
+        "show_link_header": "bool",
+        "step_label": "null"
+      }
+    ],
+    "workflows": []
+  }
+}

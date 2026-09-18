@@ -13,6 +13,13 @@
 > | ❓ | **Requires research.** May not exist. Do not implement until confirmed against the appliance and IBM docs. |
 > | 🚫 | Known not to be safely/reliably achievable via supported API |
 
+> **Status — P2-00, 2026-09-18.** For QRadar SOAR `51.0.9.0.20848` the marks
+> below are superseded by [`../soar-api-verified.md`](../soar-api-verified.md),
+> which is the authoritative record for that version. The text of this file is
+> kept as the original pre-verification research and is otherwise unchanged;
+> where the two disagree (notably §1 on tasks and manual actions, and §2.1 on
+> the export backend), the verified record wins for that version.
+
 All paths are relative to `https://{host}/rest/orgs/{org_id}` unless noted.
 Auth: HTTP Basic with API key id/secret. Common params `handle_format=names`
 and `text_content_output_format=always_text` as already implemented.

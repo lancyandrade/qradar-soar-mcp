@@ -1,0 +1,109 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "format": [
+      "boolean",
+      "date-time",
+      "multi-select",
+      "number",
+      "select",
+      "text",
+      "text-area"
+    ]
+  },
+  "_error": null,
+  "_facts": {},
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "Q1",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/playbooks/{playbook_id}/schema",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "<key>": "str",
+    "description": "str",
+    "properties": {
+      "<name>": {
+        "description?": "str",
+        "enum?": [
+          "str"
+        ],
+        "properties?": {
+          "<name>": {
+            "description?": "str",
+            "enum?": [
+              "null|str"
+            ],
+            "format?": "str",
+            "items?": {
+              "enum": [
+                "null|str"
+              ],
+              "type": "str"
+            },
+            "maxItems?": "int",
+            "minItems?": "int",
+            "properties?": {
+              "<name>": {
+                "description?": "str",
+                "enum?": [
+                  "str"
+                ],
+                "format?": "str",
+                "items?": {
+                  "enum": [
+                    "null|str"
+                  ],
+                  "type": "str"
+                },
+                "maxItems?": "int",
+                "minItems?": "int",
+                "properties?": {
+                  "<name>": {
+                    "example": "str",
+                    "properties": {
+                      "<name>": {
+                        "properties?": {
+                          "<name>": {
+                            "properties?": {
+                              "<name>": {
+                                "properties?": {
+                                  "<name>": {
+                                    "type": "str"
+                                  }
+                                },
+                                "type": "str"
+                              }
+                            },
+                            "type": "str"
+                          }
+                        },
+                        "type": "str"
+                      }
+                    },
+                    "type": "str"
+                  }
+                },
+                "type": "str"
+              }
+            },
+            "type": "str"
+          }
+        },
+        "type": "str"
+      }
+    },
+    "title": "str",
+    "type": "str"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_facts": {
+    "attachment_found": false,
+    "attachment_metadata_keys": [],
+    "incidents_looked_at": 1,
+    "limit": 10,
+    "source": "bounded scan",
+    "stopped_at_first_attachment": false
+  },
+  "_fixture": "verified-shape",
+  "_note": "at most 10 incidents, attachment metadata only, stops at the first hit",
+  "_question": "Q7",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/incidents/{incident_id}/attachments",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "shape": null
+}

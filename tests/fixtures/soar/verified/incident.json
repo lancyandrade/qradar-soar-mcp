@@ -1,0 +1,191 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "plan_status": [
+      "A"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "description_type": "str",
+    "has_properties": true,
+    "key_count": "10-99",
+    "projection_fields_missing": [],
+    "select_value_types": {
+      "incident_type_ids": "list[str]",
+      "owner_id": "str",
+      "phase_id": "str",
+      "plan_status": "str",
+      "resolution_id": "NoneType",
+      "severity_code": "str"
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "OQ12",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/incidents/{incident_id}",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "actions": [],
+    "addr": "null",
+    "admin_id": "null",
+    "artifacts": "null",
+    "assessment": "str",
+    "city": "null",
+    "cm": {
+      "geo_counts": {},
+      "total": "int",
+      "unassigneds": []
+    },
+    "comments": "null",
+    "confirmed": "bool",
+    "country": "null",
+    "create_date": "int",
+    "creator": "null",
+    "creator_id": "str",
+    "creator_principal": {
+      "display_name": "str",
+      "id": "int",
+      "name": "str",
+      "type": "str"
+    },
+    "crimestatus_id": "str",
+    "data_compromised": "null",
+    "description": "str",
+    "discovered_date": "int",
+    "draft": "bool",
+    "dtm": {},
+    "due_date": "null",
+    "employee_involved": "null",
+    "end_date": "null",
+    "exposure": "int",
+    "exposure_dept_id": "null",
+    "exposure_individual_name": "null",
+    "exposure_type_id": "str",
+    "exposure_vendor_id": "null",
+    "gdpr": {
+      "gdpr_breach_circumstances": [],
+      "gdpr_breach_type": "null",
+      "gdpr_breach_type_comment": "null",
+      "gdpr_consequences": "null",
+      "gdpr_consequences_comment": "null",
+      "gdpr_final_assessment": "null",
+      "gdpr_final_assessment_comment": "null",
+      "gdpr_identification": "null",
+      "gdpr_identification_comment": "null",
+      "gdpr_personal_data": "null",
+      "gdpr_personal_data_comment": "null",
+      "gdpr_subsequent_notification": "null"
+    },
+    "hard_liability": "int",
+    "hipaa": {
+      "hipaa_acquired": "null",
+      "hipaa_acquired_comment": "null",
+      "hipaa_additional_misuse": "null",
+      "hipaa_additional_misuse_comment": "null",
+      "hipaa_adverse": "null",
+      "hipaa_adverse_comment": "null",
+      "hipaa_breach": "null",
+      "hipaa_breach_comment": "null",
+      "hipaa_misused": "null",
+      "hipaa_misused_comment": "null"
+    },
+    "id": "int",
+    "inc_last_modified_date": "int",
+    "inc_start": "int",
+    "inc_training": "bool",
+    "incident_type_ids": [
+      "str"
+    ],
+    "is_scenario": "bool",
+    "jurisdiction_name": "null",
+    "jurisdiction_reg_id": "null",
+    "members": [],
+    "name": "str",
+    "negative_pr_likely": "null",
+    "nist_attack_vectors": [],
+    "org_handle": "str",
+    "org_id": "int",
+    "owner_id": "str",
+    "perms": {
+      "assign": "bool",
+      "attach_file": "bool",
+      "change_members": "bool",
+      "change_workspace": "bool",
+      "close": "bool",
+      "comment": "bool",
+      "create_artifacts": "bool",
+      "create_milestones": "bool",
+      "delete": "bool",
+      "delete_attachments": "bool",
+      "list_artifacts": "bool",
+      "list_milestones": "bool",
+      "playbook_progress_enabled": "bool",
+      "read": "bool",
+      "read_attachments": "bool",
+      "write": "bool"
+    },
+    "phase_id": "str",
+    "pii": {
+      "alberta_health_risk_assessment": "null",
+      "assessment": "str",
+      "california_health_risk_assessment": "null",
+      "data_compromised": "null",
+      "data_contained": "null",
+      "data_encrypted": "null",
+      "data_format": "null",
+      "data_source_ids": [],
+      "dc_impact_likely": "null",
+      "determined_date": "int",
+      "exposure": "int",
+      "gdpr_harm_risk": "null",
+      "gdpr_lawful_data_processing_categories": [],
+      "harmstatus_id": "str",
+      "impact_likely": "null",
+      "new_zealand_risk_assessment": "null",
+      "ny_impact_likely": "null",
+      "or_impact_likely": "null",
+      "singapore_risk_assessment": "null",
+      "wa_impact_likely": "null"
+    },
+    "plan_status": "str",
+    "playbooks": [],
+    "properties": {
+      "<name>": "null|str"
+    },
+    "regulator_risk": {},
+    "regulators": {
+      "ids": [
+        "str"
+      ]
+    },
+    "reporter": "null",
+    "resolution_id": "null",
+    "resolution_summary": "null",
+    "score": "null",
+    "sequence_code": "null",
+    "severity_code": "str",
+    "start_date": "int",
+    "state": "null",
+    "task_changes": {
+      "added": [],
+      "removed": []
+    },
+    "tasks": "null",
+    "timer_field_summarized_incident_data": [],
+    "vers": "int",
+    "workspace": "str",
+    "zip": "null"
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "has_view_items": true,
+    "input_like_keys": [
+      "field_type",
+      "view_items"
+    ],
+    "keys": [
+      "created_date",
+      "creator",
+      "description",
+      "destination_handle",
+      "display_name",
+      "id",
+      "last_modified_by",
+      "last_modified_time",
+      "name",
+      "output_description",
+      "output_json_example",
+      "output_json_schema",
+      "tags",
+      "uuid",
+      "version",
+      "view_items",
+      "workflows"
+    ],
+    "view_item_keys": [
+      "content",
+      "element",
+      "field_type",
+      "show_if",
+      "show_link_header",
+      "step_label"
+    ],
+    "view_items_resolving_to_function_fields": "37/37"
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "Q5",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/functions/{function_id}",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "created_date": "int",
+    "creator": {
+      "display_name": "str",
+      "id": "int",
+      "name": "str",
+      "type": "str"
+    },
+    "description": "str",
+    "destination_handle": "str",
+    "display_name": "str",
+    "id": "int",
+    "last_modified_by": {
+      "display_name": "str",
+      "id": "int",
+      "name": "str",
+      "type": "str"
+    },
+    "last_modified_time": "int",
+    "name": "str",
+    "output_description": "null",
+    "output_json_example": "str",
+    "output_json_schema": "str",
+    "tags": [
+      {
+        "tag_handle": "str",
+        "value": "null|str"
+      }
+    ],
+    "uuid": "str",
+    "version": "int",
+    "view_items": [
+      {
+        "content": "str",
+        "element": "str",
+        "field_type": "str",
+        "show_if": "null",
+        "show_link_header": "bool",
+        "step_label": "null"
+      }
+    ],
+    "workflows": []
+  }
+}

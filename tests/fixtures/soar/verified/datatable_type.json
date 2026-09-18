@@ -1,0 +1,122 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "input_type": [
+      "text",
+      "textarea"
+    ],
+    "type_id": [
+      1020,
+      8
+    ]
+  },
+  "_error": null,
+  "_facts": {},
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "Q4",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/types/{datatable_type}",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "actions": [],
+    "display_name": "str",
+    "fields": {
+      "<name>": {
+        "allow_default_value": "bool",
+        "blank_option": "bool",
+        "calculated": "bool",
+        "changeable": "bool",
+        "chosen": "bool",
+        "default_chosen_by_server": "bool",
+        "deprecated": "bool",
+        "hide_notification": "bool",
+        "id": "int",
+        "input_type": "str",
+        "internal": "bool",
+        "is_tracked": "bool",
+        "json_example": "null",
+        "json_schema": "null",
+        "name": "str",
+        "operation_perms": {
+          "<name>": {
+            "show_in_auto_actions": "bool",
+            "show_in_manual_actions": "bool",
+            "show_in_notifications": "bool"
+          }
+        },
+        "operations": [
+          "str"
+        ],
+        "order": "int",
+        "perms": {
+          "delete": "bool",
+          "modify_blank": "bool",
+          "modify_chosen": "bool",
+          "modify_default": "bool",
+          "modify_name": "bool",
+          "modify_operations": "bool",
+          "modify_required": "bool",
+          "modify_type": [
+            "str"
+          ],
+          "modify_values": "bool",
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool",
+          "show_in_scripts": "bool",
+          "sort": "bool"
+        },
+        "placeholder": "str",
+        "prefix": "null",
+        "read_only": "bool",
+        "rich_text": "bool",
+        "tags": [],
+        "templates": [],
+        "text": "str",
+        "tooltip": "str",
+        "type_id": "int",
+        "uuid": "str",
+        "values": [],
+        "width": "int"
+      }
+    },
+    "for_actions": "bool",
+    "for_custom_fields": "bool",
+    "for_notifications": "bool",
+    "for_workflows": "bool",
+    "id": "int",
+    "parent_types": [
+      "str"
+    ],
+    "playbooks": [],
+    "properties": {
+      "<name>": {
+        "<anyOf>": [
+          "bool",
+          []
+        ]
+      }
+    },
+    "scripts": [],
+    "tags": [
+      {
+        "tag_handle": "str",
+        "value": "null"
+      }
+    ],
+    "type_id": "int",
+    "type_name": "str",
+    "uuid": "str"
+  }
+}

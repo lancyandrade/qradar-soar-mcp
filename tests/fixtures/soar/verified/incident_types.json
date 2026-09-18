@@ -1,0 +1,43 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "is_list": false,
+    "paging_keys": [],
+    "row_keys": [],
+    "rows": "0",
+    "wrapper_keys": []
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "05§2",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/incident_types",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "<name>": {
+      "create_date": "int|null",
+      "description": "null",
+      "enabled": "bool",
+      "hidden": "bool",
+      "id": "int",
+      "name": "str",
+      "parent_id": "null",
+      "system": "bool",
+      "tags": [],
+      "update_date": "int|null",
+      "uuid": "str"
+    }
+  }
+}

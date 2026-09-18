@@ -1,0 +1,197 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "object_type": [
+      "ARTIFACT",
+      "INCIDENT"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "result_like_keys": [
+      "pending_scan_result",
+      "playbooks"
+    ],
+    "row_keys": [
+      "after",
+      "before",
+      "entry_type",
+      "name",
+      "object_id",
+      "object_type",
+      "parent_id",
+      "parent_name",
+      "principal",
+      "revision_number",
+      "simulation",
+      "timestamp",
+      "user"
+    ],
+    "rows": "1-9",
+    "top_level_keys": []
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "Q8",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/incidents/{incident_id}/newsfeed",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": [
+    {
+      "after": {
+        "<anyOf>": [
+          "null",
+          {
+            "tasks_added": "int",
+            "tasks_removed": "int"
+          },
+          {
+            "actions": [],
+            "attachment": "null",
+            "created": "int",
+            "creator_principal": {
+              "display_name": "str",
+              "id": "int",
+              "name": "str",
+              "type": "str"
+            },
+            "description": "null",
+            "global_artifact": [
+              {
+                "created": "int",
+                "creator": {
+                  "display_name": "str",
+                  "id": "int",
+                  "name": "str",
+                  "type": "str"
+                },
+                "description": "null",
+                "first_associated_time": "null",
+                "first_related_inc_id": "null",
+                "first_related_inc_owner_handle": "null",
+                "hit_threat_sources": [],
+                "id": "int",
+                "last_associated_time": "null",
+                "last_modified_by": {
+                  "display_name": "str",
+                  "id": "int",
+                  "name": "str",
+                  "type": "str"
+                },
+                "last_modified_time": "int",
+                "last_related_inc_id": "null",
+                "last_related_inc_owner_handle": "null",
+                "last_scan_hits": [],
+                "properties": "null",
+                "related_incident_count": "int",
+                "relating": "bool",
+                "relating_incidents": "bool",
+                "scan_option": "str",
+                "summary": "null",
+                "tags": [],
+                "type": "str",
+                "value": "str",
+                "version": "int"
+              }
+            ],
+            "global_info": {
+              "created": "int",
+              "creator": {
+                "display_name": "str",
+                "id": "int",
+                "name": "str",
+                "type": "str"
+              },
+              "description": "null",
+              "first_associated_time": "null",
+              "first_related_inc_id": "null",
+              "first_related_inc_owner_handle": "null",
+              "hit_threat_sources": [],
+              "id": "int",
+              "last_associated_time": "null",
+              "last_modified_by": {
+                "display_name": "str",
+                "id": "int",
+                "name": "str",
+                "type": "str"
+              },
+              "last_modified_time": "int",
+              "last_related_inc_id": "null",
+              "last_related_inc_owner_handle": "null",
+              "last_scan_hits": [],
+              "properties": "null",
+              "related_incident_count": "int",
+              "relating": "bool",
+              "relating_incidents": "bool",
+              "scan_option": "str",
+              "summary": "null",
+              "tags": [],
+              "type": "str",
+              "value": "str",
+              "version": "int"
+            },
+            "hash": "str",
+            "hits": [],
+            "id": "int",
+            "inc_id": "int",
+            "inc_name": "str",
+            "inc_owner": "str",
+            "ip": {
+              "destination": "null",
+              "source": "bool"
+            },
+            "last_modified_by": {
+              "display_name": "str",
+              "id": "int",
+              "name": "str",
+              "type": "str"
+            },
+            "last_modified_time": "int",
+            "parent_id": "null",
+            "pending_scan_result": "bool",
+            "pending_sources": [],
+            "perms": "null",
+            "playbooks": [],
+            "properties": [
+              {
+                "name": "str",
+                "value": "str"
+              }
+            ],
+            "related_incident_count": "null",
+            "relating": "bool",
+            "type": "str",
+            "value": "str"
+          }
+        ]
+      },
+      "before": "null",
+      "entry_type": "str",
+      "name": "str",
+      "object_id": "int",
+      "object_type": "str",
+      "parent_id": "int|null",
+      "parent_name": "null|str",
+      "principal": {
+        "display_name": "str",
+        "id": "int",
+        "name": "str",
+        "type": "str"
+      },
+      "revision_number": "int",
+      "simulation": "bool",
+      "timestamp": "int",
+      "user": "null"
+    }
+  ]
+}
