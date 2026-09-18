@@ -66,13 +66,15 @@ CIDR_CONTEXT = re.compile(r"/(8|12|16|24)\b")
 
 
 def tracked_files(root: Path) -> list[str]:
+    """Tracked plus untracked-but-not-ignored files, so a new file is caught
+    before it is ever committed (pre-commit runs this on the working tree)."""
     out = subprocess.run(
-        ["git", "ls-files", "-z"],  # noqa: S607
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],  # noqa: S607
         cwd=root,
         check=True,
         capture_output=True,
     ).stdout
-    return [p for p in out.decode().split("\0") if p]
+    return sorted({p for p in out.decode().split("\0") if p and (root / p).is_file()})
 
 
 def scan(root: Path, rel: str) -> list[str]:

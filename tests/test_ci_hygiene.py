@@ -94,11 +94,14 @@ def test_secret_scanner_catches_a_planted_key(tmp_path: Path):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     planted = tmp_path / "leak.py"
-    planted.write_text(
-        'SOAR_API_KEY_SECRET = "abcdef0123456789abcdef"\n'  # gitleaks:allow
-        'host = "soar.lab.corp"\nip = "10.1.2.3"\n',
-        encoding="utf-8",
-    )
+    # Deliberately fake values. Each line carries the marker of the scanner that would
+    # otherwise flag this file: our tree scanner, and gitleaks for the key-shaped one.
+    lines = [
+        'SOAR_API_KEY_SECRET = "abcdef0123456789abcdef"',  # check_no_secrets:allow gitleaks:allow
+        'host = "soar.lab.corp"',  # check_no_secrets:allow
+        'ip = "10.1.2.3"',  # check_no_secrets:allow
+    ]
+    planted.write_text("\n".join(lines) + "\n", encoding="utf-8")
     hits = mod.scan(tmp_path, "leak.py")
     labels = {h.split(": ")[1] for h in hits}
     assert {"api key assignment", "internal hostname", "rfc1918 10/8"} <= labels
