@@ -31,6 +31,7 @@ class PolicyResult:
     rule: str
     reason: str
     constraint_violation: str | None = None
+    subject: str | None = None  # the classified thing's own name, for plans and audit
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -40,6 +41,7 @@ class PolicyResult:
             "rule": self.rule,
             "reason": self.reason,
             "constraint_violation": self.constraint_violation,
+            "subject": self.subject,
         }
 
 

@@ -65,10 +65,134 @@ CONFIG_STATES: dict[str, dict[str, str]] = {
 }
 TRANSPORTS = ("stdio", "streamable-http")
 
-# EXPECTED[tool][state][transport] -> "ALLOW" or a decision code. Filled in P1-14/P1-15.
-EXPECTED: dict[str, dict[str, dict[str, str]]] = {}
-# Minimal valid arguments per tool, against the P1-01 fixtures. Filled in P1-14/P1-15.
-MINIMAL_ARGS: dict[str, dict[str, Any]] = {}
+Cell = str | tuple[str, str]  # same on both transports, or (stdio, streamable-http)
+
+
+def _row(**states: Cell) -> dict[str, dict[str, str]]:
+    """One tool's decisions, named per state; both transports must be decided."""
+    if set(states) != set(CONFIG_STATES):
+        missing = sorted(set(CONFIG_STATES) - set(states))
+        extra = sorted(set(states) - set(CONFIG_STATES))
+        raise RuntimeError(f"EXPECTED row: missing states {missing}, unknown states {extra}")
+    out: dict[str, dict[str, str]] = {}
+    for state, cell in states.items():
+        stdio, http = (cell, cell) if isinstance(cell, str) else cell
+        out[state] = {"stdio": stdio, "streamable-http": http}
+    return out
+
+
+# Every Tier-0 tool: allowed everywhere except when the runtime refused to start.
+_READ = _row(
+    default="ALLOW",
+    comments_only="ALLOW",
+    tier1="ALLOW",
+    tier2="ALLOW",
+    tier2_no_close="ALLOW",
+    actions_no_policy="DENY_CONFIG",
+    actions_with_policy="ALLOW",
+    actions_destructive="ALLOW",
+    legacy_allow_writes="ALLOW",
+    playbook_draft="ALLOW",
+    playbook_export="ALLOW",
+    playbook_deploy="ALLOW",
+    playbook_enable="ALLOW",
+    kill_switch_active="ALLOW",
+)
+
+
+def _flagged(flag_on_in: set[str]) -> dict[str, dict[str, str]]:
+    """A Tier-1/2 tool gated by one flag: allowed only in the states that set it."""
+    cells: dict[str, Cell] = {}
+    for state in CONFIG_STATES:
+        if state == "actions_no_policy":
+            cells[state] = "DENY_CONFIG"
+        elif state == "kill_switch_active":
+            cells[state] = "DENY_KILL_SWITCH"
+        elif state in flag_on_in:
+            cells[state] = "ALLOW"
+        else:
+            cells[state] = "DENY_DISABLED"
+    return _row(**cells)
+
+
+_COMMENTS = _flagged({"comments_only", "tier1", "tier2", "tier2_no_close", "legacy_allow_writes"})
+_ARTIFACTS = _flagged({"tier1", "tier2", "tier2_no_close", "legacy_allow_writes"})
+_INCIDENT_WRITES = _flagged({"tier2", "tier2_no_close", "legacy_allow_writes"})
+_TASK_WRITES = _flagged({"tier2", "tier2_no_close", "legacy_allow_writes"})
+_INCIDENT_CLOSE = _flagged({"tier2", "legacy_allow_writes"})
+
+# soar_invoke_action is exercised with action 49 ("EDR — Isolate Endpoint": Tier 3,
+# require_approval, destructive in tests/tool_harness.POLICY_YAML). The flag alone is
+# not enough: the destructive rule needs SOAR_ALLOW_DESTRUCTIVE_ACTIONS, then a human
+# approval (REQUIRE_APPROVAL is the first-call result), and Tier 3 never runs over HTTP.
+_INVOKE = _row(
+    default="DENY_DISABLED",
+    comments_only="DENY_DISABLED",
+    tier1="DENY_DISABLED",
+    tier2="DENY_DISABLED",
+    tier2_no_close="DENY_DISABLED",
+    actions_no_policy="DENY_CONFIG",
+    actions_with_policy="DENY_DESTRUCTIVE",
+    actions_destructive=("REQUIRE_APPROVAL", "DENY_TRANSPORT"),
+    legacy_allow_writes="DENY_DISABLED",  # SOAR_ALLOW_WRITES never implies actions
+    playbook_draft="DENY_DISABLED",
+    playbook_export="DENY_DISABLED",
+    playbook_deploy="DENY_DISABLED",
+    playbook_enable="DENY_DISABLED",
+    kill_switch_active=("DENY_KILL_SWITCH", "DENY_TRANSPORT"),
+)
+
+# EXPECTED[tool][state][transport] -> "ALLOW" or a decision code.
+EXPECTED: dict[str, dict[str, dict[str, str]]] = {
+    "soar_search_incidents": _READ,
+    "soar_get_incident": _READ,
+    "soar_list_artifacts": _READ,
+    "soar_list_tasks": _READ,
+    "soar_list_comments": _READ,
+    "soar_list_attachments": _READ,
+    "soar_list_users": _READ,
+    "soar_describe_incident_fields": _READ,
+    "soar_list_incident_actions": _READ,
+    "soar_check_approval": _READ,
+    "soar_add_comment": _COMMENTS,
+    "soar_add_artifact": _ARTIFACTS,
+    "soar_create_incident": _INCIDENT_WRITES,
+    "soar_update_incident": _INCIDENT_WRITES,
+    "soar_assign_incident": _INCIDENT_WRITES,
+    "soar_close_incident": _INCIDENT_CLOSE,
+    "soar_update_task_status": _TASK_WRITES,
+    "soar_invoke_action": _INVOKE,
+}
+# Minimal valid arguments per tool, against the P1-01 fixtures (incident 42).
+MINIMAL_ARGS: dict[str, dict[str, Any]] = {
+    "soar_search_incidents": {},
+    "soar_get_incident": {"incident_id": 42},
+    "soar_list_artifacts": {"incident_id": 42},
+    "soar_list_tasks": {"incident_id": 42},
+    "soar_list_comments": {"incident_id": 42},
+    "soar_list_attachments": {"incident_id": 42},
+    "soar_list_users": {},
+    "soar_describe_incident_fields": {},
+    "soar_list_incident_actions": {"incident_id": 42},
+    "soar_check_approval": {"approval_id": "APR-2026-0917-abcdef"},
+    "soar_add_comment": {"incident_id": 42, "text": "matrix"},
+    "soar_add_artifact": {
+        "incident_id": 42,
+        "artifact_type": "IP Address",
+        "value": "198.51.100.7",
+    },
+    "soar_create_incident": {"name": "matrix", "discovered_date": 1758000000000},
+    "soar_update_incident": {"incident_id": 42, "changes": {"severity_code": "High"}},
+    "soar_assign_incident": {"incident_id": 42, "owner": "analyst.two"},
+    "soar_close_incident": {
+        "incident_id": 42,
+        "resolution": "Resolved",
+        "summary": "matrix",
+        "custom_fields": {"root_cause": "matrix"},
+    },
+    "soar_update_task_status": {"incident_id": 42, "task_id": 9001, "status": "closed"},
+    "soar_invoke_action": {"incident_id": 42, "action_id": 49},
+}
 
 
 def _collection_check() -> None:

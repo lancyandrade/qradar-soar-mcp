@@ -174,7 +174,8 @@ Apache-2.0. `SECURITY.md` reporting address: `lancy@gulfsoftware.com`.
 
 ## 7. Incident projection (P1-14, lifecycle step 12)
 
-Raw incident DTOs are never returned. `_summarise_incident` emits exactly:
+Raw incident DTOs are never returned. `summarise_incident`
+(`tools/projection.py`) emits exactly:
 
 `id`, `name`, `description` (trimmed), `plan_status`, `phase_id`,
 `severity_code`, `incident_type_ids`, `owner_id`, `discovered_date`,

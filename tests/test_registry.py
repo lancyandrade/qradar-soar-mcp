@@ -371,6 +371,29 @@ async def test_audit_write_failure_fails_closed(reg, fake: FakeSoar, tmp_path: P
     await rt.aclose()
 
 
+async def test_best_effort_audit_failure_does_not_mask_a_denial(
+    reg, fake: FakeSoar, tmp_path: Path, monkeypatch, caplog
+):
+    rt = build_runtime(fake, tmp_path)
+
+    def broken(*a, **k):
+        raise AuditError("disk full")
+
+    monkeypatch.setattr(rt.audit, "append", broken)
+    with caplog.at_level(logging.ERROR):
+        out = await run_pipeline(reg["soar_t_comment"], rt, {"incident_id": 42, "text": "hi"})
+    assert out["error"]["code"] == "DENY_DISABLED"
+    assert any("audit write failed" in r.getMessage() for r in caplog.records)
+    await rt.aclose()
+
+
+def test_actions_without_public_key_warns(tmp_path: Path, policy: Path):
+    rt = Runtime.build(
+        base_env(tmp_path, SOAR_ALLOW_ACTIONS="true", SOAR_ACTION_POLICY_FILE=str(policy))
+    )
+    assert rt.usable and any("no approval can ever be verified" in w for w in rt.warnings)
+
+
 async def test_not_configured_connection(reg, tmp_path: Path):
     rt = Runtime.build(
         {

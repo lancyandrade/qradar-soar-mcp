@@ -1,5 +1,6 @@
-"""MCP tools. Importing this package populates ``TOOL_REGISTRY`` (P1-14)."""
+"""MCP tools. Importing this package populates ``TOOL_REGISTRY`` (08 §3)."""
 
+from qradar_soar_mcp.tools import actions, incidents, investigation  # noqa: F401  (registration)
 from qradar_soar_mcp.tools.registry import (
     TOOL_REGISTRY,
     ToolResult,

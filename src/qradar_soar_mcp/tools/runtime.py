@@ -74,6 +74,9 @@ class Runtime:
         except ConfigError as exc:
             return cls.unusable(str(exc), transport or "stdio")
         effective = transport or settings.mcp_transport
+        if effective != settings.mcp_transport:
+            # A CLI override is still subject to every transport rule (P1-11).
+            settings = settings.model_copy(update={"mcp_transport": effective})
         warnings = list(settings.warnings)
         add_secrets(settings.secret_values())
         try:
