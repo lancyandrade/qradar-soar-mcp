@@ -1,0 +1,861 @@
+# serializer version: 1
+# name: test_get_incident_is_projected
+  dict({
+    'create_date': 1758000060000,
+    'description': 'User jdoe signed in from a country not seen before. Please review.',
+    'discovered_date': 1758000000000,
+    'due_date': None,
+    'id': 42,
+    'inc_last_modified_date': 1758003700000,
+    'incident_type_ids': list([
+      'Suspicious activity',
+    ]),
+    'name': 'Suspicious login from unusual location',
+    'owner_id': 'analyst.one',
+    'phase_id': 'Engage',
+    'plan_status': 'A',
+    'resolution_id': None,
+    'resolution_summary': None,
+    'severity_code': 'Medium',
+    'start_date': 1757999000000,
+    'vers': 3,
+  })
+# ---
+# name: test_projection_field_list_is_pinned
+  list([
+    'id',
+    'name',
+    'description',
+    'plan_status',
+    'phase_id',
+    'severity_code',
+    'incident_type_ids',
+    'owner_id',
+    'discovered_date',
+    'create_date',
+    'start_date',
+    'due_date',
+    'inc_last_modified_date',
+    'resolution_id',
+    'resolution_summary',
+    'vers',
+  ])
+# ---
+# name: test_tool_manifest_snapshot
+  dict({
+    'soar_add_artifact': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': False,
+        'title': 'soar_add_artifact',
+      }),
+      'capability': 'SOAR_ALLOW_ARTIFACTS',
+      'input_schema': dict({
+        'properties': dict({
+          'artifact_type': dict({
+            'title': 'Artifact Type',
+            'type': 'string',
+          }),
+          'description': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Description',
+          }),
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+          'value': dict({
+            'title': 'Value',
+            'type': 'string',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+          'artifact_type',
+          'value',
+        ]),
+        'title': 'soar_add_artifactArguments',
+        'type': 'object',
+      }),
+      'tier': 1,
+    }),
+    'soar_add_comment': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': False,
+        'title': 'soar_add_comment',
+      }),
+      'capability': 'SOAR_ALLOW_COMMENTS',
+      'input_schema': dict({
+        'properties': dict({
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+          'parent_id': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Parent Id',
+          }),
+          'text': dict({
+            'title': 'Text',
+            'type': 'string',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+          'text',
+        ]),
+        'title': 'soar_add_commentArguments',
+        'type': 'object',
+      }),
+      'tier': 1,
+    }),
+    'soar_assign_incident': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': False,
+        'title': 'soar_assign_incident',
+      }),
+      'capability': 'SOAR_ALLOW_INCIDENT_WRITES',
+      'input_schema': dict({
+        'properties': dict({
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+          'owner': dict({
+            'title': 'Owner',
+            'type': 'string',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+          'owner',
+        ]),
+        'title': 'soar_assign_incidentArguments',
+        'type': 'object',
+      }),
+      'tier': 2,
+    }),
+    'soar_check_approval': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_check_approval',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'approval_id': dict({
+            'title': 'Approval Id',
+            'type': 'string',
+          }),
+        }),
+        'required': list([
+          'approval_id',
+        ]),
+        'title': 'soar_check_approvalArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_close_incident': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': False,
+        'title': 'soar_close_incident',
+      }),
+      'capability': 'SOAR_ALLOW_INCIDENT_CLOSE',
+      'input_schema': dict({
+        'properties': dict({
+          'custom_fields': dict({
+            'anyOf': list([
+              dict({
+                'additionalProperties': True,
+                'type': 'object',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Custom Fields',
+          }),
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+          'resolution': dict({
+            'title': 'Resolution',
+            'type': 'string',
+          }),
+          'summary': dict({
+            'title': 'Summary',
+            'type': 'string',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+          'resolution',
+          'summary',
+        ]),
+        'title': 'soar_close_incidentArguments',
+        'type': 'object',
+      }),
+      'tier': 2,
+    }),
+    'soar_create_incident': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': False,
+        'title': 'soar_create_incident',
+      }),
+      'capability': 'SOAR_ALLOW_INCIDENT_WRITES',
+      'input_schema': dict({
+        'properties': dict({
+          'custom_fields': dict({
+            'anyOf': list([
+              dict({
+                'additionalProperties': True,
+                'type': 'object',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Custom Fields',
+          }),
+          'description': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Description',
+          }),
+          'discovered_date': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Discovered Date',
+          }),
+          'incident_type_ids': dict({
+            'anyOf': list([
+              dict({
+                'items': dict({
+                  'type': 'string',
+                }),
+                'type': 'array',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Incident Type Ids',
+          }),
+          'name': dict({
+            'title': 'Name',
+            'type': 'string',
+          }),
+          'owner_id': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Owner Id',
+          }),
+          'severity_code': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Severity Code',
+          }),
+        }),
+        'required': list([
+          'name',
+        ]),
+        'title': 'soar_create_incidentArguments',
+        'type': 'object',
+      }),
+      'tier': 2,
+    }),
+    'soar_describe_incident_fields': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_describe_incident_fields',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+        }),
+        'title': 'soar_describe_incident_fieldsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_find_similar_incidents': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_find_similar_incidents',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+          'limit': dict({
+            'default': 5,
+            'title': 'Limit',
+            'type': 'integer',
+          }),
+          'max_candidates': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Max Candidates',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+        ]),
+        'title': 'soar_find_similar_incidentsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_get_incident': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_get_incident',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'custom_fields': dict({
+            'anyOf': list([
+              dict({
+                'items': dict({
+                  'type': 'string',
+                }),
+                'type': 'array',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Custom Fields',
+          }),
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+        ]),
+        'title': 'soar_get_incidentArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_get_incident_full': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_get_incident_full',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'custom_fields': dict({
+            'anyOf': list([
+              dict({
+                'items': dict({
+                  'type': 'string',
+                }),
+                'type': 'array',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Custom Fields',
+          }),
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+        ]),
+        'title': 'soar_get_incident_fullArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_invoke_action': dict({
+      'annotations': dict({
+        'destructive_hint': True,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': False,
+        'title': 'soar_invoke_action',
+      }),
+      'capability': 'SOAR_ALLOW_ACTIONS',
+      'input_schema': dict({
+        'properties': dict({
+          'action_id': dict({
+            'title': 'Action Id',
+            'type': 'integer',
+          }),
+          'approval_id': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Approval Id',
+          }),
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+          'action_id',
+        ]),
+        'title': 'soar_invoke_actionArguments',
+        'type': 'object',
+      }),
+      'tier': 3,
+    }),
+    'soar_list_artifacts': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_artifacts',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+        ]),
+        'title': 'soar_list_artifactsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_list_attachments': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_attachments',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+        ]),
+        'title': 'soar_list_attachmentsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_list_comments': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_comments',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+        ]),
+        'title': 'soar_list_commentsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_list_incident_actions': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_incident_actions',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+        ]),
+        'title': 'soar_list_incident_actionsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_list_tasks': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_tasks',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+        ]),
+        'title': 'soar_list_tasksArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_list_users': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_users',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+        }),
+        'title': 'soar_list_usersArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_search_incidents': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_search_incidents',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        '$defs': dict({
+          'SearchCondition': dict({
+            'additionalProperties': False,
+            'description': 'One condition; ``value`` is omitted for has_a_value / does_not_have_a_value.',
+            'properties': dict({
+              'field_name': dict({
+                'title': 'Field Name',
+                'type': 'string',
+              }),
+              'method': dict({
+                'enum': list([
+                  'equals',
+                  'not_equals',
+                  'in',
+                  'not_in',
+                  'contains',
+                  'not_contains',
+                  'gte',
+                  'gt',
+                  'lte',
+                  'lt',
+                  'has_a_value',
+                  'does_not_have_a_value',
+                ]),
+                'title': 'Method',
+                'type': 'string',
+              }),
+              'value': dict({
+                'default': None,
+                'title': 'Value',
+              }),
+            }),
+            'required': list([
+              'field_name',
+              'method',
+            ]),
+            'title': 'SearchCondition',
+            'type': 'object',
+          }),
+          'SortSpec': dict({
+            'additionalProperties': False,
+            'properties': dict({
+              'field_name': dict({
+                'title': 'Field Name',
+                'type': 'string',
+              }),
+              'type': dict({
+                'default': 'desc',
+                'enum': list([
+                  'asc',
+                  'desc',
+                ]),
+                'title': 'Type',
+                'type': 'string',
+              }),
+            }),
+            'required': list([
+              'field_name',
+            ]),
+            'title': 'SortSpec',
+            'type': 'object',
+          }),
+        }),
+        'properties': dict({
+          'custom_fields': dict({
+            'anyOf': list([
+              dict({
+                'items': dict({
+                  'type': 'string',
+                }),
+                'type': 'array',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Custom Fields',
+          }),
+          'filters': dict({
+            'anyOf': list([
+              dict({
+                'items': dict({
+                  'items': dict({
+                    '$ref': '#/$defs/SearchCondition',
+                  }),
+                  'type': 'array',
+                }),
+                'type': 'array',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Filters',
+          }),
+          'length': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Length',
+          }),
+          'sorts': dict({
+            'anyOf': list([
+              dict({
+                'items': dict({
+                  '$ref': '#/$defs/SortSpec',
+                }),
+                'type': 'array',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Sorts',
+          }),
+          'start': dict({
+            'default': 0,
+            'title': 'Start',
+            'type': 'integer',
+          }),
+        }),
+        'title': 'soar_search_incidentsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_update_incident': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': False,
+        'title': 'soar_update_incident',
+      }),
+      'capability': 'SOAR_ALLOW_INCIDENT_WRITES',
+      'input_schema': dict({
+        'properties': dict({
+          'changes': dict({
+            'additionalProperties': True,
+            'title': 'Changes',
+            'type': 'object',
+          }),
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+          'changes',
+        ]),
+        'title': 'soar_update_incidentArguments',
+        'type': 'object',
+      }),
+      'tier': 2,
+    }),
+    'soar_update_task_status': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': False,
+        'title': 'soar_update_task_status',
+      }),
+      'capability': 'SOAR_ALLOW_TASK_WRITES',
+      'input_schema': dict({
+        'properties': dict({
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+          'status': dict({
+            'enum': list([
+              'open',
+              'closed',
+            ]),
+            'title': 'Status',
+            'type': 'string',
+          }),
+          'task_id': dict({
+            'title': 'Task Id',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+          'task_id',
+          'status',
+        ]),
+        'title': 'soar_update_task_statusArguments',
+        'type': 'object',
+      }),
+      'tier': 2,
+    }),
+  })
+# ---

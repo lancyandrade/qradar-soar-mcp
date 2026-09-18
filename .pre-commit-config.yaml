@@ -1,0 +1,27 @@
+# Mirrors CI (P1-12). Install once: `uv run pre-commit install`
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.8
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy --strict
+        entry: uv run mypy
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: check-no-secrets
+        name: no private addresses / internal hostnames / keys in the tree
+        entry: uv run python scripts/check_no_secrets.py
+        language: system
+        pass_filenames: false

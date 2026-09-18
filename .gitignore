@@ -1,0 +1,50 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+config/action_policy.yaml
+config/*.local.yaml
+
+# SOAR exports, snapshots, approvals, audit — never commit runtime state
+*.resz
+*.res
+snapshots/
+approvals/
+*.jsonl
+out/
+
+# Unsanitised appliance captures (Phase 2 probes)
+scripts/probe/raw/
+tests/fixtures/raw/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Testing / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+coverage.xml
+htmlcov/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local logs
+*.log

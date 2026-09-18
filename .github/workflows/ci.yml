@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: secret scan (gitleaks, full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_SUMMARY: "true"
+
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --extra dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      # The suite must pass with no environment at all: the server is deny-by-default
+      # and every test that needs configuration sets it explicitly.
+      - run: uv run pytest -q --cov=qradar_soar_mcp --cov-report=term-missing --cov-report=xml --cov-fail-under=80
+        env:
+          SOAR_BASE_URL: ""
+      - name: security/ coverage floor (95%)
+        run: uv run coverage report --include="src/qradar_soar_mcp/security/*" --fail-under=95
+      - name: No private addresses, internal hostnames, keys or tokens in the tree
+        shell: bash
+        run: uv run python scripts/check_no_secrets.py
+
+  audit:
+    name: dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra dev
+      # Audit the locked third-party set (runtime + dev extra). The project itself is
+      # not on PyPI, and under --strict pip-audit fails on any package it cannot look
+      # up, so the project is left out of the export instead of relaxing --strict.
+      - name: Export the locked third-party requirements (project excluded)
+        run: uv export --locked --extra dev --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/requirements-audit.txt"
+      - name: pip-audit --strict over the locked set
+        run: uv run pip-audit --strict --desc --disable-pip --require-hashes -r "$RUNNER_TEMP/requirements-audit.txt"

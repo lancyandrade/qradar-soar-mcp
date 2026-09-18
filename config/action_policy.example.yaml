@@ -1,0 +1,59 @@
+# Action policy for qradar-soar-mcp — docs/design/02-SECURITY-MODEL.md §3.
+#
+# Copy to config/action_policy.yaml (git-ignored) and point SOAR_ACTION_POLICY_FILE at it.
+#
+# This file is YOUR classification of YOUR environment. It is the only place a
+# Tier-3 action becomes reachable by the model. Rules are matched in order;
+# the first match wins; anything unmatched falls to `default` (Tier 5, deny).
+#
+# `deny_values` is the control that matters most: it stops the plausible-but-
+# catastrophic action — blocking your own egress IP because it appeared in a
+# proxy-log artifact, or isolating a domain controller. Populate the
+# placeholders below before enabling SOAR_ALLOW_ACTIONS. The generated schema
+# is docs/action_policy.schema.json; a malformed file refuses to start.
+
+version: 1
+
+# Unmatched ⇒ deny at Tier 5. Do not lower this.
+default:
+  tier: 5
+  decision: deny
+
+actions:
+  - match: { name: "Send Analyst Digest" }
+    tier: 1
+    decision: allow
+
+  - match: { name: "Enrich Artifact with Threat Intel" }
+    tier: 1
+    decision: allow
+    reason: "Read-only enrichment; no downstream mutation"
+
+  - match: { name_regex: "^Escalate to .*" }
+    tier: 2
+    decision: allow
+
+  - match: { name: "Firewall — Block IP" }
+    tier: 3
+    decision: require_approval
+    destructive: true
+    constraints:
+      artifact_types: [ "IP Address" ]
+      deny_values:                     # never let the model block these
+        - "10.0.0.0/8"
+        - "172.16.0.0/12"
+        - "192.168.0.0/16"
+        - "<your egress ranges>"
+        - "<your DC subnets>"
+
+  - match: { name: "EDR — Isolate Endpoint" }
+    tier: 3
+    decision: require_approval
+    destructive: true
+    constraints:
+      deny_values: [ "<domain controller hostnames>", "<hypervisor hosts>" ]
+
+  - match: { name_regex: ".*(Delete|Purge|Wipe|Disable All).*" }
+    tier: 5
+    decision: deny
+    reason: "Bulk/destructive verbs are never model-reachable"

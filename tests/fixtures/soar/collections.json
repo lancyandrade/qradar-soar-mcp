@@ -1,0 +1,46 @@
+{
+  "_fixture": "synthetic",
+  "_note": "Per-incident collections and org-level lists. All invented. Action names deliberately match the example policy in docs/design/02-SECURITY-MODEL.md §3.",
+  "data": {
+    "comments": {
+      "42": [
+        {"id": 7001, "parent_id": null, "text": "Opened from SIEM offense 9001.", "create_date": 1758000120000, "user_name": "analyst.one", "children": []},
+        {"id": 7002, "parent_id": null, "text": "Geo-IP shows a hosting provider. Escalating.", "create_date": 1758003600000, "user_name": "analyst.two",
+         "children": [
+           {"id": 7003, "parent_id": 7002, "text": "Ack.", "create_date": 1758003700000, "user_name": "analyst.one", "children": []}
+         ]}
+      ]
+    },
+    "artifacts": {
+      "42": [
+        {"id": 8001, "type": "IP Address", "value": "203.0.113.10", "description": "Source of the login", "created": 1758000180000, "hits": []},
+        {"id": 8002, "type": "User Account", "value": "jdoe", "description": null, "created": 1758000181000, "hits": []}
+      ]
+    },
+    "tasks": {
+      "42": [
+        {"id": 9001, "vers": 2, "inc_id": 42, "name": "Confirm with user", "phase_id": "Engage", "status": "O", "active": true, "required": true, "instructions": "Call the user on a known-good number.", "owner_id": null, "due_date": null},
+        {"id": 9002, "vers": 5, "inc_id": 42, "name": "Review sign-in logs", "phase_id": "Engage", "status": "C", "active": true, "required": false, "instructions": "", "owner_id": "analyst.two", "due_date": null}
+      ]
+    },
+    "attachments": {
+      "42": [
+        {"id": 5001, "name": "signin-export.csv", "size": 20480, "content_type": "text/csv", "created": 1758000200000, "creator_id": "analyst.one"}
+      ]
+    },
+    "incident_actions": {
+      "42": [
+        {"id": 47, "name": "Firewall — Block IP", "object_type": "artifact", "enabled": true},
+        {"id": 48, "name": "Send Analyst Digest", "object_type": "incident", "enabled": true},
+        {"id": 49, "name": "EDR — Isolate Endpoint", "object_type": "incident", "enabled": true},
+        {"id": 50, "name": "Enrich Artifact with Threat Intel", "object_type": "artifact", "enabled": true},
+        {"id": 51, "name": "Escalate to Tier 2", "object_type": "incident", "enabled": true},
+        {"id": 52, "name": "Purge Mailbox", "object_type": "incident", "enabled": true}
+      ]
+    },
+    "users": [
+      {"id": 7, "fname": "Analyst", "lname": "One", "email": "analyst.one@soar.example.internal", "display_name": "Analyst One", "status": "A"},
+      {"id": 8, "fname": "Analyst", "lname": "Two", "email": "analyst.two@soar.example.internal", "display_name": "Analyst Two", "status": "A"}
+    ]
+  }
+}
