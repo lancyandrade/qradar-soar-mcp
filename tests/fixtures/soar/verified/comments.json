@@ -1,0 +1,28 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "has_children_key": false,
+    "has_parent_id_key": false,
+    "rows": "0",
+    "text_type": []
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "OQ10",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/incidents/{incident_id}/comments",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<1KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": []
+}

@@ -1,0 +1,194 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "input_type": [
+      "boolean",
+      "datetimepicker",
+      "multiselect_members",
+      "number",
+      "select",
+      "select_owner",
+      "text",
+      "textarea"
+    ],
+    "type_id": [
+      1
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "is_list": true,
+    "paging_keys": [],
+    "row_keys": [
+      "allow_default_value",
+      "blank_option",
+      "calculated",
+      "changeable",
+      "chosen",
+      "default_chosen_by_server",
+      "deprecated",
+      "hide_notification",
+      "id",
+      "input_type",
+      "internal",
+      "is_tracked",
+      "json_example",
+      "json_schema",
+      "name",
+      "operation_perms",
+      "operations",
+      "perms",
+      "prefix",
+      "read_only",
+      "rich_text",
+      "tags",
+      "templates",
+      "text",
+      "type_id",
+      "uuid",
+      "values"
+    ],
+    "rows": "10-99",
+    "wrapper_keys": []
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "05§2",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/types/task/fields",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": [
+    {
+      "allow_default_value": "bool",
+      "blank_option": "bool",
+      "calculated": "bool",
+      "changeable": "bool",
+      "chosen": "bool",
+      "default_chosen_by_server": "bool",
+      "deprecated": "bool",
+      "hide_notification": "bool",
+      "id": "int",
+      "input_type": "str",
+      "internal": "bool",
+      "is_tracked": "bool",
+      "json_example": "null",
+      "json_schema": "null",
+      "name": "str",
+      "operation_perms": {
+        "<name>?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        },
+        "changed?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        },
+        "changed_to?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        },
+        "contains?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        },
+        "due_within?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        },
+        "equals?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        },
+        "has_a_value?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        },
+        "not_changed_to?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        },
+        "not_contains?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        },
+        "not_equals?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        },
+        "not_has_a_value?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        },
+        "overdue_by?": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        }
+      },
+      "operations": [
+        "str"
+      ],
+      "perms": {
+        "delete": "bool",
+        "modify_blank": "bool",
+        "modify_chosen": "bool",
+        "modify_default": "bool",
+        "modify_name": "bool",
+        "modify_operations": "bool",
+        "modify_required": "bool",
+        "modify_type": [
+          "str"
+        ],
+        "modify_values": "bool",
+        "show_in_auto_actions": "bool",
+        "show_in_manual_actions": "bool",
+        "show_in_notifications": "bool",
+        "show_in_scripts": "bool",
+        "sort": "bool"
+      },
+      "prefix": "null",
+      "read_only": "bool",
+      "required?": "str",
+      "rich_text": "bool",
+      "tags": [],
+      "templates": [],
+      "text": "str",
+      "tooltip?": "str",
+      "type_id": "int",
+      "uuid": "str",
+      "values": [
+        {
+          "default": "bool",
+          "enabled": "bool",
+          "hidden": "bool",
+          "label": "str",
+          "principal_type?": "str",
+          "properties": "null",
+          "uuid": "null|str",
+          "value": "int|str"
+        }
+      ]
+    }
+  ]
+}

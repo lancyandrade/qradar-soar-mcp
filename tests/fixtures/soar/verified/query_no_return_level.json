@@ -1,0 +1,72 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "plan_status": [
+      "A"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "is_list": false,
+    "paging_keys": [
+      "recordsTotal"
+    ],
+    "row_keys": [
+      "create_date",
+      "description",
+      "discovered_date",
+      "due_date",
+      "id",
+      "inc_training",
+      "name",
+      "owner_id",
+      "phase_id",
+      "plan_status",
+      "sequence_code",
+      "severity_code"
+    ],
+    "rows": "1-9",
+    "rows_returned_at_most_one": true,
+    "wrapper_keys": [
+      "data",
+      "recordsFiltered",
+      "recordsTotal"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "is return_level required?",
+  "_question": "P1",
+  "_request": {
+    "method": "POST",
+    "path": "/rest/orgs/{org_id}/incidents/query_paged",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<1KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "data": [
+      {
+        "create_date": "int",
+        "description": "str",
+        "discovered_date": "int",
+        "due_date": "null",
+        "id": "int",
+        "inc_training": "bool",
+        "name": "str",
+        "owner_id": "str",
+        "phase_id": "str",
+        "plan_status": "str",
+        "sequence_code": "null",
+        "severity_code": "str"
+      }
+    ],
+    "recordsFiltered": "int",
+    "recordsTotal": "int"
+  }
+}

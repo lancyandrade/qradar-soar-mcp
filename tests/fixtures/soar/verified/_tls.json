@@ -1,0 +1,31 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_fixture": "verified-tls",
+  "findings": {
+    "ca_bundle_failure": "None",
+    "ca_bundle_supplied": "True",
+    "certifi_failure": "self-signed certificate",
+    "connect_error": "None",
+    "currently_valid": "True",
+    "host_is_ip_literal": "False",
+    "issuer_type": "self-signed leaf",
+    "key_type": "RSA-2048",
+    "leaf_is_ca": "None",
+    "os_store_failure": "self-signed certificate",
+    "private_ca_appears_required": "False",
+    "reachable": "True",
+    "recommended_mode": "ca-bundle",
+    "san_covers_host": "True",
+    "san_dns_entries": "1",
+    "san_ip_entries": "0",
+    "san_names_resolving_to_endpoint": "1",
+    "self_signed": "True",
+    "signature_hash": "sha256",
+    "tls_version": "TLSv1.2",
+    "verifies_with_ca_bundle": "True",
+    "verifies_with_certifi": "False",
+    "verifies_with_os_store": "False",
+    "verifies_with_san_hostname": "True"
+  },
+  "mode_used": "ca-bundle"
+}

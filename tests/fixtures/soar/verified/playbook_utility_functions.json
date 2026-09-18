@@ -1,0 +1,67 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "is_list": false,
+    "paging_keys": [],
+    "row_keys": [
+      "created_date",
+      "creator",
+      "description",
+      "display_name",
+      "enabled",
+      "id",
+      "last_modified_by",
+      "last_modified_time",
+      "name",
+      "uuid"
+    ],
+    "rows": "1-9",
+    "wrapper_keys": [
+      "entities"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "Q1",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/playbooks/utility_functions",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<1KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "entities": [
+      {
+        "created_date": "int",
+        "creator": {
+          "display_name": "str",
+          "id": "int",
+          "name": "str",
+          "type": "str"
+        },
+        "description": "null",
+        "display_name": "str",
+        "enabled": "bool",
+        "id": "int",
+        "last_modified_by": {
+          "display_name": "str",
+          "id": "int",
+          "name": "str",
+          "type": "str"
+        },
+        "last_modified_time": "int",
+        "name": "str",
+        "uuid": "str"
+      }
+    ]
+  }
+}

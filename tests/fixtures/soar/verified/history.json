@@ -1,0 +1,82 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "format": [
+      "html"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "result_like_keys": [],
+    "row_keys": [],
+    "rows": "0",
+    "top_level_keys": [
+      "artifact_history",
+      "attachment_history",
+      "data_type_history",
+      "incident_detail_history",
+      "milestone_history",
+      "record_count_history",
+      "task_history"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "Q8",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/incidents/{incident_id}/history",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "artifact_history": "null",
+    "attachment_history": "null",
+    "data_type_history": "null",
+    "incident_detail_history": [
+      {
+        "create": "bool",
+        "date": "int",
+        "delete": "bool",
+        "diffs": [
+          {
+            "name": "str",
+            "new_val": {
+              "<anyOf>": [
+                {
+                  "<anyOf>": [
+                    "str",
+                    {
+                      "content": "str",
+                      "format": "str",
+                      "null": "bool"
+                    }
+                  ]
+                }
+              ]
+            },
+            "old_val?": {
+              "format": "str",
+              "null": "bool"
+            },
+            "type": "str"
+          }
+        ],
+        "object_id": "int",
+        "object_name": "str",
+        "revision_number": "int",
+        "user": "str"
+      }
+    ],
+    "milestone_history": "null",
+    "record_count_history": "null",
+    "task_history": "null"
+  }
+}

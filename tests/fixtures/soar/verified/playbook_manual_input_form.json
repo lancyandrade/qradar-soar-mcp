@@ -1,0 +1,34 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "server_error": {
+      "error_code": "generic",
+      "message_masked": "Forbidden"
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "Q1",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/playbooks/{playbook_id}/manual_input_form",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<1KB",
+  "_status": 403,
+  "_truncated": false,
+  "shape": {
+    "error_code": "str",
+    "hints": [],
+    "message": "str",
+    "success": "bool",
+    "title": "null"
+  }
+}

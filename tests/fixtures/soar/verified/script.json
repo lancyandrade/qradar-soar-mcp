@@ -1,0 +1,49 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "object_type": [
+      "incident"
+    ]
+  },
+  "_error": null,
+  "_facts": {},
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "05§2",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/scripts/{script_id}",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<1KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "actions": [],
+    "created_date": "int",
+    "creator_id": "str",
+    "description": "str",
+    "enabled": "bool",
+    "id": "int",
+    "language": "str",
+    "last_modified_by": "str",
+    "last_modified_time": "int",
+    "name": "str",
+    "object_type": "str",
+    "playbook_handle": "null",
+    "programmatic_name": "str",
+    "script_text": "str",
+    "tags": [
+      {
+        "tag_handle": "str",
+        "value": "str"
+      }
+    ],
+    "uuid": "str"
+  }
+}

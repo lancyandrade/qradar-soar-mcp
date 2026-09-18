@@ -1,0 +1,2241 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_fixture": "verified-ledger",
+  "documentation_requests": [
+    {
+      "allow": null,
+      "content_type": "text/html",
+      "error": null,
+      "method": "GET",
+      "path": "/docs/rest-api/index.html",
+      "query_keys": [],
+      "size": "<1MB",
+      "status": 200
+    }
+  ],
+  "documented_endpoints": {
+    "ActionREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/actions/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/actions"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/actions/action_order"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/actions/{handle}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/actions/{id}/view"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/actions"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/actions/action_order"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/actions/{id}"
+      ]
+    ],
+    "ApiKeyREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/apikeys/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/apikeys"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/apikeys/{id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/apikeys"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/apikeys/query_paged"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/apikeys/{id}"
+      ]
+    ],
+    "ArtifactREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/artifacts/{artifact_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/artifacts/{artifact_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/artifacts/{artifact_id}/history"
+      ],
+      [
+        "PATCH",
+        "/orgs/{org_id}/artifacts"
+      ],
+      [
+        "PATCH",
+        "/orgs/{org_id}/artifacts/{artifact_id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/artifacts"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/artifacts/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/artifacts/{artifact_id}/hits/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/artifacts/{artifact_id}/related_incident_artifacts/query_paged"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/artifacts/patch"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/artifacts/{artifact_id}"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/artifacts/{artifact_id}/patch"
+      ]
+    ],
+    "AutomaticTaskREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/automatic_tasks/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/automatic_tasks"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/automatic_tasks/{id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/automatic_tasks"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/automatic_tasks/{id}"
+      ]
+    ],
+    "ConfigurationsREST": [
+      [
+        "GET",
+        "/orgs/{org_id}/configurations/exports/history"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/configurations/exports/{export_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/configurations/imports/history"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/configurations/push/history"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/configurations/push/history/{push_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/configurations/push/history/{push_id}/exports"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/configurations/exports"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/configurations/exports/zip"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/configurations/exports/{export_id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/configurations/imports"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/configurations/push"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/configurations/push/history/{push_id}/exports"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/configurations/imports/{import_id}"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/configurations/imports/{import_id}/status"
+      ]
+    ],
+    "DataTableDataREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/incidents/{inc_id}/table_data/{table_id}/row_data"
+      ],
+      [
+        "DELETE",
+        "/orgs/{org_id}/incidents/{inc_id}/table_data/{table_id}/row_data/{row_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/table_data"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/table_data/{table_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/table_data/{table_id}/row_data/{row_id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/table_data/{table_id}/row_data"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{inc_id}/table_data/{table_id}/row_data/{row_id}"
+      ]
+    ],
+    "FunctionREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/functions/{functionHandle}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/functions"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/functions/{functionHandle}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/functions"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/functions/{functionHandle}"
+      ]
+    ],
+    "GroupREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/groups/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/groups"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/groups/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/groups/{id}/has_assignments"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/groups"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/groups/query_paged"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/groups/{id}"
+      ]
+    ],
+    "IncidentArtifactREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/count_by_severity"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/contents"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/explainability/scores/count_by_severity"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/history"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/files"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/contents"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/copy"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/enrichments/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/explainability/scores/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/findings/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/generic_properties/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/hits"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/related_incidents/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}/whois"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/delete"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{inc_id}/artifacts/{artifact_id}"
+      ]
+    ],
+    "IncidentAttachmentREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/incidents/{inc_id}/attachments/{attach_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/attachments"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/attachments/{attach_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/attachments/{attach_id}/contents"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/attachments"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/attachments/query"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/attachments/{attach_id}/contents"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{inc_id}/attachments/delete"
+      ]
+    ],
+    "IncidentMilestoneREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/incidents/{inc_id}/milestones/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/milestones"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/milestones"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{inc_id}/milestones/{id}"
+      ]
+    ],
+    "IncidentNoteREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/incidents/{inc_id}/comments/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/comments"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/comments/{id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/comments"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/comments/query"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{inc_id}/comments/{id}"
+      ]
+    ],
+    "IncidentREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/incidents/{inc_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/open"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/simulations"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/due_soon"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/history"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/members"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/newsfeed"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/related_ex"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/related_ex_counts"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/tasks"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/workflow_instances"
+      ],
+      [
+        "GET",
+        "/rest/incidents"
+      ],
+      [
+        "PATCH",
+        "/orgs/{org_id}/incidents"
+      ],
+      [
+        "PATCH",
+        "/orgs/{org_id}/incidents/{inc_id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/query"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/related"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incidents/{inc_id}/tasks"
+      ],
+      [
+        "POST",
+        "/rest/incidents/query_paged"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/delete"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/patch"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{id}/patch"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{inc_id}"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{inc_id}/edit_attachment_descriptions"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{inc_id}/members"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incidents/{inc_id}/move_task_attachments_to_incident"
+      ]
+    ],
+    "IncidentStatisticsREST": [
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/stats/tasks_by_owner"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incidents/{inc_id}/stats/tasks_over_time"
+      ]
+    ],
+    "MessageDestinationREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/message_destinations/{handle}/messages"
+      ],
+      [
+        "DELETE",
+        "/orgs/{org_id}/message_destinations/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/message_destinations"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/message_destinations/diagnostics/messages/{queue_name}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/message_destinations/diagnostics/messages/{queue_name}/details"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/message_destinations/{handle}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/message_destinations"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/message_destinations/diagnostics/playbook/execution/messages"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/message_destinations/diagnostics/workflow/execution/messages"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/message_destinations/{id}"
+      ]
+    ],
+    "OrgIncidentArtifactTypeREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/artifact_types/{type_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/artifact_types"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/artifact_types/{type_id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/artifact_types"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/artifact_types/query_paged"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/artifact_types/{type_id}"
+      ]
+    ],
+    "OrgREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/authldapgroup"
+      ],
+      [
+        "DELETE",
+        "/orgs/{org_id}/incident_types/{id}"
+      ],
+      [
+        "DELETE",
+        "/orgs/{org_id}/twofactorauth"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/data_types"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/geos"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incident_types"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/incident_types/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/newsfeed"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/permissions"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/permissions/{perm_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/regulators"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/settings"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/timeframes"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/twofactorauth"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/incident_types"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/authldapgroup"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/data_types"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/geos"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/incident_types/{id}"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/regulators"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/settings"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/timeframes"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/twofactorauth/{id}"
+      ]
+    ],
+    "OrgStatisticsREST": [
+      [
+        "GET",
+        "/orgs/{org_id}/stats/closed_incidents_by_duration"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/stats/counts"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/stats/incidents_by_category"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/stats/incidents_by_severity"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/stats/incidents_by_type_over_time"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/stats/incidents_by_user"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/stats/new_and_open_incidents"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/stats/open_incidents_by_confirmed_unconfirmed"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/stats/open_incidents_by_duration"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/stats/open_incidents_by_phase"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/stats/open_tasks_by_owner"
+      ]
+    ],
+    "OrgThreatSourceREST": [
+      [
+        "GET",
+        "/orgs/{org_id}/threat_sources"
+      ]
+    ],
+    "OrgUserREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/users/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/users"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/users/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/users/{id}/has_assignments"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/users/{id}/incidents"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/users/{id}/tasks"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/users/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/users/{id}/has_assignments"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/users/{user_object_handle}/resetPassword"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/users/{id}"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/users/{id}/activateUser"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/users/{id}/deactivateUser"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/users/{id}/reassign_assignments"
+      ]
+    ],
+    "PhaseREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/phases/{phaseId}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/phases"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/phases/{phaseId}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/phases"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/phases/order"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/phases/{phaseId}"
+      ]
+    ],
+    "PlaybookExecutionREST": [
+      [
+        "GET",
+        "/orgs/{org_id}/playbooks/execution/{execution_id}/playbook"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/execution/cancel"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/execution/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/execution/{execution_id}/activities"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/playbooks/execution/{execution_id}/status"
+      ]
+    ],
+    "PlaybookExecutionStatisticsREST": [
+      [
+        "GET",
+        "/orgs/{org_id}/playbooks/execution/statistics"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/execution/statistics/most_executed_playbooks"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/execution/statistics/playbooks_by_runtime"
+      ]
+    ],
+    "PlaybookFunctionREST": [
+      [
+        "GET",
+        "/orgs/{org_id}/playbooks/utility_functions"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/playbooks/utility_functions/{id}"
+      ]
+    ],
+    "PlaybookREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/playbooks/{playbook_object_handle}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/playbooks/{playbook_object_handle}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/playbooks/{playbook_object_handle}/change_logs/{change_log_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/playbooks/{playbook_object_handle}/inputs/schema"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/playbooks/{playbook_object_handle}/manual_input_form"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/playbooks/{playbook_object_handle}/schema"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/exports"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/exports/{export_id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/imports"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/{playbook_object_handle}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/{playbook_object_handle}/change_logs/query_paged"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/playbooks/{playbook_object_handle}/clone"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/playbooks/imports/{import_id}/status"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/playbooks/{playbook_object_handle}"
+      ]
+    ],
+    "ScriptREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/scripts/{script_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/scripts"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/scripts/{script_id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/scripts"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/scripts/query_paged"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/scripts/{script_id}"
+      ]
+    ],
+    "SessionREST": [
+      [
+        "DELETE",
+        "/session"
+      ],
+      [
+        "GET",
+        "/rest/orgs/{org_id}/apikeys/{id}"
+      ],
+      [
+        "GET",
+        "/rest/session/{org_id}/acl"
+      ],
+      [
+        "GET",
+        "/session"
+      ],
+      [
+        "GET",
+        "/session/twofactor"
+      ],
+      [
+        "GET",
+        "/session/{org_id}/acl"
+      ],
+      [
+        "POST",
+        "/session"
+      ],
+      [
+        "POST",
+        "/session/twofactor"
+      ]
+    ],
+    "TaskAttachmentREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/tasks/{task_id}/attachments/{attach_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks/{task_id}/attachments"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks/{task_id}/attachments/{attach_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks/{task_id}/attachments/{attach_id}/contents"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/tasks/{task_id}/attachments"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/tasks/{task_id}/attachments/query"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/tasks/{task_id}/attachments/{attach_id}/contents"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/tasks/{task_id}/attachments/{attach_id}/move"
+      ]
+    ],
+    "TaskNoteREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/tasks/{task_id}/comments/{id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks/{task_id}/comments"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks/{task_id}/comments/{id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/tasks/{task_id}/comments"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/tasks/{task_id}/comments/query"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/tasks/{task_id}/comments/{id}"
+      ]
+    ],
+    "TaskREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/tasks/{id}/members"
+      ],
+      [
+        "DELETE",
+        "/orgs/{org_id}/tasks/{task_id}"
+      ],
+      [
+        "GET",
+        "/instructions_ex"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks/due_soon"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks/{id}/members"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks/{task_id}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks/{task_id}/instructions"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks/{task_id}/instructions_ex"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/tasks/{task_id}/sources"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/tasks"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/tasks/delete"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/tasks/{id}/members"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/tasks/{task_id}"
+      ]
+    ],
+    "TypeREST": [
+      [
+        "DELETE",
+        "/orgs/{org_id}/types/{type}"
+      ],
+      [
+        "DELETE",
+        "/orgs/{org_id}/types/{type}/fields/{field}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/types"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/types/{type}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/types/{type}/fields"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/types/{type}/fields/{field}"
+      ],
+      [
+        "GET",
+        "/orgs/{org_id}/types/{type}/schema"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/types"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/types/{type}/fields"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/types/{type}"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/types/{type}/fields/{field}"
+      ]
+    ],
+    "WorkflowInstanceREST": [
+      [
+        "GET",
+        "/orgs/{org_id}/workflow_instances/{wi_id}"
+      ],
+      [
+        "POST",
+        "/orgs/{org_id}/workflow_instances/{inc_id}/query_paged"
+      ],
+      [
+        "PUT",
+        "/orgs/{org_id}/workflow_instances/{wi_id}"
+      ]
+    ],
+    "WorkflowREST": [
+      [
+        "GET",
+        "/orgs/{org_id}/workflows"
+      ]
+    ]
+  },
+  "refused_by_policy": [],
+  "requests": [
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/const",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "version",
+      "size": "<1MB",
+      "status": 200,
+      "step": "const"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/session",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q6",
+      "size": "<1KB",
+      "status": 200,
+      "step": "session"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q6",
+      "size": "<100KB",
+      "status": 200,
+      "step": "org"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/session/{org_id}/acl",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q6",
+      "size": "<1KB",
+      "status": 200,
+      "step": "session_acl"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/permissions",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q6",
+      "size": "<1KB",
+      "status": 403,
+      "step": "permissions"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/apikeys",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q6",
+      "size": "<1KB",
+      "status": 403,
+      "step": "apikeys"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/playbooks",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q1",
+      "size": "<1KB",
+      "status": 500,
+      "step": "playbooks"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "POST",
+      "path": "/rest/orgs/{org_id}/playbooks/query_paged",
+      "query_keys": [
+        "handle_format",
+        "return_level",
+        "text_content_output_format"
+      ],
+      "question": "Q1",
+      "size": "<100KB",
+      "status": 200,
+      "step": "playbooks_query_paged"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/playbooks/{playbook_id}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q1",
+      "size": "<100KB",
+      "status": 200,
+      "step": "playbook"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/playbooks/query_paged",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q1",
+      "size": "<1KB",
+      "status": 404,
+      "step": "playbooks_query_paged_via_get"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/playbooks/{playbook_id}/schema",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q1",
+      "size": "<100KB",
+      "status": 200,
+      "step": "playbook_schema"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/playbooks/{playbook_id}/inputs/schema",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q1",
+      "size": "<1KB",
+      "status": 200,
+      "step": "playbook_inputs_schema"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/playbooks/{playbook_id}/manual_input_form",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q1",
+      "size": "<1KB",
+      "status": 403,
+      "step": "playbook_manual_input_form"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/playbooks/utility_functions",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q1",
+      "size": "<1KB",
+      "status": 200,
+      "step": "playbook_utility_functions"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/playbooks/execution/statistics",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q8",
+      "size": "<1KB",
+      "status": 200,
+      "step": "playbook_execution_statistics"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/configurations/exports/history",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q2",
+      "size": "<1KB",
+      "status": 403,
+      "step": "export_history"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/types",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q4",
+      "size": "<10MB",
+      "status": 200,
+      "step": "types"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/types/{datatable_type}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q4",
+      "size": "<100KB",
+      "status": 200,
+      "step": "datatable_type"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/types/{datatable_type}/fields",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q4",
+      "size": "<100KB",
+      "status": 200,
+      "step": "datatable_fields"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/types/{datatable_type}/schema",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q4",
+      "size": "<1KB",
+      "status": 200,
+      "step": "datatable_schema"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/types/__function/fields",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q5",
+      "size": "<1MB",
+      "status": 200,
+      "step": "function_fields"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/functions",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q5",
+      "size": "<100KB",
+      "status": 200,
+      "step": "functions"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/functions/{function_id}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q5",
+      "size": "<100KB",
+      "status": 200,
+      "step": "function"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/actions",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<100KB",
+      "status": 200,
+      "step": "actions"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/actions/{action_id}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<1KB",
+      "status": 200,
+      "step": "action"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/actions/{action_id}/view",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<1KB",
+      "status": 200,
+      "step": "action_view"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/workflows",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<1KB",
+      "status": 200,
+      "step": "workflows"
+    },
+    {
+      "allow": null,
+      "content_type": null,
+      "error": "skipped: no workflow_id",
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/workflows/{workflow_id}",
+      "query_keys": [],
+      "question": "05§2",
+      "size": "n/a",
+      "status": null,
+      "step": "workflow"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/scripts",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<100KB",
+      "status": 200,
+      "step": "scripts"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/scripts/{script_id}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<1KB",
+      "status": 200,
+      "step": "script"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/message_destinations",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<100KB",
+      "status": 200,
+      "step": "message_destinations"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incident_types",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<100KB",
+      "status": 200,
+      "step": "incident_types"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/phases",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<100KB",
+      "status": 200,
+      "step": "phases"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/groups",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<1KB",
+      "status": 200,
+      "step": "groups"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/users",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "OQ11",
+      "size": "<100KB",
+      "status": 200,
+      "step": "users"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/types/incident/fields",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<1MB",
+      "status": 200,
+      "step": "fields_incident"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/types/task/fields",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<100KB",
+      "status": 200,
+      "step": "fields_task"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/types/artifact/fields",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<100KB",
+      "status": 200,
+      "step": "fields_artifact"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "POST",
+      "path": "/rest/orgs/{org_id}/incidents/query_paged",
+      "query_keys": [
+        "handle_format",
+        "return_level",
+        "text_content_output_format"
+      ],
+      "question": "Q7/Q8",
+      "size": "<100KB",
+      "status": 200,
+      "step": "incidents_query_paged"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "OQ12",
+      "size": "<100KB",
+      "status": 200,
+      "step": "incident"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P1",
+      "size": "<100KB",
+      "status": 200,
+      "step": "incident_handle_format_ids"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}",
+      "query_keys": [],
+      "question": "P1",
+      "size": "<100KB",
+      "status": 200,
+      "step": "incident_no_params"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "POST",
+      "path": "/rest/orgs/{org_id}/incidents/query_paged",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P1",
+      "size": "<1KB",
+      "status": 200,
+      "step": "query_no_return_level"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "POST",
+      "path": "/rest/orgs/{org_id}/incidents/query_paged",
+      "query_keys": [
+        "handle_format",
+        "return_level",
+        "text_content_output_format"
+      ],
+      "question": "P1",
+      "size": "<100KB",
+      "status": 200,
+      "step": "query_active"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "POST",
+      "path": "/rest/orgs/{org_id}/incidents/query_paged",
+      "query_keys": [
+        "handle_format",
+        "return_level",
+        "text_content_output_format"
+      ],
+      "question": "P1",
+      "size": "<1KB",
+      "status": 200,
+      "step": "query_closed"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "POST",
+      "path": "/rest/orgs/{org_id}/incidents/query_paged",
+      "query_keys": [
+        "handle_format",
+        "return_level",
+        "text_content_output_format"
+      ],
+      "question": "P1",
+      "size": "<1KB",
+      "status": 200,
+      "step": "query_and"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "POST",
+      "path": "/rest/orgs/{org_id}/incidents/query_paged",
+      "query_keys": [
+        "handle_format",
+        "return_level",
+        "text_content_output_format"
+      ],
+      "question": "P1",
+      "size": "<100KB",
+      "status": 200,
+      "step": "query_or"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "POST",
+      "path": "/rest/orgs/{org_id}/incidents/query_paged",
+      "query_keys": [
+        "handle_format",
+        "return_level",
+        "text_content_output_format"
+      ],
+      "question": "OQ3",
+      "size": "<100KB",
+      "status": 200,
+      "step": "query_sorted"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}/tasks",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "OQ1",
+      "size": "<1MB",
+      "status": 200,
+      "step": "tasks"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/tasks/{task_id}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "OQ1",
+      "size": "<100KB",
+      "status": 200,
+      "step": "task"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}/comments",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "OQ10",
+      "size": "<1KB",
+      "status": 200,
+      "step": "comments"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}/artifacts",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§1.2",
+      "size": "<1KB",
+      "status": 200,
+      "step": "artifacts"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/artifacts/{artifact_id}/history",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§1.2",
+      "size": "<100KB",
+      "status": 200,
+      "step": "artifact_history"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}/actions",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P1",
+      "size": "<1KB",
+      "status": 500,
+      "step": "incident_actions"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}/action_invocations",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P1",
+      "size": "<1KB",
+      "status": 200,
+      "step": "incident_action_invocations"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}/table_data",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q4",
+      "size": "<1KB",
+      "status": 200,
+      "step": "table_data"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}/history",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q8",
+      "size": "<100KB",
+      "status": 200,
+      "step": "history"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}/newsfeed",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q8",
+      "size": "<100KB",
+      "status": 200,
+      "step": "newsfeed"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}/workflow_instances",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q8",
+      "size": "<1KB",
+      "status": 200,
+      "step": "workflow_instances"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/tasks/{task_id}/attachments",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q7",
+      "size": "<1KB",
+      "status": 200,
+      "step": "task_attachments"
+    },
+    {
+      "allow": null,
+      "content_type": null,
+      "error": "skipped: no task_attachment_id",
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/tasks/{task_id}/attachments/{task_attachment_id}/contents",
+      "query_keys": [],
+      "question": "Q7",
+      "size": "n/a",
+      "status": null,
+      "step": "task_attachment_contents"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{incident_id}/attachments",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q7",
+      "size": "<1KB",
+      "status": 200,
+      "step": "attachment_scan"
+    },
+    {
+      "allow": null,
+      "content_type": null,
+      "error": "skipped: no attachment_incident_id, attachment_id",
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{attachment_incident_id}/attachments/{attachment_id}",
+      "query_keys": [],
+      "question": "Q7",
+      "size": "n/a",
+      "status": null,
+      "step": "attachment_metadata"
+    },
+    {
+      "allow": null,
+      "content_type": null,
+      "error": "skipped: no attachment_incident_id, attachment_id",
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/incidents/{attachment_incident_id}/attachments/{attachment_id}/contents",
+      "query_keys": [],
+      "question": "Q7",
+      "size": "n/a",
+      "status": null,
+      "step": "attachment_contents"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "POST",
+      "path": "/rest/orgs/{org_id}/configurations/exports",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q2",
+      "size": "<1KB",
+      "status": 403,
+      "step": "export"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "error": null,
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/configurations/exports/history",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "Q2",
+      "size": "<1KB",
+      "status": 403,
+      "step": "export_history_after"
+    },
+    {
+      "allow": null,
+      "content_type": null,
+      "error": "skipped: no export_id",
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/configurations/exports/{export_id}",
+      "query_keys": [],
+      "question": "Q2",
+      "size": "n/a",
+      "status": null,
+      "step": "export_by_id"
+    }
+  ]
+}

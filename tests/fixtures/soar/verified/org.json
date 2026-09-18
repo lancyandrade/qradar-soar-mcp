@@ -1,0 +1,299 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "status": [
+      "A"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "permission_like_keys": [
+      "perms",
+      "role_handles",
+      "system_permission_handles"
+    ],
+    "perms_false": "1-9",
+    "perms_map_present": true,
+    "perms_true": "10-99",
+    "rows": "0",
+    "top_level_keys": [
+      "actions_framework_enabled",
+      "attachments_enabled",
+      "attachments_used_bytes",
+      "automation_types",
+      "breach_enabled",
+      "canada_enabled",
+      "data_types",
+      "eu_enabled",
+      "field_value_modifications",
+      "geos",
+      "groups",
+      "hide_breach_tab",
+      "id",
+      "inc_deletion_allowed",
+      "incident_artifact_types",
+      "incident_severities",
+      "incident_types",
+      "nps_survey_enabled",
+      "nps_survey_offering_id",
+      "org_info",
+      "phases",
+      "properties",
+      "regs",
+      "saas",
+      "sir_enabled",
+      "task_categories",
+      "threat_sources",
+      "unknown_users",
+      "us_enabled",
+      "users"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "Q6",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "actions_framework_enabled": "bool",
+    "attachments_enabled": "bool",
+    "attachments_used_bytes": "int",
+    "automation_types": {
+      "create_task": "str",
+      "modify_field": "str",
+      "run_script": "str"
+    },
+    "breach_enabled": "bool",
+    "canada_enabled": "bool",
+    "data_types": {},
+    "eu_enabled": "bool",
+    "field_value_modifications": {
+      "set_field": "str"
+    },
+    "geos": {},
+    "groups": {
+      "<name>": {
+        "config_org_group": "bool",
+        "enabled": "bool",
+        "export_key": "str",
+        "id": "int",
+        "is_assignable": "bool",
+        "is_default_owner": "bool",
+        "is_task_assignable": "bool",
+        "last_modified_by": {
+          "display_name": "str",
+          "id": "int",
+          "name": "str",
+          "type": "str"
+        },
+        "last_modified_time": "int",
+        "member_count": "int",
+        "members": [],
+        "name": "str",
+        "role_handles": "null",
+        "uuid": "str"
+      }
+    },
+    "hide_breach_tab": "bool",
+    "id": "int",
+    "inc_deletion_allowed": "bool",
+    "incident_artifact_types": {
+      "<name>": {
+        "default_scan_option": "str",
+        "desc": "str",
+        "enabled": "bool",
+        "file": "bool",
+        "id": "int",
+        "multi_aware": "bool",
+        "name": "str",
+        "parse_as_csv": "bool",
+        "programmatic_name": "str",
+        "reg_exp": "null|str",
+        "split_on?": "str",
+        "system": "bool",
+        "tags": [],
+        "use_for_relationships": "bool",
+        "uuid": "str",
+        "version": "int"
+      }
+    },
+    "incident_severities": {
+      "<name>": {
+        "id": "int",
+        "name": "str"
+      }
+    },
+    "incident_types": {
+      "<name>": {
+        "create_date": "int|null",
+        "description": "null|str",
+        "enabled": "bool",
+        "hidden": "bool",
+        "id": "int",
+        "name": "str",
+        "parent_id": "null",
+        "system": "bool",
+        "tags": [],
+        "update_date": "int|null",
+        "uuid": "str"
+      }
+    },
+    "nps_survey_enabled": "bool",
+    "nps_survey_offering_id": "str",
+    "org_info": {
+      "addr": "null",
+      "addr2": "null",
+      "attachments_enabled": "bool",
+      "authorized_ldap_group": "null",
+      "city": "null",
+      "cloud_account": "null",
+      "configuration_type": "str",
+      "final_phase_required": "bool",
+      "has_available_twofactor": "bool",
+      "has_saml": "bool",
+      "id": "int",
+      "incident_deletion_allowed": "bool",
+      "last_modified_by": {
+        "display_name": "str",
+        "id": "int",
+        "name": "str",
+        "type": "str"
+      },
+      "last_modified_time": "int",
+      "name": "str",
+      "parent_org": "null",
+      "require_saml": "bool",
+      "session_timeout": "int",
+      "state": "null",
+      "supports_ldap": "bool",
+      "tasks_private": "bool",
+      "timezone": "null",
+      "twofactor_auth_domain": "null",
+      "twofactor_cookie_lifetime_secs": "int",
+      "uuid": "str",
+      "zip": "null"
+    },
+    "phases": {
+      "<name>": {
+        "enabled": "bool",
+        "id": "int",
+        "name": "str",
+        "order": "int",
+        "perms": {
+          "deleteable": "bool",
+          "reorderable": "bool"
+        },
+        "tags": [],
+        "uuid": "str"
+      }
+    },
+    "properties": [],
+    "regs": {},
+    "saas": "bool",
+    "sir_enabled": "bool",
+    "task_categories": {
+      "<name>": {
+        "id": "int",
+        "name": "str"
+      }
+    },
+    "threat_sources": {
+      "<name>": {
+        "custom": "bool",
+        "description": "str",
+        "enabled": "bool",
+        "id": "int",
+        "license": "null",
+        "name": "str",
+        "org_handle": "null",
+        "prompt_license": "bool",
+        "properties": {},
+        "tos": {
+          "<anyOf>": [
+            {
+              "fields": "null",
+              "tos_url": "str"
+            },
+            {
+              "fields": [
+                {
+                  "id": "str",
+                  "label": "str",
+                  "type": "str",
+                  "value": "bool|null"
+                }
+              ],
+              "tos_url": "str"
+            },
+            "null",
+            {
+              "fields": [
+                {
+                  "id": "str",
+                  "label": "str",
+                  "type": "str",
+                  "value": "null"
+                }
+              ],
+              "tos_url": "str"
+            },
+            {
+              "fields": [
+                {
+                  "id": "str",
+                  "label": "str",
+                  "type": "str",
+                  "value": "null"
+                }
+              ],
+              "tos_url": "null"
+            }
+          ]
+        },
+        "tos_agreement_date": "null",
+        "type": "str",
+        "uuid": "str"
+      }
+    },
+    "unknown_users": {},
+    "us_enabled": "bool",
+    "users": {
+      "<name>": {
+        "create_date": "int",
+        "display_name": "str",
+        "email": "str",
+        "enabled": "bool",
+        "fname": "str",
+        "group_ids": [],
+        "id": "int",
+        "is_external": "bool",
+        "is_ldap": "bool",
+        "is_saml": "bool",
+        "last_login": "int",
+        "last_modified_time": "int",
+        "lname": "str",
+        "locked": "bool",
+        "org_id": "int",
+        "org_last_modified_time": "int",
+        "password_changed": "bool",
+        "password_expiration_date": "int",
+        "role_handles": "null",
+        "status": "str",
+        "system_permission_handles": [],
+        "ui_theme": "str",
+        "use_highcharts": "bool"
+      }
+    }
+  }
+}

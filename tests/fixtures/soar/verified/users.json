@@ -1,0 +1,117 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "status": [
+      "A"
+    ],
+    "type_id": [
+      7
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "is_list": true,
+    "paging_keys": [],
+    "row_keys": [
+      "create_date",
+      "display_name",
+      "email",
+      "enabled",
+      "fname",
+      "group_ids",
+      "id",
+      "incs_assigned",
+      "instance_roles",
+      "is_external",
+      "is_ldap",
+      "is_saml",
+      "last_login",
+      "last_modified_time",
+      "lname",
+      "locked",
+      "org_id",
+      "org_last_modified_time",
+      "password_changed",
+      "password_expiration_date",
+      "role_handles",
+      "roles",
+      "status",
+      "system_permission_handles",
+      "tasks_assigned",
+      "ui_theme",
+      "use_highcharts"
+    ],
+    "rows": "1-9",
+    "wrapper_keys": []
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "OQ11",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/users",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": [
+    {
+      "create_date": "int",
+      "display_name": "str",
+      "email": "str",
+      "enabled": "bool",
+      "fname": "str",
+      "group_ids": [],
+      "id": "int",
+      "incs_assigned": "null",
+      "instance_roles": [
+        {
+          "effective_permissions": [
+            "str"
+          ],
+          "role_handles": [
+            "str"
+          ],
+          "typed_object": {
+            "object_id": "int",
+            "object_name": "str",
+            "parent": "null",
+            "type_id": "int",
+            "type_name": "str"
+          }
+        }
+      ],
+      "is_external": "bool",
+      "is_ldap": "bool",
+      "is_saml": "bool",
+      "last_login": "int",
+      "last_modified_time": "int",
+      "lname": "str",
+      "locked": "bool",
+      "org_id": "int",
+      "org_last_modified_time": "int",
+      "password_changed": "bool",
+      "password_expiration_date": "int",
+      "role_handles": [
+        "str"
+      ],
+      "roles": {
+        "administrator": "bool",
+        "create_incs": "bool",
+        "master_administrator": "bool",
+        "observer": "bool"
+      },
+      "status": "str",
+      "system_permission_handles": [],
+      "tasks_assigned": "null",
+      "ui_theme": "str",
+      "use_highcharts": "bool"
+    }
+  ]
+}

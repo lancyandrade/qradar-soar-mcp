@@ -1,0 +1,107 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "is_list": true,
+    "paging_keys": [],
+    "row_keys": [
+      "actions",
+      "attachment",
+      "created",
+      "creator_principal",
+      "description",
+      "global_artifact",
+      "global_info",
+      "hash",
+      "hits",
+      "id",
+      "inc_id",
+      "inc_name",
+      "inc_owner",
+      "ip",
+      "last_modified_by",
+      "last_modified_time",
+      "parent_id",
+      "pending_scan_result",
+      "pending_sources",
+      "perms",
+      "playbooks",
+      "properties",
+      "related_incident_count",
+      "relating",
+      "type",
+      "value"
+    ],
+    "rows": "1-9",
+    "wrapper_keys": []
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "05§1.2",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/incidents/{incident_id}/artifacts",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<1KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": [
+    {
+      "actions": [],
+      "attachment": "null",
+      "created": "int",
+      "creator_principal": {
+        "display_name": "str",
+        "id": "int",
+        "name": "str",
+        "type": "str"
+      },
+      "description": "null",
+      "global_artifact": [],
+      "global_info": "null",
+      "hash": "str",
+      "hits": [],
+      "id": "int",
+      "inc_id": "int",
+      "inc_name": "str",
+      "inc_owner": "str",
+      "ip": {
+        "destination": "null",
+        "source": "bool"
+      },
+      "last_modified_by": {
+        "display_name": "str",
+        "id": "int",
+        "name": "str",
+        "type": "str"
+      },
+      "last_modified_time": "int",
+      "parent_id": "null",
+      "pending_scan_result": "bool",
+      "pending_sources": [],
+      "perms": {
+        "delete": "bool",
+        "read": "bool",
+        "write": "bool"
+      },
+      "playbooks": [],
+      "properties": [
+        {
+          "name": "str",
+          "value": "str"
+        }
+      ],
+      "related_incident_count": "null",
+      "relating": "bool",
+      "type": "str",
+      "value": "str"
+    }
+  ]
+}

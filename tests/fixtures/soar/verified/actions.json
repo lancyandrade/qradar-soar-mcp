@@ -1,0 +1,148 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "method": [
+      "changed_to",
+      "equals",
+      "has_a_value",
+      "in",
+      "includes_hierarchical"
+    ],
+    "object_type": [
+      "artifact",
+      "incident",
+      "note"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "is_list": false,
+    "paging_keys": [],
+    "row_keys": [
+      "automations",
+      "conditions",
+      "enabled",
+      "export_key",
+      "id",
+      "logic_type",
+      "message_destinations",
+      "name",
+      "object_type",
+      "tags",
+      "timeout_seconds",
+      "type",
+      "uuid",
+      "view_items",
+      "workflows"
+    ],
+    "rows": "10-99",
+    "wrapper_keys": [
+      "entities"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "05§2",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/actions",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "entities": [
+      {
+        "automations": [
+          {
+            "tasks_to_create": [
+              "str"
+            ],
+            "type": "str",
+            "value": "null"
+          }
+        ],
+        "conditions": [
+          {
+            "evaluation_id": "int|null",
+            "field_name": "str",
+            "method": "str",
+            "type": "null",
+            "value": {
+              "<anyOf>": [
+                "null|str",
+                {
+                  "<anyOf>": [
+                    "str",
+                    [
+                      "str"
+                    ]
+                  ]
+                },
+                [
+                  "str"
+                ],
+                {
+                  "<anyOf>": [
+                    "null",
+                    [
+                      "str"
+                    ]
+                  ]
+                },
+                {
+                  "<anyOf>": [
+                    "bool",
+                    [
+                      "str"
+                    ]
+                  ]
+                },
+                {
+                  "<anyOf>": [
+                    [
+                      "str"
+                    ],
+                    "bool",
+                    "null"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "custom_condition?": "str",
+        "enabled": "bool",
+        "export_key": "str",
+        "id": "int",
+        "logic_type": "str",
+        "message_destinations": [
+          "str"
+        ],
+        "name": "str",
+        "object_type": "str",
+        "tags": [],
+        "timeout_seconds": "int",
+        "type": "int",
+        "uuid": "str",
+        "view_items": [
+          {
+            "content": "str",
+            "element": "str",
+            "field_type": "str",
+            "show_if": "null",
+            "show_link_header": "bool",
+            "step_label": "null"
+          }
+        ],
+        "workflows": []
+      }
+    ]
+  }
+}

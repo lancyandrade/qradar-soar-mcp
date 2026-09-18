@@ -1,0 +1,142 @@
+{
+  "_allow": null,
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "activation_type": [
+      "automatic"
+    ],
+    "object_type": [
+      "incident"
+    ],
+    "status": [
+      "enabled"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "is_list": false,
+    "paging_keys": [
+      "recordsTotal"
+    ],
+    "row_keys": [
+      "activation_type",
+      "create_date",
+      "creator_principal",
+      "deployment_id",
+      "description",
+      "display_name",
+      "has_logical_errors",
+      "id",
+      "is_deleted",
+      "is_locked",
+      "last_modified_principal",
+      "last_modified_time",
+      "name",
+      "object_type",
+      "playbook_change_log_info",
+      "status",
+      "tag",
+      "tags",
+      "type",
+      "uuid",
+      "version"
+    ],
+    "rows": "1-9",
+    "wrapper_keys": [
+      "data",
+      "recordsFiltered",
+      "recordsTotal"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "read-only query, one row, no criteria (owner-approved for P2-00)",
+  "_question": "Q1",
+  "_request": {
+    "method": "POST",
+    "path": "/rest/orgs/{org_id}/playbooks/query_paged",
+    "query_keys": [
+      "handle_format",
+      "return_level",
+      "text_content_output_format"
+    ]
+  },
+  "_size": "<100KB",
+  "_status": 200,
+  "_truncated": false,
+  "shape": {
+    "data": [
+      {
+        "activation_type": "str",
+        "create_date": "int",
+        "creator_principal": {
+          "display_name": "str",
+          "id": "int",
+          "name": "str",
+          "type": "str"
+        },
+        "deployment_id": "str",
+        "description": "null",
+        "display_name": "str",
+        "has_logical_errors": "bool",
+        "id": "int",
+        "is_deleted": "bool",
+        "is_locked": "bool",
+        "last_modified_principal": {
+          "display_name": "str",
+          "id": "int",
+          "name": "str",
+          "type": "str"
+        },
+        "last_modified_time": "int",
+        "name": "str",
+        "object_type": "str",
+        "playbook_change_log_info": {
+          "change_log_id": "int",
+          "change_log_items": [
+            {
+              "change": {
+                "new_value": "int",
+                "old_value": "int",
+                "operation_type": "str",
+                "path": "str"
+              },
+              "create_date": "int",
+              "creator_principal": {
+                "display_name": "str",
+                "id": "int",
+                "name": "str",
+                "type": "str"
+              },
+              "entity_id": "int",
+              "entity_type": "str"
+            }
+          ],
+          "change_number": "int",
+          "change_number_prefix": "str",
+          "create_date": "int",
+          "modified_principal": {
+            "display_name": "str",
+            "id": "int",
+            "name": "str",
+            "type": "str"
+          }
+        },
+        "status": "str",
+        "tag": {
+          "display_name": "str",
+          "id": "int",
+          "name": "str",
+          "type": "str",
+          "uuid": "str"
+        },
+        "tags": [],
+        "type": "str",
+        "uuid": "str",
+        "version": "int"
+      }
+    ],
+    "recordsFiltered": "int",
+    "recordsTotal": "int"
+  }
+}
