@@ -179,8 +179,9 @@ async def soar_find_similar_incidents(
                 "reason": "the incident has no artifacts to compare",
             }
         )
+    # No filter: only the documented sort + page size are relied on. The source
+    # incident is skipped client-side rather than via an unverified `id` condition.
     page = await client.incidents.search(
-        filters=[[{"field_name": "id", "method": "not_equals", "value": int(incident_id)}]],
         sorts=[{"field_name": "create_date", "type": "desc"}],
         length=max_candidates,
     )

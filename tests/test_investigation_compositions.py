@@ -142,22 +142,20 @@ async def test_find_similar_ranks_by_shared_artifacts(rt: Runtime, fake: FakeSoa
     assert sum(p.endswith("/query_paged") for p in reads) == 1
     assert sum(p.endswith("/artifacts") for p in reads) == 5
     sent = next(r for r in fake.requests if r.path.endswith("/query_paged")).json
-    assert sent["filters"] == [
-        {"conditions": [{"field_name": "id", "method": "not_equals", "value": 42}]}
-    ]
+    assert sent["filters"] == []  # nothing unverified: sort + page size only
     assert sent["sorts"] == [{"field_name": "create_date", "type": "desc"}] and sent["length"] == 50
     assert [r for r in fake.mutating_requests if not r.path.endswith("/query_paged")] == []
 
 
 async def test_find_similar_limits_and_caps(fake: FakeSoar, tmp_path: Path):
     rt = build_runtime(fake, tmp_path, SOAR_MAX_RESULTS="2")
-    for i in range(43, 48):
+    for i in range(43, 48):  # all newer than incident 42
         _add_incident(
-            fake, i, create_date=1758000000000 + i, artifacts=[("IP Address", "203.0.113.10")]
+            fake, i, create_date=1758100000000 + i, artifacts=[("IP Address", "203.0.113.10")]
         )
     out = await call(rt, "soar_find_similar_incidents", incident_id=42, limit=1, max_candidates=100)
     data = out["data"]
-    assert data["candidates_examined"] == 2 and data["candidates_available"] == 5
+    assert data["candidates_examined"] == 2 and data["candidates_available"] == 6
     assert [m["incident"]["id"] for m in data["matches"]] == [47]  # most recent, top-1
     assert (
         data["candidates_examined"]

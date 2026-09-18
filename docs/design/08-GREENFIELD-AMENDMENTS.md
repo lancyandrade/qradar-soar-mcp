@@ -304,7 +304,23 @@ tracked file: being authoritative exempts nothing from topology detection.
 Its only address allowance in the design pack is that one CIDR test example,
 keyed by file and literal value.
 
-## 18. Deferred to Session 2 / lab access
+## 18. Implementation notes recorded during P1-13 – P1-16
+
+Decisions taken while building, each the conservative reading of the baseline;
+none widens the REST surface of §4.
+
+| Where | Note |
+|---|---|
+| P1-13 `tools/runtime.py` | `Runtime.build()` never raises; a refused configuration makes every tool call `DENY_CONFIG` and the CLI refuses to serve. A `--transport` override is applied to the settings before the P1-11 checks run, so it cannot bypass them. |
+| P1-13 `tools/registry.py` | `MUTATION_PENDING` is written before any mutation and an audit failure there refuses the mutation; every other audit write is best-effort and logged. Responses always round-trip through JSON + redaction (tuples become lists). |
+| P1-14 `tools/actions.py` | `soar_invoke_action` invokes **incident-scoped** actions only (`object_type == "incident"`), because the known-good body `{"action_id": N}` is incident-scoped; artifact-scoped actions are listed, marked `invocable: false`, and refused (open question Q4). Policy `constraints` are therefore exercised by tests only in this release. |
+| P1-14 `tools/actions.py` | The approval plan is built from ids and the operator-named action (`PolicyResult.subject`), never from incident text, so attacker-writable content cannot reach the approver's terminal. |
+| P1-14 `tools/incidents.py` | `soar_update_incident` refuses `plan_status`, `resolution_id`, `resolution_summary` so `SOAR_ALLOW_INCIDENT_CLOSE` cannot be bypassed through `SOAR_ALLOW_INCIDENT_WRITES`. |
+| P1-14 `tools/projection.py` | Trim limits: description / resolution summary 2 000, note text 2 000, artifact value 1 000, custom field 1 000, names 300 characters, with a visible marker. |
+| P1-15 `tools/investigation.py` | `soar_get_incident_full` budget: 60 000 characters of JSON (≈15k tokens); caps 50 tasks / 100 artifacts / 50 notes / 50 attachments, halved until the budget fits. `soar_find_similar_incidents` sends **no filter** (only `sorts` + `length`) and skips the source incident client-side, to avoid relying on an unverified `id` condition (open question Q2/Q3). |
+| P1-16 | README claims about SOAR behaviour carry ✅/⚠️/❓ marks and state that ✅ means "documented and modelled offline, not yet verified by this repository". The key-capability startup probe of `01 §6` is documented as not implemented (Q6). |
+
+## 19. Deferred to Session 2 / lab access
 
 Mock AppHost and `tests/lab/` (`07 §7`), T4–T6 test tiers (registered as
 markers, skipped without `SOAR_TEST_BASE_URL`), the startup key-capability
