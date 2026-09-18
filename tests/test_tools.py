@@ -24,7 +24,7 @@ from qradar_soar_mcp.tools.projection import (
 from tests.fake_soar import FakeSoar
 from tests.tool_harness import audit_records, build_runtime, write_keys, write_policy
 
-# The Phase-1 contract, verbatim from 08 §3 (the two P1-15 compositions are added there).
+# The Phase-1 contract, verbatim from 08 §3.
 APPROVED_TOOLS = {
     "soar_search_incidents": 0,
     "soar_get_incident": 0,
@@ -36,6 +36,8 @@ APPROVED_TOOLS = {
     "soar_describe_incident_fields": 0,
     "soar_list_incident_actions": 0,
     "soar_check_approval": 0,
+    "soar_get_incident_full": 0,
+    "soar_find_similar_incidents": 0,
     "soar_add_comment": 1,
     "soar_add_artifact": 1,
     "soar_create_incident": 2,

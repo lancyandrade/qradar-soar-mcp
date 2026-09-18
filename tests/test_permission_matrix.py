@@ -154,6 +154,8 @@ EXPECTED: dict[str, dict[str, dict[str, str]]] = {
     "soar_describe_incident_fields": _READ,
     "soar_list_incident_actions": _READ,
     "soar_check_approval": _READ,
+    "soar_get_incident_full": _READ,
+    "soar_find_similar_incidents": _READ,
     "soar_add_comment": _COMMENTS,
     "soar_add_artifact": _ARTIFACTS,
     "soar_create_incident": _INCIDENT_WRITES,
@@ -175,6 +177,8 @@ MINIMAL_ARGS: dict[str, dict[str, Any]] = {
     "soar_describe_incident_fields": {},
     "soar_list_incident_actions": {"incident_id": 42},
     "soar_check_approval": {"approval_id": "APR-2026-0917-abcdef"},
+    "soar_get_incident_full": {"incident_id": 42},
+    "soar_find_similar_incidents": {"incident_id": 42},
     "soar_add_comment": {"incident_id": 42, "text": "matrix"},
     "soar_add_artifact": {
         "incident_id": 42,

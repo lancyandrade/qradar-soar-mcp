@@ -347,6 +347,47 @@
       }),
       'tier': 0,
     }),
+    'soar_find_similar_incidents': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_find_similar_incidents',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+          'limit': dict({
+            'default': 5,
+            'title': 'Limit',
+            'type': 'integer',
+          }),
+          'max_candidates': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Max Candidates',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+        ]),
+        'title': 'soar_find_similar_incidentsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
     'soar_get_incident': dict({
       'annotations': dict({
         'destructive_hint': False,
@@ -382,6 +423,45 @@
           'incident_id',
         ]),
         'title': 'soar_get_incidentArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_get_incident_full': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_get_incident_full',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'custom_fields': dict({
+            'anyOf': list([
+              dict({
+                'items': dict({
+                  'type': 'string',
+                }),
+                'type': 'array',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Custom Fields',
+          }),
+          'incident_id': dict({
+            'title': 'Incident Id',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'incident_id',
+        ]),
+        'title': 'soar_get_incident_fullArguments',
         'type': 'object',
       }),
       'tier': 0,
