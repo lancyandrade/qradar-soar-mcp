@@ -118,13 +118,37 @@ def _flagged(flag_on_in: set[str]) -> dict[str, dict[str, str]]:
 _COMMENTS = _flagged({"comments_only", "tier1", "tier2", "tier2_no_close", "legacy_allow_writes"})
 _ARTIFACTS = _flagged({"tier1", "tier2", "tier2_no_close", "legacy_allow_writes"})
 _INCIDENT_WRITES = _flagged({"tier2", "tier2_no_close", "legacy_allow_writes"})
-_TASK_WRITES = _flagged({"tier2", "tier2_no_close", "legacy_allow_writes"})
 _INCIDENT_CLOSE = _flagged({"tier2", "legacy_allow_writes"})
 
-# soar_invoke_action is exercised with action 49 ("EDR — Isolate Endpoint": Tier 3,
-# require_approval, destructive in tests/tool_harness.POLICY_YAML). The flag alone is
-# not enough: the destructive rule needs SOAR_ALLOW_DESTRUCTIVE_ACTIONS, then a human
-# approval (REQUIRE_APPROVAL is the first-call result), and Tier 3 never runs over HTTP.
+# soar_update_task_status is declared unsupported (P1-CORR-01 D1, 08 §21): the verified
+# PUT /tasks/{id} has an unverified request body, so enforce() refuses every call that
+# the flag, config and transport gates would otherwise let through — including under the
+# kill switch, which is never consulted because the denial comes first. The refusal is an
+# ordinary audited DECISION_DENIED and nothing reaches SOAR.
+_TASK_WRITES = _row(
+    default="DENY_DISABLED",
+    comments_only="DENY_DISABLED",
+    tier1="DENY_DISABLED",
+    tier2="DENY_UNSUPPORTED",
+    tier2_no_close="DENY_UNSUPPORTED",
+    actions_no_policy="DENY_CONFIG",
+    actions_with_policy="DENY_DISABLED",
+    actions_destructive="DENY_DISABLED",
+    legacy_allow_writes="DENY_UNSUPPORTED",
+    playbook_draft="DENY_DISABLED",
+    playbook_export="DENY_DISABLED",
+    playbook_deploy="DENY_DISABLED",
+    playbook_enable="DENY_DISABLED",
+    kill_switch_active="DENY_UNSUPPORTED",
+)
+
+# soar_invoke_action is declared unsupported too (P1-CORR-01 D4, 08 §21): the invocation
+# contract is unverified, and with no verified target list there is no per-call policy
+# classification, so its effective tier is its declared Tier 3. Enforcement order is
+# preserved: the flag gate, then the transport gate (Tier 3 never runs over HTTP), then
+# the unsupported denial — always before approval, so no approval is requested or
+# consumed. The Tier-3 approval pipeline itself is proven with the harness tool in
+# test_registry.py.
 _INVOKE = _row(
     default="DENY_DISABLED",
     comments_only="DENY_DISABLED",
@@ -132,14 +156,14 @@ _INVOKE = _row(
     tier2="DENY_DISABLED",
     tier2_no_close="DENY_DISABLED",
     actions_no_policy="DENY_CONFIG",
-    actions_with_policy="DENY_DESTRUCTIVE",
-    actions_destructive=("REQUIRE_APPROVAL", "DENY_TRANSPORT"),
+    actions_with_policy=("DENY_UNSUPPORTED", "DENY_TRANSPORT"),
+    actions_destructive=("DENY_UNSUPPORTED", "DENY_TRANSPORT"),
     legacy_allow_writes="DENY_DISABLED",  # SOAR_ALLOW_WRITES never implies actions
     playbook_draft="DENY_DISABLED",
     playbook_export="DENY_DISABLED",
     playbook_deploy="DENY_DISABLED",
     playbook_enable="DENY_DISABLED",
-    kill_switch_active=("DENY_KILL_SWITCH", "DENY_TRANSPORT"),
+    kill_switch_active=("DENY_UNSUPPORTED", "DENY_TRANSPORT"),
 )
 
 # EXPECTED[tool][state][transport] -> "ALLOW" or a decision code.

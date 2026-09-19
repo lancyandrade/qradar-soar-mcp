@@ -221,40 +221,23 @@ async def test_close_requires_all_three_together_and_surfaces_close_required_fie
 # -------------------------------------------------------------------- tasks
 
 
-async def test_tasks_list_and_set_status_uses_patch(client: SoarClient, fake: FakeSoar):
+def _calls(fake: FakeSoar) -> list[tuple[str, str]]:
+    return [(r.method, r.path.removeprefix("/rest/orgs/201")) for r in fake.requests]
+
+
+async def test_tasks_list(client: SoarClient, fake: FakeSoar):
     tasks = await client.tasks.list(42)
     assert {t["id"] for t in tasks} == {9001, 9002}
-    out = await client.tasks.set_status(42, 9001, "closed")
-    methods = [(r.method, r.path.rsplit("/", 2)[-2:]) for r in fake.requests[-2:]]
-    assert methods[0][0] == "GET" and methods[1] == ("PATCH", ["tasks", "9001"])
-    assert fake.requests[-1].json == {
-        "version": 2,
-        "changes": [
-            {
-                "field": {"name": "status"},
-                "old_value": {"object": "O"},
-                "new_value": {"object": "C"},
-            }
-        ],
-    }
-    assert out.changes == {"status": ("O", "C")} and out.post_image["status"] == "C"
-    assert fake.tasks[9001]["status"] == "C"
-    noop = await client.tasks.set_status(42, 9002, "C")
-    assert noop.changes == {}
-    assert fake.requests[-1].method == "GET"
-
-
-async def test_tasks_errors(client: SoarClient, fake: FakeSoar):
-    with pytest.raises(SoarValidationError):
-        await client.tasks.set_status(42, 9001, "done")
-    with pytest.raises(SoarNotFoundError):
-        await client.tasks.set_status(42, 1, "closed")
-    fake.tasks[9001].pop("vers")
-    with pytest.raises(SoarValidationError, match="no integer 'vers'"):
-        await client.tasks.set_status(42, 9001, "closed")
     fake.fault("GET", r"/tasks$", status=200, body={})
     with pytest.raises(SoarMalformedResponseError):
         await client.tasks.list(42)
+
+
+async def test_the_task_client_cannot_change_a_task(client: SoarClient, fake: FakeSoar):
+    """P1-CORR-01 D1: the verified PUT's body is unverified, so nothing is sent to a task."""
+    assert [name for name in vars(type(client.tasks)) if not name.startswith("_")] == ["list"]
+    await client.tasks.list(42)
+    assert _calls(fake) == [("GET", "/incidents/42/tasks")]
 
 
 # ------------------------------------------------------ comments / artifacts
@@ -368,20 +351,53 @@ async def test_users_display_name_fallback(client: SoarClient, fake: FakeSoar):
 # ----------------------------------------------------------------- actions
 
 
-async def test_actions_incident_scoped_list_and_exact_invoke_body(
-    client: SoarClient, fake: FakeSoar
-):
+async def test_actions_come_from_the_incident_object(client: SoarClient, fake: FakeSoar):
+    """P1-CORR-01 D3: the object-carried list, never GET /incidents/{id}/actions."""
     actions = await client.actions.list_for_incident(42)
-    assert {a["name"] for a in actions} >= {"Firewall — Block IP", "Send Analyst Digest"}
-    assert all(set(a) == {"id", "name", "object_type", "enabled"} for a in actions)
-    out = await client.actions.invoke(42, 48)
-    assert out == {"incident_id": 42, "action_id": 48, "invoked": True}
-    assert fake.requests[-1].json == {"action_id": 48}
-    assert fake.action_invocations == [{"incident_id": 42, "action_id": 48}]
-    with pytest.raises(SoarNotFoundError):
-        await client.actions.invoke(42, 999)
-    with pytest.raises(SoarValidationError):
-        await client.actions.invoke(42, 0)
-    fake.fault("GET", r"/actions$", status=200, body={})
-    with pytest.raises(SoarMalformedResponseError):
+    assert _calls(fake) == [("GET", "/incidents/42")]
+    assert [a["id"] for a in actions] == [47, 48, 49, 50, 51, 52]
+    assert all(set(a) == {"id", "name"} for a in actions)
+    # D4: the client has no way to invoke anything.
+    assert not hasattr(client.actions, "invoke")
+
+
+async def test_action_list_passes_through_only_id_and_name(client: SoarClient, fake: FakeSoar):
+    fake.incident["actions"] = [
+        {"id": 48, "name": "Send Analyst Digest", "object_type": "incident", "extra": "x"}
+    ]
+    assert await client.actions.list_for_incident(42) == [{"id": 48, "name": "Send Analyst Digest"}]
+    fake.incident["actions"] = []  # what the verified appliance returned
+    assert await client.actions.list_for_incident(42) == []
+
+
+_MISSING = object()
+
+
+@pytest.mark.parametrize(
+    "actions",
+    [
+        _MISSING,
+        None,
+        {},
+        "Send Analyst Digest",
+        [48],
+        [{"id": 48}],
+        [{"name": "Send Analyst Digest"}],
+        [{"id": "48", "name": "Send Analyst Digest"}],
+        [{"id": True, "name": "Send Analyst Digest"}],
+        [{"id": 0, "name": "Send Analyst Digest"}],
+        [{"id": 48, "name": " "}],
+        [{"id": 48, "name": 7}],
+        [{"id": 48, "name": "Send Analyst Digest"}, {"id": 49}],
+    ],
+)
+async def test_malformed_action_metadata_fails_closed(
+    client: SoarClient, fake: FakeSoar, actions: object
+):
+    if actions is _MISSING:
+        fake.incident.pop("actions")
+    else:
+        fake.incident["actions"] = actions
+    with pytest.raises(SoarMalformedResponseError, match="actions"):
         await client.actions.list_for_incident(42)
+    assert _calls(fake) == [("GET", "/incidents/42")]  # no other route is tried

@@ -67,7 +67,7 @@ async def test_get_incident_full_composes_the_five_reads(rt: Runtime, fake: Fake
     assert data["omitted"] == {} and data["budget"]["reductions"] == 0
     assert data["budget"]["chars"] <= FULL_INCIDENT_BUDGET_CHARS
     # Injected text comes back verbatim as data; nothing was invoked.
-    assert data["comments"][0]["text"] == INJECTION and fake.action_invocations == []
+    assert data["comments"][0]["text"] == INJECTION
     paths = [r.path for r in fake.requests]
     assert not any("/contents" in p for p in paths)  # attachment contents never fetched
     assert sum(p.endswith("/attachments") for p in paths) == 1

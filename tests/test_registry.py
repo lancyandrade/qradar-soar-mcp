@@ -42,8 +42,14 @@ pytestmark = pytest.mark.contract
 
 
 @pytest.fixture
-def reg() -> dict[str, ToolSpec]:
-    return make_local_registry()
+def effects() -> list[dict[str, Any]]:
+    """What soar_t_invoke executed (the harness records it instead of calling SOAR)."""
+    return []
+
+
+@pytest.fixture
+def reg(effects: list[dict[str, Any]]) -> dict[str, ToolSpec]:
+    return make_local_registry(effects)
 
 
 @pytest.fixture
@@ -124,6 +130,7 @@ def test_decorator_rejects_bad_declarations():
             ok,
         ),
         (dict(name="soar_x", tier=Tier.READ, mutations=1), "mutates nothing", ok),
+        (dict(name="soar_x", tier=Tier.READ, unsupported="  "), "needs its refusal text", ok),
     ]
     for kwargs, match, func in cases:
         with pytest.raises(ToolDefinitionError, match=match):
@@ -410,7 +417,7 @@ async def test_not_configured_connection(reg, tmp_path: Path):
 
 
 async def test_invoke_uses_policy_tier_and_target_constraints(
-    reg, fake: FakeSoar, tmp_path: Path, policy: Path, keys
+    reg, effects, fake: FakeSoar, tmp_path: Path, policy: Path, keys
 ):
     rt = build_runtime(
         fake,
@@ -425,7 +432,7 @@ async def test_invoke_uses_policy_tier_and_target_constraints(
         rt,
         {"incident_id": 42, "action_id": 48, "targets": None, "approval_id": None},
     )
-    assert out["ok"] and fake.action_invocations == [{"incident_id": 42, "action_id": 48}]
+    assert out["ok"] and effects == [{"incident_id": 42, "action_id": 48}]
     # Explicit policy deny (Purge Mailbox); unclassified action (Enrich) falls to the
     # default Tier 5; unknown action: not_found; deny_values: DENY_TARGET.
     out = await run_pipeline(
@@ -465,12 +472,12 @@ async def test_invoke_uses_policy_tier_and_target_constraints(
         {"incident_id": 42, "action_id": 49, "targets": ["host-4471"], "approval_id": None},
     )
     assert out["error"]["code"] == "DENY_DESTRUCTIVE"
-    assert len(fake.action_invocations) == 1
+    assert len(effects) == 1
     await rt.aclose()
 
 
 async def test_out_of_band_approval_round_trip(
-    reg, fake: FakeSoar, tmp_path: Path, policy: Path, keys
+    reg, effects, fake: FakeSoar, tmp_path: Path, policy: Path, keys
 ):
     rt = build_runtime(
         fake,
@@ -487,11 +494,11 @@ async def test_out_of_band_approval_round_trip(
         "Do not retry" in first["error"]["message"]
         and "soar_check_approval" in first["error"]["message"]
     )
-    assert fake.action_invocations == []
+    assert effects == []
     approval_id = first["approval_id"]
     assert rt.broker is not None and rt.broker.status(approval_id)["state"] == "pending"
     pending = await run_pipeline(reg["soar_t_invoke"], rt, {**args, "approval_id": approval_id})
-    assert pending["error"]["code"] == "REQUIRE_APPROVAL" and fake.action_invocations == []
+    assert pending["error"]["code"] == "REQUIRE_APPROVAL" and effects == []
     # A human approves in their environment.
     request = rt.broker.load_request(approval_id)
     approved = sign_request(
@@ -509,9 +516,9 @@ async def test_out_of_band_approval_round_trip(
         "approval_id": approval_id,
         "approver": "j.rossi",
     }
-    assert fake.action_invocations == [{"incident_id": 42, "action_id": 49}]
+    assert effects == [{"incident_id": 42, "action_id": 49}]
     replay = await run_pipeline(reg["soar_t_invoke"], rt, {**args, "approval_id": approval_id})
-    assert replay["error"]["code"] == "DENY_APPROVAL" and len(fake.action_invocations) == 1
+    assert replay["error"]["code"] == "DENY_APPROVAL" and len(effects) == 1
     changed = await run_pipeline(
         reg["soar_t_invoke"], rt, {**args, "targets": ["other"], "approval_id": approval_id}
     )
@@ -578,7 +585,7 @@ async def test_disabled_mode_in_lab_executes_directly(
 
 
 async def test_http_transport_denies_tier3_before_approval(
-    reg, fake: FakeSoar, tmp_path: Path, policy: Path, keys
+    reg, effects, fake: FakeSoar, tmp_path: Path, policy: Path, keys
 ):
     rt = build_runtime(
         fake,
@@ -600,7 +607,7 @@ async def test_http_transport_denies_tier3_before_approval(
             "approval_id": "APR-2026-0917-abcdef",
         },
     )
-    assert out["error"]["code"] == "DENY_TRANSPORT" and fake.action_invocations == []
+    assert out["error"]["code"] == "DENY_TRANSPORT" and effects == []
     assert (
         not list((tmp_path / "state" / "approvals").glob("*"))
         if (tmp_path / "state" / "approvals").exists()
@@ -620,6 +627,47 @@ async def test_tier4_placeholder_requires_playbook_confirmation(
     )
     out = await run_pipeline(reg["soar_t_playbook"], rt, {"approval_id": None})
     assert out["error"]["code"] == "REQUIRE_APPROVAL"
+    await rt.aclose()
+
+
+async def test_unsupported_tool_is_denied_before_its_body_and_before_approval(
+    fake: FakeSoar, tmp_path: Path, keys
+):
+    """08 §21: `unsupported` is an ordinary audited denial; the body never runs."""
+    local: dict[str, ToolSpec] = {}
+    ran: list[str] = []
+
+    @soar_tool(
+        name="soar_t_unverified",
+        tier=Tier.AUTOMATION,
+        capability="SOAR_ALLOW_PLAYBOOK_DEPLOY",
+        describe=lambda a, p: {"target": {"incident_id": a.get("incident_id")}, "plan": "x"},
+        unsupported="Unsupported: not verified",
+        registry=local,
+    )
+    async def t_unverified(
+        rt: Runtime, incident_id: int, approval_id: str | None = None
+    ) -> ToolResult:
+        """would mutate if it ever ran"""
+        ran.append("body")
+        await rt.require_client().comments.add(incident_id, "never")
+        return ToolResult(data={})
+
+    rt = build_runtime(
+        fake,
+        tmp_path,
+        SOAR_ALLOW_PLAYBOOK_DEPLOY="true",
+        SOAR_APPROVAL_PUBLIC_KEY_FILE=str(keys[1]),
+    )
+    spec = local["soar_t_unverified"]
+    for approval_id in (None, "APR-2026-0917-abcdef"):
+        out = await run_pipeline(spec, rt, {"incident_id": 42, "approval_id": approval_id})
+        assert out["error"] == {"code": "DENY_UNSUPPORTED", "message": "Unsupported: not verified"}
+        assert "approval_id" not in out and "plan" not in out
+    assert ran == [] and fake.requests == []
+    assert _events(tmp_path) == [("DECISION_DENIED", "DENY_UNSUPPORTED")] * 2
+    assert audit_records(tmp_path)[0]["target"] == {"incident_id": 42}
+    assert not rt.broker.path.exists() or list(rt.broker.path.iterdir()) == []  # type: ignore[union-attr]
     await rt.aclose()
 
 

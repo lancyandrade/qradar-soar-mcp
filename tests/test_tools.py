@@ -11,7 +11,7 @@ import pytest
 from mcp.server.mcpserver import MCPServer
 
 from qradar_soar_mcp.client.incidents import SEARCH_METHODS as CLIENT_SEARCH_METHODS
-from qradar_soar_mcp.security.approvals import IN_BAND_DISCLAIMER, load_private_key, sign_request
+from qradar_soar_mcp.security.approvals import load_private_key, sign_request
 from qradar_soar_mcp.tools import TOOL_REGISTRY, Runtime, register_all, run_pipeline
 from qradar_soar_mcp.tools.incidents import SEARCH_METHODS
 from qradar_soar_mcp.tools.projection import (
@@ -348,21 +348,24 @@ async def test_assign_and_close(rt: Runtime, fake: FakeSoar):
     assert out["error"]["code"] == "validation"
 
 
-async def test_update_task_status(rt: Runtime, fake: FakeSoar, tmp_path: Path):
-    data = await ok(rt, "soar_update_task_status", incident_id=42, task_id=9001, status="closed")
-    assert data["changed"] == {"status": {"from": "O", "to": "C"}} and data["task"]["status"] == "C"
-    sent = fake.mutating_requests[-1]
-    assert (
-        sent.method == "PATCH" and sent.path.endswith("/tasks/9001") and sent.json["version"] == 2
-    )
-    again = await ok(rt, "soar_update_task_status", incident_id=42, task_id=9001, status="closed")
-    assert again["changed"] == {} and len(fake.mutating_requests) == 1
-    out = await call(rt, "soar_update_task_status", incident_id=42, task_id=9001, status="done")
-    assert out["ok"] is False
-    committed = [r for r in audit_records(tmp_path) if r["event"] == "MUTATION_COMMITTED"]
-    assert (
-        committed[0]["pre_image"]["status"] == "O" and committed[0]["post_image"]["status"] == "C"
-    )
+async def test_update_task_status_is_refused_without_touching_soar(
+    rt: Runtime, fake: FakeSoar, tmp_path: Path
+):
+    """P1-CORR-01 D1: PUT /tasks/{id} is verified, its body is not, so nothing is sent."""
+    outs = [
+        await call(rt, "soar_update_task_status", incident_id=42, task_id=task_id, status=status)
+        for task_id, status in ((9001, "closed"), (9002, "open"), (1, "closed"))
+    ]
+    assert outs[0]["ok"] is False and outs[0]["error"]["code"] == "DENY_UNSUPPORTED"
+    assert "request body has not been verified" in outs[0]["error"]["message"]
+    assert all(out["error"] == outs[0]["error"] for out in outs)  # same for every target
+    assert fake.requests == []  # no GET, PUT or PATCH; not even a read
+    assert fake.tasks[9001]["status"] == "O" and fake.tasks[9002]["status"] == "C"
+    records = audit_records(tmp_path)
+    assert [r["event"] for r in records] == ["DECISION_DENIED"] * 3  # never MUTATION_PENDING
+    assert records[0]["decision"] == "DENY_UNSUPPORTED" and records[0]["tier"] == 2
+    assert records[0]["tool"] == "soar_update_task_status"
+    assert records[0]["target"] == {"incident_id": 42, "task_id": 9001}
 
 
 # ---------------------------------------------------------------- actions
@@ -383,12 +386,17 @@ async def rt_actions(fake: FakeSoar, tmp_path: Path):
     await runtime.aclose()
 
 
-async def test_list_incident_actions_annotates_policy(rt: Runtime, rt_actions: Runtime):
+async def test_list_incident_actions_annotates_policy(
+    rt: Runtime, rt_actions: Runtime, fake: FakeSoar
+):
     plain = await ok(rt, "soar_list_incident_actions", incident_id=42)
     assert plain["policy_loaded"] is False and plain["actions"][0]["policy"] is None
     data = await ok(rt_actions, "soar_list_incident_actions", incident_id=42)
     by_id = {a["id"]: a for a in data["actions"]}
-    assert by_id[47]["invocable"] is False and by_id[47]["policy"]["tier"] == 3
+    assert [a["id"] for a in data["actions"]] == [47, 48, 49, 50, 51, 52]
+    for row in data["actions"]:
+        assert set(row) == {"id", "name", "invocable", "policy"} and row["invocable"] is False
+    assert by_id[47]["policy"]["tier"] == 3
     assert by_id[48]["policy"] == {
         "tier": 1,
         "decision": "allow",
@@ -396,79 +404,87 @@ async def test_list_incident_actions_annotates_policy(rt: Runtime, rt_actions: R
         "rule": "Send Analyst Digest",
     }
     assert by_id[50]["policy"]["rule"] == "default" and by_id[50]["policy"]["tier"] == 5
+    # The object-carried list only (P1-CORR-01 D3).
+    assert {(r.method, r.path) for r in fake.requests} == {("GET", "/rest/orgs/201/incidents/42")}
 
 
-async def test_invoke_action_paths(rt_actions: Runtime, fake: FakeSoar, tmp_path: Path):
+async def test_invoke_action_is_refused_before_approval_or_soar(
+    rt_actions: Runtime, fake: FakeSoar, tmp_path: Path
+):
+    """P1-CORR-01 D4: the invocation contract is unverified, so every call is an ordinary
+    audited denial: no request to SOAR, no approval requested or consumed, no PENDING."""
     rt = rt_actions
-    # Tier-1 action by policy: runs without approval, exact body.
-    data = await ok(rt, "soar_invoke_action", incident_id=42, action_id=48)
-    assert data["invoked"] is True and fake.mutating_requests[-1].json == {"action_id": 48}
-    # Artifact-scoped action: refused before any policy decision or POST.
-    out = await call(rt, "soar_invoke_action", incident_id=42, action_id=47)
-    assert out["error"]["code"] == "validation" and "incident-scoped" in out["error"]["message"]
-    # Unknown on this incident; policy default deny.
-    assert (await call(rt, "soar_invoke_action", incident_id=42, action_id=999))["error"][
-        "code"
-    ] == "not_found"
-    assert (await call(rt, "soar_invoke_action", incident_id=42, action_id=52))["error"][
-        "code"
-    ] == "DENY_POLICY"
-    assert len(fake.action_invocations) == 1
-    # Tier-3 destructive: approval round trip; the plan names the action, never incident text.
-    first = await call(rt, "soar_invoke_action", incident_id=42, action_id=49)
-    assert first["error"]["code"] == "REQUIRE_APPROVAL"
-    approval_id = first["approval_id"]
-    assert first["plan"] == "Invoke manual action 'EDR — Isolate Endpoint' (id 49) on incident 42"
-    assert fake.incident["name"] not in json.dumps(first)
-    status = await ok(rt, "soar_check_approval", approval_id=approval_id)
-    assert (
-        status["state"] == "pending"
-        and status["plan"] == first["plan"]
-        and "signature" not in status
-    )
+    outs = [
+        await call(rt, "soar_invoke_action", incident_id=42, action_id=action_id)
+        for action_id in (48, 49, 52, 999)
+    ]
+    assert outs[0]["error"]["code"] == "DENY_UNSUPPORTED"
+    assert "not verified" in outs[0]["error"]["message"]
+    assert all(out["ok"] is False and out["error"] == outs[0]["error"] for out in outs)
+    assert all("approval_id" not in out and "plan" not in out for out in outs)
+    assert fake.requests == []  # nothing reached SOAR, not even a read
+    records = audit_records(tmp_path)
+    assert [r["event"] for r in records] == ["DECISION_DENIED"] * 4
+    assert {r["decision"] for r in records} == {"DENY_UNSUPPORTED"} and records[0]["tier"] == 3
+    assert records[1]["target"] == {"incident_id": 42, "action_id": 49}
     assert rt.broker is not None
-    request = rt.broker.load_request(approval_id)
-    assert request is not None and request.action == {"id": 49, "name": "EDR — Isolate Endpoint"}
-    private = tmp_path / "keys" / "approval.key"
+    assert not rt.broker.path.exists() or list(rt.broker.path.glob("*.request.json")) == []
+
+    # An approval a human already granted is neither consumed nor looked at.
+    args = {"incident_id": 42, "action_id": 49, "approval_id": None}
+    request = rt.broker.request(
+        tool="soar_invoke_action",
+        tier=3,
+        capability="SOAR_ALLOW_ACTIONS",
+        args=args,
+        target={"incident_id": 42, "action_id": 49},
+        plan="Invoke manual action id 49 on incident 42",
+        action={"id": 49, "name": None},
+        transport="stdio",
+        destructive=False,
+        policy_rule=None,
+    )
     signed = sign_request(
         request,
-        private_key=load_private_key(private),
+        private_key=load_private_key(tmp_path / "keys" / "approval.key"),
         approver="j.rossi",
         now=time.time(),
         ttl_seconds=300,
     )
-    (rt.broker.path / f"{approval_id}.approved.json").write_text(
+    (rt.broker.path / f"{request.approval_id}.approved.json").write_text(
         json.dumps(signed), encoding="utf-8"
     )
-    assert (await ok(rt, "soar_check_approval", approval_id=approval_id))["state"] == "approved"
-    second = await call(
-        rt, "soar_invoke_action", incident_id=42, action_id=49, approval_id=approval_id
-    )
-    assert second["ok"] is True and second["approval"]["approver"] == "j.rossi"
-    assert fake.action_invocations[-1] == {"incident_id": 42, "action_id": 49}
-    assert (await ok(rt, "soar_check_approval", approval_id=approval_id))["state"] == "consumed"
+    assert (await ok(rt, "soar_check_approval", approval_id=request.approval_id))[
+        "state"
+    ] == "approved"
+    out = await call(rt, "soar_invoke_action", **{**args, "approval_id": request.approval_id})
+    assert out["error"] == outs[0]["error"]
+    assert (await ok(rt, "soar_check_approval", approval_id=request.approval_id))[
+        "state"
+    ] == "approved"
     assert (await ok(rt, "soar_check_approval", approval_id="nonsense"))["state"] == "invalid"
-    rendered = json.dumps(audit_records(tmp_path))
-    assert "j.rossi" in rendered and "EDR" in rendered
-    assert "audit" not in json.dumps(second) and "pre_image" not in json.dumps(second)
+    events = [r["event"] for r in audit_records(tmp_path)]
+    assert fake.requests == [] and set(events) == {"DECISION_DENIED"}  # nothing consumed
 
 
-async def test_invoke_in_band_carries_the_disclaimer(fake: FakeSoar, tmp_path: Path):
+@pytest.mark.parametrize("mode", ["in_band", "disabled"])
+async def test_invoke_is_refused_in_every_approval_mode(fake: FakeSoar, tmp_path: Path, mode):
+    """Lab approval modes would otherwise hand out a token, or execute at once."""
     rt = build_runtime(
         fake,
         tmp_path,
         SOAR_ALLOW_ACTIONS="true",
         SOAR_ALLOW_DESTRUCTIVE_ACTIONS="true",
         SOAR_ACTION_POLICY_FILE=str(write_policy(tmp_path)),
-        SOAR_APPROVAL_MODE="in_band",
+        SOAR_APPROVAL_MODE=mode,
         SOAR_LAB_MODE="true",
     )
-    first = await call(rt, "soar_invoke_action", incident_id=42, action_id=49)
-    assert first["disclaimer"] == IN_BAND_DISCLAIMER
-    second = await call(
-        rt, "soar_invoke_action", incident_id=42, action_id=49, approval_id=first["approval_id"]
-    )
-    assert second["ok"] is True and second["disclaimer"] == IN_BAND_DISCLAIMER
+    first = await call(rt, "soar_invoke_action", incident_id=42, action_id=48)
+    second = await call(rt, "soar_invoke_action", incident_id=42, action_id=49, approval_id="t")
+    assert first["error"]["code"] == "DENY_UNSUPPORTED" and second["error"] == first["error"]
+    assert "approval_id" not in first and "disclaimer" not in first
+    assert fake.requests == []
+    assert [r["event"] for r in audit_records(tmp_path)] == ["DECISION_DENIED"] * 2
     await rt.aclose()
 
 

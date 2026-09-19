@@ -6,11 +6,15 @@ URL to :meth:`FakeSoar.handler`. Together they are the T2 contract fixture of
 docs/design/07-TEST-STRATEGY.md.
 
 What is modelled is exactly the known-good surface of
-docs/design/05-SOAR-API-SURFACE.md §1 and §1.1 (see 08 §4): Basic auth, the two
+docs/design/05-SOAR-API-SURFACE.md §1 and §1.1 (see 08 §4), as corrected for QRadar
+SOAR 51.0.9.0.20848 by docs/soar-api-verified.md (08 §21): Basic auth, the two
 required query parameters, ``return_level=normal`` on ``query_paged``, AND-within
-/ OR-across filters, PATCH optimistic concurrency with ``success:false``, custom
-fields under ``properties``, close semantics, incident-scoped manual actions and
-the exact invocation body. Nothing outside that list has a route.
+/ OR-across filters, incident PATCH optimistic concurrency with ``success:false``,
+custom fields under ``properties``, close semantics, tasks without a version, and
+the ``actions`` list the incident object carries. ``GET /incidents/{id}/actions``
+answers 500 as it did on the verified appliance. No task mutation is modelled (the
+verified ``PUT /tasks/{id}`` has an unverified body) and there is no invocation
+route. Nothing else has a route.
 
 All state comes from synthetic fixtures in ``tests/fixtures/soar``.
 """
@@ -85,11 +89,7 @@ class FakeSoar:
         self.attachments: dict[int, list[dict[str, Any]]] = {
             int(k): v for k, v in cols["attachments"].items()
         }
-        self.incident_actions: dict[int, list[dict[str, Any]]] = {
-            int(k): v for k, v in cols["incident_actions"].items()
-        }
         self.users: list[dict[str, Any]] = cols["users"]
-        self.action_invocations: list[dict[str, Any]] = []
         self.session_status = session_status
         self.faults: list[tuple[str, re.Pattern[str], Fault]] = []
         self.requests: list[Recorded] = []
@@ -245,7 +245,11 @@ class FakeSoar:
                 return self._patch_incident(inc, body)
             return self._error(405, "method not allowed")
 
-        m = re.fullmatch(r"/incidents/(\d+)/(comments|artifacts|tasks|attachments|actions)", rest)
+        if re.fullmatch(r"/incidents/\d+/actions", rest) and method == "GET":
+            # Verified on 51.0.9.0.20848: undocumented there, and it answers 500.
+            return self._error(500, "Internal Server Error")
+
+        m = re.fullmatch(r"/incidents/(\d+)/(comments|artifacts|tasks|attachments)", rest)
         if m:
             inc_id, coll = int(m.group(1)), m.group(2)
             if inc_id not in self.incidents:
@@ -254,10 +258,6 @@ class FakeSoar:
                 if method != "GET":
                     return self._error(405, "method not allowed")
                 return self._json(200, [t for t in self.tasks.values() if t["inc_id"] == inc_id])
-            if coll == "actions":
-                if method != "GET":
-                    return self._error(405, "method not allowed")
-                return self._json(200, self.incident_actions.get(inc_id, []))
             if coll == "attachments":
                 if method != "GET":
                     return self._error(405, "method not allowed")
@@ -295,27 +295,12 @@ class FakeSoar:
                 return self._json(200, created)
             return self._error(405, "method not allowed")
 
-        m = re.fullmatch(r"/incidents/(\d+)/action_invocations", rest)
-        if m and method == "POST":
-            inc_id = int(m.group(1))
-            if inc_id not in self.incidents:
-                return self._error(404, "incident not found")
-            if not isinstance(body, dict) or set(body) != {"action_id"}:
-                return self._error(400, 'fake_soar: body must be exactly {"action_id": N}')
-            if not isinstance(body["action_id"], int):
-                return self._error(400, "action_id must be an integer")
-            known = {a["id"] for a in self.incident_actions.get(inc_id, [])}
-            if body["action_id"] not in known:
-                return self._error(404, "action not available on this incident")
-            self.action_invocations.append({"incident_id": inc_id, "action_id": body["action_id"]})
-            return httpx.Response(200)
-
         m = re.fullmatch(r"/tasks/(\d+)", rest)
-        if m and method == "PATCH":
+        if m and method == "GET":  # a verified read; no task mutation is modelled
             task = self.tasks.get(int(m.group(1)))
             if task is None:
                 return self._error(404, "task not found")
-            return self._patch_task(task, body)
+            return self._json(200, task)
 
         if rest == "/users" and method == "GET":
             return self._json(200, self.users)
@@ -349,6 +334,7 @@ class FakeSoar:
             "inc_last_modified_date": 1758010000000,
             "resolution_id": None,
             "resolution_summary": None,
+            "actions": [],
         }
         for key, value in body.items():
             if key == "properties" and isinstance(value, dict):
@@ -404,34 +390,6 @@ class FakeSoar:
         candidate["inc_last_modified_date"] = 1758020000000
         inc.clear()
         inc.update(candidate)
-        return self._json(
-            200,
-            {"success": True, "title": None, "message": None, "hints": [], "field_failures": []},
-        )
-
-    def _patch_task(self, task: dict[str, Any], body: Any) -> httpx.Response:
-        if not isinstance(body, dict) or "version" not in body or "changes" not in body:
-            return self._error(400, "PATCH requires version and changes")
-        if body["version"] != task["vers"]:
-            return self._patch_failure("Task has been modified by another user", [])
-        for change in body["changes"]:
-            name = change["field"]["name"]
-            if name not in task:
-                return self._error(400, f"unknown task field {name}")
-            if task[name] != change["old_value"].get("object"):
-                return self._patch_failure(
-                    "Field values have changed",
-                    [
-                        {
-                            "field": name,
-                            "your_original_value": change["old_value"].get("object"),
-                            "actual_current_value": task[name],
-                        }
-                    ],
-                )
-        for change in body["changes"]:
-            task[change["field"]["name"]] = change["new_value"].get("object")
-        task["vers"] += 1
         return self._json(
             200,
             {"success": True, "title": None, "message": None, "hints": [], "field_failures": []},

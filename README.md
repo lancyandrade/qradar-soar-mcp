@@ -33,12 +33,16 @@ whole incident in one call under a size budget; find incidents that share
 artifacts with this one.
 
 **Annotate and modify (Tiers 1–2, off by default)** — add notes and artifacts,
-create incidents, update fields, assign, change task status, close. Each is a
-separate capability flag.
+create incidents, update fields, assign, close. Each is a separate capability
+flag. **Changing a task's status is disabled in this release** (see
+[Known limitations](#known-limitations)).
 
 **Respond (Tier 3, off by default, human-approved)** — invoke a manual action
 that *you* classified in a policy file, after a human approves that exact call
-out of band.
+out of band. **Not available in this release:** SOAR's invocation contract is
+unverified for QRadar SOAR 51.0.9, so `soar_invoke_action` refuses every call
+(see [Known limitations](#known-limitations)). The flags, policy and approval
+machinery stay in place for when it is verified.
 
 Every tool changes at most one object. There is no delete, no bulk operation,
 no script execution and no way to reach a SOAR endpoint the design does not
@@ -89,7 +93,7 @@ failure.
 | `soar_list_attachments` | 0 | — | attachment **metadata** only; contents are never fetched |
 | `soar_list_users` | 0 | — | users in the org |
 | `soar_describe_incident_fields` | 0 | — | field definitions incl. custom `properties.*` and close-required flags |
-| `soar_list_incident_actions` | 0 | — | manual actions on an incident with their policy classification |
+| `soar_list_incident_actions` | 0 | — | manual actions the incident carries, with their policy classification |
 | `soar_check_approval` | 0 | — | state of an approval reference (broker files; no SOAR call) |
 | `soar_add_comment` | 1 | `SOAR_ALLOW_COMMENTS` | one note |
 | `soar_add_artifact` | 1 | `SOAR_ALLOW_ARTIFACTS` | one artifact |
@@ -97,13 +101,15 @@ failure.
 | `soar_update_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | fields on one incident (optimistic concurrency; closing fields refused) |
 | `soar_assign_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | owner of one incident |
 | `soar_close_incident` | 2 | `SOAR_ALLOW_INCIDENT_CLOSE` | close with resolution + summary + close-required custom fields |
-| `soar_update_task_status` | 2 | `SOAR_ALLOW_TASK_WRITES` | open/close one task |
-| `soar_invoke_action` | per policy | `SOAR_ALLOW_ACTIONS` (+ `SOAR_ALLOW_DESTRUCTIVE_ACTIONS`) | one incident-scoped manual action, human-approved at Tier 3 |
+| `soar_update_task_status` | 2 | `SOAR_ALLOW_TASK_WRITES` | **disabled in this release**: refuses every call as `DENY_UNSUPPORTED` |
+| `soar_invoke_action` | per policy | `SOAR_ALLOW_ACTIONS` (+ `SOAR_ALLOW_DESTRUCTIVE_ACTIONS`) | **unavailable in this release**: refuses every call as `DENY_UNSUPPORTED` |
 
 Every response is `{"ok": true, "request_id": ..., "data": ...}` or
 `{"ok": false, "request_id": ..., "error": {"code": ..., "message": ...}}`. A
 denial names the setting that would change it (`DENY_DISABLED`, `DENY_POLICY`,
 `DENY_TARGET`, `DENY_TRANSPORT`, `DENY_KILL_SWITCH`, `DENY_RATE_LIMIT`, …).
+`DENY_UNSUPPORTED` is the exception: no setting changes it, because the SOAR
+request the tool needs has not been verified, and nothing is sent to SOAR.
 Audit records never appear in tool output.
 
 ### What an incident looks like to the model
@@ -208,7 +214,8 @@ file a phishing report can write into the data the model reads. `in_band` and
 response carries a disclaimer saying so.
 
 Out-of-band approval works through a file broker and an Ed25519 signature the
-server can verify but cannot forge:
+server can verify but cannot forge. (The example below shows `soar_invoke_action`;
+in this release that tool is refused before any approval is requested.)
 
 1. Once, in the approver's environment (not on the MCP host):
    `qradar-soar-approve keygen --private ~/.config/qradar-soar/approval.key --public approval.pub`.
@@ -330,13 +337,16 @@ this repository against a live appliance**; ⚠️/❓ open, listed in
    `"A"` active / `"C"` closed.
 5. ✅ Closing sends `plan_status` + `resolution_id` + `resolution_summary`
    together and SOAR rejects it if a close-required custom field is empty.
-6. ✅ Task status changes use `PATCH /tasks/{id}` with the task's version taken
-   from `GET /incidents/{id}/tasks`. ⚠️ Whether that list carries `vers` on every
-   SOAR version is open.
-7. ✅ Manual actions come from `GET /incidents/{id}/actions`; invocation is
-   `POST /incidents/{id}/action_invocations` with the body exactly
-   `{"action_id": N}`. ⚠️ Only incident-scoped actions are invoked; artifact-scoped
-   invocation is open.
+6. ❓ Task status changes are **not sent at all**. QRadar SOAR 51.0.9 documents
+   `PUT /tasks/{id}` for them (it has no `PATCH` there, and tasks carry no
+   version), but the `PUT` request body is unverified and is not guessed, so
+   `soar_update_task_status` refuses every call until it is verified.
+7. ✅ Manual actions are read from the `actions` list the incident object
+   carries (`GET /incidents/{id}`); `GET /incidents/{id}/actions` answers 500
+   on 51.0.9 and is not used. ❓ The shape of the list's entries is unverified,
+   so only `id` and `name` are used and anything else fails closed. ❓ Invocation
+   is unverified, so `soar_invoke_action` refuses every call before approval
+   or any request.
 8. ✅ `GET /rest/session` may be forbidden to API keys; `--check` reports that
    and does not fail on it.
 9. ⚠️ Attachment contents (`…/attachments/{aid}/contents`) are not fetched;
@@ -345,7 +355,7 @@ this repository against a live appliance**; ⚠️/❓ open, listed in
 
 ### Confidence in API claims
 
-The REST surface `client/` may touch is the fourteen calls listed in
+The REST surface `client/` may touch is exactly the set of calls listed in
 `docs/design/08-GREENFIELD-AMENDMENTS.md §4`, enforced by an AST test. Nothing
 else is called. When the maintainer's lab access is available (Phase 2,
 ticket `P2-00`), every ✅ above is re-verified against a real appliance and
@@ -358,9 +368,13 @@ ticket `P2-00`), every ✅ above is re-verified against a real appliance and
 - No live-appliance verification yet (see above).
 - `soar_find_similar_incidents` is an N+1 client-side composition over the
   most recent `SOAR_MAX_RESULTS` incidents, not a server-side search.
-- Artifact-scoped manual actions are listed but cannot be invoked.
-- The outcome of an invoked action runs asynchronously in SOAR and is not
-  observable through this server.
+- No manual action can be invoked: `soar_invoke_action` refuses every call as
+  `DENY_UNSUPPORTED` until SOAR's invocation contract is verified.
+- No task can be opened or closed: `soar_update_task_status` refuses every call
+  as `DENY_UNSUPPORTED` until the request body of SOAR's `PUT /tasks/{id}` is
+  verified. Both refusals are audited as denials and send nothing to SOAR.
+- `soar_list_incident_actions` lists the incident's own actions, not those its
+  tasks and artifacts carry.
 - Attachment contents are never read; there is no text extraction.
 - No playbook tools; the Tier-4 flags are accepted and unused.
 

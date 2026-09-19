@@ -88,6 +88,7 @@ class ToolSpec:
     classify: Classifier | None = None  # per-target policy classification (invoke_action)
     describe: Describer | None = None  # target + plan for approval requests and audit
     idempotent: bool = False
+    unsupported: str | None = None  # fixed refusal: SOAR contract unverified (08 §21)
 
     @property
     def mutating(self) -> bool:
@@ -115,9 +116,13 @@ def soar_tool(
     classify: Classifier | None = None,
     describe: Describer | None = None,
     idempotent: bool = False,
+    unsupported: str | None = None,
     registry: dict[str, ToolSpec] | None = None,
 ) -> Callable[[Callable[..., Awaitable[ToolResult]]], Callable[..., Awaitable[ToolResult]]]:
-    """Declare a tool. Validation here is deliberately strict; it runs at import."""
+    """Declare a tool. Validation here is deliberately strict; it runs at import.
+
+    ``unsupported`` keeps a tool registered, and gated like any other, while
+    ``enforce()`` refuses every call to it with that text (08 §21)."""
 
     def decorate(
         func: Callable[..., Awaitable[ToolResult]],
@@ -160,6 +165,8 @@ def soar_tool(
         doc = (description or func.__doc__ or "").strip()
         if not doc:
             raise ToolDefinitionError(f"{name}: a description (docstring) is required")
+        if unsupported is not None and not unsupported.strip():
+            raise ToolDefinitionError(f"{name}: an unsupported tool needs its refusal text")
         spec = ToolSpec(
             name=name,
             tier=tier,
@@ -170,6 +177,7 @@ def soar_tool(
             classify=classify,
             describe=describe,
             idempotent=idempotent,
+            unsupported=unsupported,
         )
         reg[name] = spec
         func.__soar_tool__ = spec  # type: ignore[attr-defined]
@@ -245,6 +253,7 @@ async def run_pipeline(spec: ToolSpec, rt: Runtime, args: Mapping[str, Any]) -> 
         config=settings,
         transport=rt.transport,
         policy=policy,
+        unsupported=spec.unsupported,
     )
     if decision.denied and decision.code is Code.DENY_CONFIG and rt.config_error:
         decision = deny(Code.DENY_CONFIG, f"{decision.reason}: {rt.config_error}", spec.tier)

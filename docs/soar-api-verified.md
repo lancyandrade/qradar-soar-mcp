@@ -400,6 +400,13 @@ IP. See `P2-TLS` (§8).
 ## 8. Proposed tickets (proposals only — not started)
 
 ### P1-CORR-01 — reconcile Phase-1 client semantics with the verified v51 API
+> **Status, 2026-09-19:** addressed for D1–D4 only, from this record alone; see
+> [`design/08-GREENFIELD-AMENDMENTS.md §21`](design/08-GREENFIELD-AMENDMENTS.md).
+> D2 and D3 are resolved. For D1 this record verifies the endpoint and method
+> (`PUT /tasks/{task_id}`) but not the mutation request body, so the
+> implementation is intentionally disabled pending `P2-00b`; D4 likewise fails
+> closed. The live checks (a) and (b) below are still open; (c) was out of scope.
+
 **Separate from P2-00. Not to be implemented until this report is reviewed.**
 Scope: D1–D4 of §3. Establish, with a suitably scoped key in a disposable org,
 (a) the real task-update contract (`PUT /tasks/{task_id}` with a full object?
