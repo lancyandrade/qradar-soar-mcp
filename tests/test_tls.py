@@ -159,9 +159,19 @@ def _spy_on_default_context(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, A
 
 
 def _assert_verifying(context: ssl.SSLContext | None) -> None:
+    """What this project guarantees about a verifying context: certificate-chain
+    verification and host-name verification. Nothing else is asserted here.
+
+    The protocol floor is deliberately not asserted. That policy is inherited from
+    Python/OpenSSL and may vary by build (08 §22): most Python builds set TLS 1.2
+    themselves, while some distribution builds report no floor of their own
+    (``minimum_version == MINIMUM_SUPPORTED``) and defer to the OpenSSL system
+    configuration. This project uses the context as Python provides it, and sets no
+    floor of its own; nothing in src/ may touch ``minimum_version`` at all (see
+    ``test_no_code_path_weakens_verification``).
+    """
     assert isinstance(context, ssl.SSLContext)
     assert context.check_hostname is True and context.verify_mode is ssl.CERT_REQUIRED
-    assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
 
 
 def test_default_trust_is_pythons_default_context(monkeypatch: pytest.MonkeyPatch):
