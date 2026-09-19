@@ -9,7 +9,10 @@ back to their documented default with a warning. The only inputs that refuse
 to start are the ones where guessing either way would be wrong: a forbidden
 capability set to true, an unusable TLS setting, a base URL that is not
 HTTPS, and the cross-field rules of 02 §2/§4 (actions need a policy file;
-in-band approval for Tier 3 needs lab mode; HTTP transport needs a token).
+in-band approval for Tier 3 needs lab mode; HTTP transport needs a token) and of
+the TLS trust model (08 §22): a CA bundle that is not a file, a bundle given
+twice with different values, a bundle together with disabled verification, and
+``SOAR_VERIFY_SSL=false`` without ``SOAR_LAB_MODE=true``.
 
 Settings are loaded from the environment (``SOAR_*``). Tests inject a mapping
 through :meth:`Settings.load` and get the same source semantics.
@@ -67,6 +70,13 @@ LEGACY_WRITES_TARGETS: tuple[str, ...] = (
     "SOAR_ALLOW_INCIDENT_WRITES",
     "SOAR_ALLOW_TASK_WRITES",
     "SOAR_ALLOW_INCIDENT_CLOSE",
+)
+
+# Emitted once, when the settings are loaded, whenever verification is off (08 §22).
+TLS_INSECURE_WARNING = (
+    "TLS certificate verification is DISABLED (SOAR_VERIFY_SSL=false with SOAR_LAB_MODE=true): "
+    "the SOAR API key can be intercepted by anyone on the network path. Lab use only; for a "
+    "private or self-signed CA use SOAR_CA_BUNDLE instead"
 )
 
 _WARNINGS: ContextVar[list[str] | None] = ContextVar("soar_config_warnings", default=None)
@@ -159,6 +169,11 @@ def _org_id(value: Any) -> int | None:
 
 
 def _verify_ssl(value: Any) -> bool | Path:
+    """``true`` | ``false`` | (deprecated) the path of an existing CA bundle.
+
+    Never guesses: an unrecognised value refuses to start instead of picking a
+    side. The value is not echoed, because it may be a filesystem path.
+    """
     if isinstance(value, bool):
         return value
     raw = str(value)
@@ -168,11 +183,18 @@ def _verify_ssl(value: Any) -> bool | Path:
         return False
     path = Path(raw)
     if raw.strip() and path.is_file():
-        return path
+        return path  # the Phase-1 bool-or-path form; see Settings._tls_rules
     raise ValueError(
-        "SOAR_VERIFY_SSL must be true, false, or the path of an existing CA bundle; "
-        "refusing to guess"
+        "SOAR_VERIFY_SSL must be true or false (a CA bundle belongs in SOAR_CA_BUNDLE; "
+        "the path of an existing bundle is still accepted here); refusing to guess"
     )
+
+
+def _same_file(a: Path, b: Path) -> bool:
+    try:
+        return a.resolve() == b.resolve()
+    except OSError:
+        return False
 
 
 def _transport(value: Any) -> str:
@@ -288,7 +310,10 @@ class Settings(BaseSettings):
     org_id: Annotated[int | None, BeforeValidator(_org_id)] = None
     api_key_id: str = ""
     api_key_secret: Annotated[SecretStr, BeforeValidator(_secret)] = SecretStr("")
+    # TLS trust (08 §22). Verification is on by default against Python's default TLS
+    # trust configuration; ``ca_bundle``, when supplied, is used instead of it.
     verify_ssl: Annotated[bool | Path, BeforeValidator(_verify_ssl)] = True
+    ca_bundle: Annotated[Path | None, BeforeValidator(_optional_path)] = None
     timeout: Annotated[
         float, BeforeValidator(_float_parser("SOAR_TIMEOUT", default=30.0, minimum=1.0))
     ] = 30.0
@@ -432,6 +457,7 @@ class Settings(BaseSettings):
                 raise ValueError("SOAR_BASE_URL must use https unless it points at loopback")
             if parts.query or parts.fragment or parts.username or parts.password:
                 raise ValueError("SOAR_BASE_URL must not carry credentials, a query or a fragment")
+        self._tls_rules()
         if self.allow_actions:
             if self.action_policy_file is None:
                 raise ValueError("SOAR_ALLOW_ACTIONS=true requires SOAR_ACTION_POLICY_FILE (02 §2)")
@@ -447,6 +473,39 @@ class Settings(BaseSettings):
                     "Tier 3 outside a lab (02 §4.1)"
                 )
         return self
+
+    def _tls_rules(self) -> None:
+        """The TLS trust model (08 §22). Messages name variables, never paths."""
+        legacy = self.verify_ssl if isinstance(self.verify_ssl, Path) else None
+        if legacy is not None:
+            if self.ca_bundle is not None and not _same_file(legacy, self.ca_bundle):
+                raise ValueError(
+                    "SOAR_VERIFY_SSL and SOAR_CA_BUNDLE name different CA bundles; set "
+                    "SOAR_VERIFY_SSL=true and keep only SOAR_CA_BUNDLE"
+                )
+            _warn(
+                "SOAR_VERIFY_SSL=<path> is deprecated; it still selects that CA bundle, but "
+                "set SOAR_VERIFY_SSL=true and SOAR_CA_BUNDLE=<path> instead"
+            )
+        if self.ca_bundle is not None and not self.ca_bundle.is_file():
+            raise ValueError(
+                "SOAR_CA_BUNDLE does not name an existing file; it must be a PEM CA bundle. "
+                "Refusing to start rather than fall back to another trust source"
+            )
+        if self.verify_ssl is False:
+            if self.ca_bundle is not None:
+                raise ValueError(
+                    "SOAR_CA_BUNDLE is set but SOAR_VERIFY_SSL=false disables verification; "
+                    "remove one of them (keep SOAR_CA_BUNDLE to stay verified)"
+                )
+            if not self.lab_mode:
+                raise ValueError(
+                    "SOAR_VERIFY_SSL=false is refused: disabling TLS certificate verification "
+                    "exposes the API key to interception and is lab-only, so it also requires "
+                    "SOAR_LAB_MODE=true. For a private or self-signed CA set SOAR_CA_BUNDLE "
+                    "instead"
+                )
+            _warn(TLS_INSECURE_WARNING)
 
     # ----------------------------------------------------------- loading
     @classmethod
@@ -488,6 +547,22 @@ class Settings(BaseSettings):
     def base_url_clean(self) -> str:
         return self.base_url.rstrip("/")
 
+    @property
+    def tls_verify(self) -> bool:
+        """False only for ``SOAR_VERIFY_SSL=false``, which needs ``SOAR_LAB_MODE=true``."""
+        return self.verify_ssl is not False
+
+    @property
+    def tls_ca_bundle(self) -> Path | None:
+        """The user-supplied CA bundle, from ``SOAR_CA_BUNDLE`` or the deprecated path form."""
+        return self.verify_ssl if isinstance(self.verify_ssl, Path) else self.ca_bundle
+
+    @property
+    def tls_trust(self) -> str:
+        if not self.tls_verify:
+            return "insecure"
+        return "ca_bundle" if self.tls_ca_bundle is not None else "python_default"
+
     def capability_enabled(self, env_name: str) -> bool:
         attr = env_name.removeprefix("SOAR_").lower()
         value = getattr(self, attr, False)
@@ -502,7 +577,8 @@ class Settings(BaseSettings):
         listing = ", ".join(enabled) if enabled else "none (read-only)"
         return (
             f"capabilities enabled: {listing}; approval_mode={self.approval_mode}; "
-            f"transport={self.mcp_transport}; lab_mode={str(self.lab_mode).lower()}"
+            f"transport={self.mcp_transport}; lab_mode={str(self.lab_mode).lower()}; "
+            f"tls={self.tls_trust}"
         )
 
     def secret_values(self) -> list[str]:

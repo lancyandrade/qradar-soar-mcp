@@ -420,6 +420,13 @@ and approval gates exactly as they are. Until then `soar_update_task_status`,
 **not working on 51.0.9**.
 
 ### P2-TLS — portable TLS trust configuration
+> **Status, 2026-09-19:** implemented; see
+> [`design/08-GREENFIELD-AMENDMENTS.md §22`](design/08-GREENFIELD-AMENDMENTS.md).
+> As built, the default trust source is Python's default TLS trust configuration
+> (whatever `ssl.create_default_context()` exposes on the platform and Python
+> build), not a union with `certifi` as proposed below. No host-name override was
+> added: an appliance must be addressed by a name its certificate carries.
+
 Verification on by default; system trust by default, evaluated against the
 operating-system store as well as `certifi`; an optional user-supplied CA
 bundle; an explicit, loudly warned verification-disabled override for labs

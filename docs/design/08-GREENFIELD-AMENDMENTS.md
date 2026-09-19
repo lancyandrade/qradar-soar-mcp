@@ -6,10 +6,11 @@ conflicts with `00-` to `07-`, this document wins *for that point only*. It
 does not license any other redesign; anything not listed here is governed by
 `00-` to `07-` unchanged.
 
-`00-` to `07-` are the baseline and are not edited, with three recorded
+`00-` to `07-` are the baseline and are not edited, with four recorded
 exceptions: before first publication the private lab topology was replaced by
-generic placeholders (§17), P2-00 added a status pointer to `05` (§20), and
-P1-CORR-01 added an implementation-status note to `05` (§21).
+generic placeholders (§17), P2-00 added a status pointer to `05` (§20),
+P1-CORR-01 added an implementation-status note to `05` (§21), and P2-TLS added
+the TLS trust model to `02` as §7.1 (§22).
 
 ---
 
@@ -246,8 +247,13 @@ error text.
 - Code defaults for the state paths are relative (`approvals`, `audit.jsonl`,
   `snapshots`, `HALT`, `out/playbooks`); `env.example` shows the recommended
   absolute locations.
-- `SOAR_VERIFY_SSL`: `true`, `false`, or a CA-bundle path that must exist;
-  anything else refuses to start (a misread TLS setting must not pick a side).
+- `SOAR_VERIFY_SSL`: `true` or `false`; anything else refuses to start (a
+  misread TLS setting must not pick a side). `false` additionally needs
+  `SOAR_LAB_MODE=true`, and the path of an existing CA bundle is still accepted
+  as a deprecated spelling of `SOAR_CA_BUNDLE` (§22).
+- `SOAR_CA_BUNDLE`: empty ⇒ Python's default TLS trust configuration; otherwise
+  it must be an existing PEM file, which is then used instead, or the server
+  refuses to start (§22).
 - Integers: unparseable or out-of-range ⇒ documented default plus a warning.
 - `SOAR_MCP_TRANSPORT`: `stdio` (default) or `streamable-http` (`http`
   accepted as an alias); unrecognised ⇒ `stdio` plus a warning.
@@ -375,3 +381,58 @@ ticket). See `docs/open-questions.md`.
 
 This ticket's only edit to the baseline is one implementation-status note in
 `05`, under the P2-00 note.
+
+## 22. P2-TLS — public TLS trust model
+
+Decided by the owner on 2026-09-19. `docs/soar-api-verified.md §6` showed that
+the Phase-1 client could not verify an appliance with a private or self-signed
+certificate out of the box, and that its only documented ways out were a
+bool-or-path `SOAR_VERIFY_SSL` and an ungated `false`. This section defines the
+trust model for a public connector; it amends the `SOAR_VERIFY_SSL` item of §14
+and adds `02 §7.1` (the fourth baseline exception).
+
+| State | Configuration | Trust source |
+|---|---|---|
+| Default (`python_default`) | `SOAR_VERIFY_SSL=true` or unset, no `SOAR_CA_BUNDLE` | Python's default TLS trust configuration: whatever `ssl.create_default_context()` exposes on the current platform and Python distribution |
+| Private or self-signed CA (`ca_bundle`) | `SOAR_CA_BUNDLE=<pem>` (with verification on) | the explicitly supplied bundle **only**; Python's default trust is not consulted |
+| Lab only (`insecure`) | `SOAR_VERIFY_SSL=false` **and** `SOAR_LAB_MODE=true` | none |
+
+The exact default trust-store behaviour varies by platform and Python build. It
+is often the operating system's trust store, but this project does not claim
+that universally: it uses Python's default as it finds it, reports at start-up
+when that default exposes no CA certificates, and never substitutes another
+trust source (no `certifi` union or fallback).
+
+Rules, all enforced before any request is sent (`config.py`, `tls.py`):
+
+- The chain **and the host name** are verified in both verifying states. A CA
+  bundle changes whom the server trusts, never what it checks; there is no
+  setting that keeps the chain check and drops the host-name check.
+- Fail closed: an unrecognised `SOAR_VERIFY_SSL`, a `SOAR_CA_BUNDLE` that is
+  missing, is a directory or is not PEM, two different bundles, or a bundle
+  together with `SOAR_VERIFY_SSL=false` each refuse to start. Nothing reverts to
+  another trust source.
+- No downgrade: one TLS decision is made when the client is built
+  (`tls.build_trust`), and nothing retries a failed handshake, with or without
+  verification.
+- Out of scope by design: certificate pinning, trust-on-first-use, fetching the
+  appliance's certificate, bundling any certificate with the package, modifying
+  the operating-system trust store, and any DNS or hosts-file workflow.
+- Errors: a verification failure reaches MCP output as one of four categories
+  with advice that never includes disabling verification (untrusted issuer →
+  `SOAR_CA_BUNDLE`; host-name mismatch → the name in `SOAR_BASE_URL`; validity
+  period; other). Messages name variables and never a path, host or port. The
+  exception class, OpenSSL's integer verify code and the category are log-only.
+
+**Compatibility with Phase 1.**
+
+| Phase-1 configuration | Now |
+|---|---|
+| `SOAR_VERIFY_SSL=true` / unset | verified, but against **Python's default TLS trust configuration** instead of the `certifi` bundle `httpx` uses by default. Where that default exposes no CA certificates, the server warns at start-up and `SOAR_CA_BUNDLE` must be set; verification is never dropped. |
+| `SOAR_VERIFY_SSL=<path>` | unchanged behaviour (that bundle, verified), plus a deprecation warning pointing at `SOAR_CA_BUNDLE`. |
+| `SOAR_VERIFY_SSL=false` | **refused unless `SOAR_LAB_MODE=true`**, with a message naming both variables and `SOAR_CA_BUNDLE`. With lab mode it behaves as before and warns on every start. This is the one deliberate break: it is loud, fails closed, and is what makes the insecure state opt-in. |
+
+`SOAR_LAB_MODE` is reused rather than adding a second acknowledgement flag: on
+its own it changes nothing, and `02 §4.1` already uses it the same way for
+`in_band` / `disabled` approval. The MCP HTTP transport rules (`01 §2.1`, P1-11)
+are untouched.

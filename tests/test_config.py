@@ -54,7 +54,7 @@ def test_empty_environment_enables_nothing():
     assert s.enabled_capabilities() == []
     assert s.allow_writes is False and s.lab_mode is False
     assert s.mcp_transport == "stdio" and s.approval_mode == "out_of_band"
-    assert s.verify_ssl is True
+    assert s.verify_ssl is True and s.ca_bundle is None and s.tls_trust == "python_default"
     assert s.require_action_confirmation is True and s.audit_required is True
     assert s.warnings == ()
     assert not s.connection_ready
@@ -229,11 +229,18 @@ def test_script_writes_garbage_is_false_not_fatal():
 
 
 def test_verify_ssl_bool_or_path(tmp_path: Path):
+    """The Phase-1 forms still parse; the trust model on top is in test_tls.py (08 §22)."""
     assert Settings.load({"SOAR_VERIFY_SSL": "true"}).verify_ssl is True
-    assert Settings.load({"SOAR_VERIFY_SSL": "false"}).verify_ssl is False
+    # ``false`` still parses, but is no longer accepted on its own: it is lab-only.
+    with pytest.raises(ConfigError, match="SOAR_LAB_MODE=true"):
+        Settings.load({"SOAR_VERIFY_SSL": "false"})
+    lab = Settings.load({"SOAR_VERIFY_SSL": "false", "SOAR_LAB_MODE": "true"})
+    assert lab.verify_ssl is False and lab.tls_verify is False
     bundle = tmp_path / "ca.pem"
     bundle.write_text("x")
-    assert Settings.load({"SOAR_VERIFY_SSL": str(bundle)}).verify_ssl == bundle
+    legacy = Settings.load({"SOAR_VERIFY_SSL": str(bundle)})
+    assert legacy.verify_ssl == bundle and legacy.tls_verify is True
+    assert legacy.tls_ca_bundle == bundle and any("deprecated" in w for w in legacy.warnings)
     with pytest.raises(ConfigError, match="SOAR_VERIFY_SSL"):
         Settings.load({"SOAR_VERIFY_SSL": str(tmp_path / "missing.pem")})
     with pytest.raises(ConfigError, match="SOAR_VERIFY_SSL"):
@@ -370,13 +377,21 @@ def _keys(text: str) -> set[str]:
     return set(re.findall(r"^([A-Z_]+)=", text, flags=re.MULTILINE))
 
 
-def test_env_example_is_the_baseline_with_only_the_documented_rename():
+def test_env_example_is_the_baseline_with_only_the_documented_changes():
+    """The frozen design copy, plus exactly the changes 08 records: the Ed25519 rename
+    (§5) and ``SOAR_CA_BUNDLE`` (§22)."""
     ours = _keys((ROOT / ".env.example").read_text(encoding="utf-8"))
     baseline = _keys((ROOT / "docs" / "design" / "env.example").read_text(encoding="utf-8"))
-    expected = (baseline - {"SOAR_APPROVAL_HMAC_KEY_FILE"}) | {"SOAR_APPROVAL_PUBLIC_KEY_FILE"}
+    expected = (baseline - {"SOAR_APPROVAL_HMAC_KEY_FILE"}) | {
+        "SOAR_APPROVAL_PUBLIC_KEY_FILE",
+        "SOAR_CA_BUNDLE",
+    }
     assert ours == expected
     text = (ROOT / ".env.example").read_text(encoding="utf-8")
-    assert "SOAR_VERIFY_SSL=true" in text
+    # Secure TLS defaults: verification on, no bundle, and no insecure value anywhere.
+    assert "SOAR_VERIFY_SSL=true" in text and re.search(r"^SOAR_CA_BUNDLE=$", text, flags=re.M)
+    assert re.search(r"^SOAR_VERIFY_SSL=false", text, flags=re.M) is None
+    assert re.search(r"^SOAR_LAB_MODE=false$", text, flags=re.M)
     assert re.search(r"^SOAR_ALLOW_[A-Z_]+=true", text, flags=re.MULTILINE) is None or (
         set(re.findall(r"^(SOAR_ALLOW_[A-Z_]+)=true", text, flags=re.MULTILINE))
         == {"SOAR_ALLOW_PLAYBOOK_DRAFT"}

@@ -140,7 +140,7 @@ async def test_no_secret_anywhere(
         assert out["ok"] is False, out
         assert out["error"]["code"] not in ("internal",), out
         if fault == "tls":
-            assert out["error"]["code"] == "tls" and "SOAR_VERIFY_SSL" in out["error"]["message"]
+            assert out["error"]["code"] == "tls" and "SOAR_CA_BUNDLE" in out["error"]["message"]
         if fault == "oversized":
             assert out["error"]["code"] == "response_too_large"
 
