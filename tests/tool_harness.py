@@ -4,6 +4,11 @@
 plus an invoke-style tool with per-target classification — so the pipeline
 can be proven before the real tools exist (08 §2.4). The real registry is
 exercised in test_tools.py and test_permission_matrix.py.
+
+The invoke-style tool classifies against the action list the incident object
+carries, then records its effect in a test-local list instead of calling SOAR:
+the real invocation contract is unverified (P1-CORR-01 D4, 08 §21), and the
+Tier-3 approval pipeline must stay proven without inventing one.
 """
 
 from __future__ import annotations
@@ -113,8 +118,10 @@ def _describe_action(args: Mapping[str, Any], policy: PolicyResult | None) -> di
     }
 
 
-def make_local_registry() -> dict[str, ToolSpec]:
+def make_local_registry(effects: list[dict[str, Any]] | None = None) -> dict[str, ToolSpec]:
+    """``effects`` receives one entry per executed ``soar_t_invoke`` call."""
     reg: dict[str, ToolSpec] = {}
+    invoked = effects if effects is not None else []
 
     @soar_tool(name="soar_t_read", tier=Tier.READ, registry=reg)
     async def t_read(rt: Runtime, incident_id: int, verbose: bool = False) -> ToolResult:
@@ -190,7 +197,8 @@ def make_local_registry() -> dict[str, ToolSpec]:
         approval_id: str | None = None,
     ) -> ToolResult:
         """invoke an action"""
-        out = await rt.require_client().actions.invoke(incident_id, action_id)
+        invoked.append({"incident_id": incident_id, "action_id": action_id})
+        out = {"incident_id": incident_id, "action_id": action_id, "invoked": True}
         return ToolResult(
             data=out,
             target={"incident_id": incident_id, "action_id": action_id},

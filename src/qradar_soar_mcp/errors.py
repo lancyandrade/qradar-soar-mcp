@@ -133,6 +133,18 @@ class SoarValidationError(SoarError):
     failure_class = "Validation failed"
 
 
+class SoarUnsupportedError(SoarError):
+    """The operation is not verified for the SOAR API this release targets (08 §21).
+
+    The backstop in the body of a tool that ``enforce()`` already refuses as
+    ``DENY_UNSUPPORTED``: raised before anything is sent to SOAR, with fixed
+    text that never depends on the request.
+    """
+
+    code = "unsupported"
+    failure_class = "Unsupported"
+
+
 class SoarRateLimitedError(SoarError):
     code = "soar_rate_limited"
     failure_class = "Rate limited by SOAR"

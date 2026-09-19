@@ -3,7 +3,9 @@
 These tests drive the fake with a bare httpx client. They are the contract the
 project's client (P1-04) must satisfy; they do not depend on it.
 
-Source of truth: docs/design/05-SOAR-API-SURFACE.md §1 and §1.1.
+Source of truth: docs/design/05-SOAR-API-SURFACE.md §1 and §1.1, except for tasks
+and manual actions, where docs/soar-api-verified.md (QRadar SOAR 51.0.9.0.20848)
+wins (P1-CORR-01; 08 §21).
 """
 
 from __future__ import annotations
@@ -335,20 +337,29 @@ async def test_artifacts_list_and_add(fake: FakeSoar, raw_client):
 # ------------------------------------------------------------------- tasks
 
 
-async def test_tasks_are_listed_per_incident_and_patched_with_version(fake: FakeSoar, raw_client):
-    r = await raw_client.get(f"{ORG}/incidents/42/tasks")
-    task = next(t for t in r.json() if t["id"] == 9001)
-    assert task["status"] == "O" and task["vers"] == 2
-    stale = await raw_client.patch(f"{ORG}/tasks/9001", json=_patch(1, status=("O", "C")))
-    assert stale.json()["success"] is False
-    ok = await raw_client.patch(f"{ORG}/tasks/9001", json=_patch(2, status=("O", "C")))
-    assert ok.json()["success"] is True
-    assert fake.tasks[9001]["status"] == "C" and fake.tasks[9001]["vers"] == 3
+async def test_tasks_carry_no_version(fake: FakeSoar, raw_client):
+    """Verified on 51.0.9.0.20848 (docs/soar-api-verified.md §3 D2)."""
+    rows = (await raw_client.get(f"{ORG}/incidents/42/tasks")).json()
+    single = (await raw_client.get(f"{ORG}/tasks/9001")).json()
+    assert {t["id"] for t in rows} == {9001, 9002}
+    for task in [*rows, single]:
+        assert not {"vers", "version"} & set(task)
 
 
-async def test_task_put_is_not_part_of_the_contract(fake: FakeSoar, raw_client):
-    r = await raw_client.put(f"{ORG}/tasks/9001", json={"id": 9001})
-    assert r.status_code == 404
+@pytest.mark.parametrize(
+    ("method", "body"),
+    [
+        ("PATCH", _patch(2, status=("O", "C"))),  # the Phase-1 assumption (D1)
+        ("PUT", {"id": 9001, "status": "C"}),  # documented on 51.0.9; body unverified
+    ],
+    ids=["patch", "put"],
+)
+async def test_no_task_mutation_is_modelled(fake: FakeSoar, raw_client, method: str, body: dict):
+    """PATCH is not documented and the PUT body is not verified, so the contract has
+    neither: task status changes are disabled until P2-00b verifies the body (08 §21)."""
+    r = await raw_client.request(method, f"{ORG}/tasks/9001", json=body)
+    assert r.status_code == 404 and r.json()["message"] == "fake_soar: no route"
+    assert fake.tasks[9001]["status"] == "O"
 
 
 # -------------------------------------------------------------- attachments
@@ -382,26 +393,24 @@ async def test_incident_fields_expose_prefix_and_close_required(fake: FakeSoar, 
 # ------------------------------------------------------------------ actions
 
 
-async def test_manual_actions_are_incident_scoped(fake: FakeSoar, raw_client):
-    r = await raw_client.get(f"{ORG}/incidents/42/actions")
-    assert {a["name"] for a in r.json()} >= {"Firewall — Block IP", "Send Analyst Digest"}
+async def test_the_incident_object_carries_its_actions(fake: FakeSoar, raw_client):
+    """Verified on 51.0.9.0.20848: incident, task and artifact objects carry ``actions`` (D3)."""
+    inc = (await raw_client.get(f"{ORG}/incidents/42")).json()
+    assert {a["name"] for a in inc["actions"]} >= {"Firewall — Block IP", "Send Analyst Digest"}
     assert (await raw_client.get(f"{ORG}/actions")).status_code == 404  # org-level is Phase 2
 
 
-async def test_action_invocation_body_is_exactly_action_id(fake: FakeSoar, raw_client):
-    r = await raw_client.post(
-        f"{ORG}/incidents/42/action_invocations", json={"action_id": 48, "properties": {}}
-    )
-    assert r.status_code == 400
+async def test_incident_actions_route_is_a_500_as_on_the_verified_appliance(
+    fake: FakeSoar, raw_client
+):
+    r = await raw_client.get(f"{ORG}/incidents/42/actions")
+    assert r.status_code == 500 and r.json()["message"] == "Internal Server Error"
+
+
+async def test_there_is_no_invocation_route(fake: FakeSoar, raw_client):
+    """The invocation contract is unverified on 51.0.9.0.20848 (D4); nothing is modelled."""
     r = await raw_client.post(f"{ORG}/incidents/42/action_invocations", json={"action_id": 48})
-    assert r.status_code == 200
-    assert fake.action_invocations == [{"incident_id": 42, "action_id": 48}]
-
-
-async def test_action_invocation_unknown_action_is_404(fake: FakeSoar, raw_client):
-    r = await raw_client.post(f"{ORG}/incidents/42/action_invocations", json={"action_id": 999})
-    assert r.status_code == 404
-    assert fake.action_invocations == []
+    assert r.status_code == 404 and r.json()["message"] == "fake_soar: no route"
 
 
 # -------------------------------------------------------- phase-2 boundary

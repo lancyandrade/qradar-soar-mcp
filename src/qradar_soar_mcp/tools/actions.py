@@ -1,37 +1,55 @@
-"""Manual actions and approvals (08 §3; 02 §1.1, §4).
+"""Manual actions and approvals (08 §3; 02 §1.1, §4), reconciled with the verified
+QRadar SOAR 51.0.9.0.20848 API by P1-CORR-01 (08 §21).
 
-``soar_invoke_action`` has no fixed tier: the action policy classifies the
-*target* action on every call, and that classification is what ``enforce()``
-gates on. Phase 1 invokes with the incident-scoped body ``{"action_id": N}``
-only, so an action whose ``object_type`` is not ``incident`` is refused (an
-artifact-scoped invocation is an open question, not a guess).
+``soar_list_incident_actions`` lists the actions the incident object carries,
+each with the operator policy's classification. None is invocable.
+
+``soar_invoke_action`` keeps its tier, capability flag, ``describe()`` and
+``approval_id`` parameter, but no verified invocation contract exists: the
+Phase-1 ``POST /incidents/{id}/action_invocations`` is undocumented on that
+version, and inventing a replacement is forbidden (08 §4). It is declared
+``unsupported``, so ``enforce()`` refuses every call with ``DENY_UNSUPPORTED``
+after the flag, config and transport gates and before approval: an ordinary
+audited ``DECISION_DENIED``, with no approval requested or consumed and nothing
+sent to SOAR. It declares no classifier, because there is no verified target to
+classify and a classifier would run before that denial. The body refuses the
+same way in case it is ever reached.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
 from typing import Any
 
-from qradar_soar_mcp.errors import SoarConfigError, SoarNotFoundError, SoarValidationError
+from qradar_soar_mcp.errors import SoarConfigError, SoarUnsupportedError
 from qradar_soar_mcp.security.permissions import PolicyResult
 from qradar_soar_mcp.security.tiers import Tier
 from qradar_soar_mcp.tools.registry import ToolResult, soar_tool
 from qradar_soar_mcp.tools.runtime import Runtime
 
-INVOCABLE_OBJECT_TYPE = "incident"
+INVOCATION_UNVERIFIED = (
+    "Unsupported: manual-action invocation is not verified for the SOAR REST API this "
+    "release targets (QRadar SOAR 51.0.9), so soar_invoke_action is unavailable. Nothing "
+    "was sent to SOAR and no approval was requested. Do not retry; run the action from "
+    "the SOAR UI."
+)
+
+
+INVOCATION_DETAIL = (
+    "P1-CORR-01 D4: POST /incidents/{id}/action_invocations is undocumented on "
+    "51.0.9.0.20848 and no verified replacement exists (docs/soar-api-verified.md §3)"
+)
 
 
 @soar_tool(name="soar_list_incident_actions", tier=Tier.READ)
 async def soar_list_incident_actions(rt: Runtime, incident_id: int) -> ToolResult:
-    """Manual actions available on one incident, each with its policy classification
-    (tier, decision, destructive) when SOAR_ALLOW_ACTIONS is enabled. Only actions whose
-    object_type is "incident" can be invoked in this release."""
+    """Manual actions the incident carries (id, name), each with its policy classification
+    (tier, decision, destructive) when SOAR_ALLOW_ACTIONS is enabled. None can be invoked in
+    this release (``invocable`` is always false; see soar_invoke_action)."""
     actions = await rt.require_client().actions.list_for_incident(incident_id)
     rows: list[dict[str, Any]] = []
     for action in actions:
-        row = dict(action)
-        row["invocable"] = action.get("object_type") == INVOCABLE_OBJECT_TYPE
+        row: dict[str, Any] = {**action, "invocable": False}
         if rt.policy is not None:
             result = rt.policy.classify(
                 action_name=str(action["name"]), action_id=int(action["id"])
@@ -55,27 +73,6 @@ async def soar_list_incident_actions(rt: Runtime, incident_id: int) -> ToolResul
     )
 
 
-async def _classify_invoke(rt: Runtime, args: Mapping[str, Any]) -> PolicyResult:
-    """Resolve the action on the incident and classify it (pipeline step 4)."""
-    if rt.policy is None:
-        raise SoarConfigError("SOAR_ALLOW_ACTIONS is enabled but no action policy is loaded")
-    incident_id, action_id = int(args["incident_id"]), int(args["action_id"])
-    actions = await rt.require_client().actions.list_for_incident(incident_id)
-    action = next((a for a in actions if a.get("id") == action_id), None)
-    if action is None:
-        raise SoarNotFoundError(
-            f"Not found: action {action_id} is not available on incident {incident_id}",
-            status=404,
-        )
-    if action.get("object_type") != INVOCABLE_OBJECT_TYPE:
-        raise SoarValidationError(
-            f"action {action_id} is scoped to {action.get('object_type')!r}; only "
-            "incident-scoped actions can be invoked in this release"
-        )
-    name = str(action["name"])
-    return replace(rt.policy.classify(action_name=name, action_id=action_id), subject=name)
-
-
 def _describe_invoke(args: Mapping[str, Any], policy: PolicyResult | None) -> dict[str, Any]:
     """The plan a human approves. Deliberately no incident text: names and
     descriptions are attacker-writable and the approver's terminal is not a
@@ -94,23 +91,18 @@ def _describe_invoke(args: Mapping[str, Any], policy: PolicyResult | None) -> di
     name="soar_invoke_action",
     tier=Tier.CONTROL,
     capability="SOAR_ALLOW_ACTIONS",
-    classify=_classify_invoke,
     describe=_describe_invoke,
+    unsupported=INVOCATION_UNVERIFIED,
 )
 async def soar_invoke_action(
     rt: Runtime, incident_id: int, action_id: int, approval_id: str | None = None
 ) -> ToolResult:
-    """Invoke one manual action on an incident (ids from soar_list_incident_actions).
-    The action policy sets the tier per action; Tier 3 needs a human approval: the first
-    call returns an approval reference, a human approves it out of band, then repeat the
-    identical call with ``approval_id``. Never retry in a loop. Not available over HTTP.
-    SOAR runs the action asynchronously; its outcome is not observable here."""
-    out = await rt.require_client().actions.invoke(incident_id, action_id)
-    return ToolResult(
-        data={**out, "note": "accepted by SOAR; the action runs asynchronously"},
-        target={"incident_id": incident_id, "action_id": action_id},
-        soar_response={"accepted": True},
-    )
+    """UNAVAILABLE in this release: every call is refused with DENY_UNSUPPORTED without
+    contacting SOAR, because SOAR's manual-action invocation contract is not verified for
+    the API this release targets. Do not retry; a human runs the action from the SOAR UI.
+    The contract is kept for when invocation is verified: the action policy sets the tier
+    per action, Tier 3 needs an out-of-band human approval, and it never runs over HTTP."""
+    raise SoarUnsupportedError(INVOCATION_UNVERIFIED, detail=INVOCATION_DETAIL)
 
 
 @soar_tool(name="soar_check_approval", tier=Tier.READ)

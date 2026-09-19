@@ -61,6 +61,9 @@ FAULTS: dict[str, dict[str, Any]] = {
     "tls": {},  # genuine SSLCertVerificationError cause; see _tls_transport
 }
 TOOLS_WITHOUT_SOAR = {"soar_check_approval"}
+# Declared unsupported: refused before anything is sent, whatever SOAR would answer
+# (P1-CORR-01 D1 and D4; 08 §21).
+TOOLS_REFUSED_BEFORE_SOAR = {"soar_invoke_action", "soar_update_task_status"}
 
 
 def _tls_transport() -> httpx.MockTransport:
@@ -129,7 +132,9 @@ async def test_no_secret_anywhere(
     rendered = json.dumps(out, default=str)
     assert SENTINEL not in rendered, f"tool response leaked the secret: {rendered[:300]}"
     assert "Basic " not in rendered
-    if fault == "ok" or tool in TOOLS_WITHOUT_SOAR:
+    if tool in TOOLS_REFUSED_BEFORE_SOAR:
+        assert out["ok"] is False and out["error"]["code"] == "DENY_UNSUPPORTED", out
+    elif fault == "ok" or tool in TOOLS_WITHOUT_SOAR:
         assert out["ok"] is True, out
     else:
         assert out["ok"] is False, out

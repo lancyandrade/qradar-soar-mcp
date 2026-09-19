@@ -350,6 +350,55 @@ def test_legacy_writes_never_reaches_actions():
     assert d.code is Code.DENY_DISABLED
 
 
+# ------------------------------------------------------------- unsupported
+
+
+def test_unsupported_is_denied_after_the_flag_and_before_approval(policy_file):
+    """08 §21: a tool whose SOAR contract is unverified is gated normally, then refused."""
+    text = "Unsupported: not verified"
+    off = enforce(
+        tool="t",
+        tier=Tier.MODIFICATION,
+        capability="SOAR_ALLOW_TASK_WRITES",
+        config=Settings.load({}),
+        transport="stdio",
+        unsupported=text,
+    )
+    assert off.code is Code.DENY_DISABLED  # the flag still comes first
+    assert enforce(
+        tool="t", tier=Tier.READ, capability=None, config=None, transport="stdio", unsupported=text
+    ).code is (Code.DENY_CONFIG)
+    for transport in ("stdio", "streamable-http"):
+        on = enforce(
+            tool="t",
+            tier=Tier.MODIFICATION,
+            capability="SOAR_ALLOW_TASK_WRITES",
+            config=_settings(policy_file, SOAR_ALLOW_TASK_WRITES="true"),
+            transport=transport,
+            unsupported=text,
+        )
+        assert on.denied and on.code is Code.DENY_UNSUPPORTED and on.reason == text
+        assert on.tier is Tier.MODIFICATION and on.capability == "SOAR_ALLOW_TASK_WRITES"
+
+
+@pytest.mark.parametrize("mode", ["out_of_band", "in_band", "disabled"])
+def test_unsupported_tier3_never_reaches_approval_and_http_is_denied_first(policy_file, mode):
+    flags = {"SOAR_ALLOW_ACTIONS": "true", "SOAR_APPROVAL_MODE": mode}
+    if mode != "out_of_band":
+        flags["SOAR_LAB_MODE"] = "true"
+    cfg = _settings(policy_file, **flags)
+    kwargs = dict(
+        tool="soar_invoke_action",
+        tier=Tier.CONTROL,
+        capability="SOAR_ALLOW_ACTIONS",
+        config=cfg,
+        unsupported="Unsupported: not verified",
+    )
+    stdio = enforce(transport="stdio", **kwargs)
+    assert stdio.code is Code.DENY_UNSUPPORTED and stdio.outcome is Outcome.DENY
+    assert enforce(transport="streamable-http", **kwargs).code is Code.DENY_TRANSPORT
+
+
 def test_decision_helpers():
     d = Decision(Outcome.ALLOW, Code.ALLOW, "ok", Tier.READ)
     assert d.allowed and not d.denied

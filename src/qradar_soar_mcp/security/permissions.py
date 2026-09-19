@@ -67,6 +67,7 @@ class Code(StrEnum):
     DENY_BREAKER = "DENY_BREAKER"
     DENY_APPROVAL = "DENY_APPROVAL"
     DENY_AUDIT = "DENY_AUDIT"
+    DENY_UNSUPPORTED = "DENY_UNSUPPORTED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,12 +112,18 @@ def enforce(
     config: Settings | None,
     transport: str,
     policy: PolicyResult | None = None,
+    unsupported: str | None = None,
 ) -> Decision:
     """Steps 3-6 and 8 of 01 §4: flag → policy → tier → transport → approval.
 
     ``policy`` is the per-target classification for ``soar_invoke_action``
     (02 §1.1): it sets the *effective* tier and may itself deny or require
     approval. Rate/bulk gates (step 7) live in ``limits.py`` and run after this.
+
+    ``unsupported`` is the fixed refusal of a tool whose SOAR request contract is
+    not verified for the API this release targets (08 §21). Such a tool is gated
+    like any other, then denied after the transport gate and before approval,
+    so its refusal is an ordinary audited denial and nothing reaches SOAR.
     """
     if config is None:
         return deny(Code.DENY_CONFIG, "configuration failed to load; nothing is permitted", tier)
@@ -193,6 +200,17 @@ def enforce(
         return deny(
             Code.DENY_TRANSPORT,
             f"{tool}: tier {int(effective)} is hard-disabled over the HTTP transport; use stdio",
+            effective,
+            capability=capability,
+            policy_rule=rule,
+            destructive=destructive,
+        )
+
+    # Step 6b: a tool whose SOAR request contract is unverified never runs (08 §21).
+    if unsupported is not None:
+        return deny(
+            Code.DENY_UNSUPPORTED,
+            unsupported,
             effective,
             capability=capability,
             policy_rule=rule,

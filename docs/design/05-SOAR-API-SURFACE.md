@@ -20,6 +20,16 @@
 > where the two disagree (notably §1 on tasks and manual actions, and §2.1 on
 > the export backend), the verified record wins for that version.
 
+> **Implementation status — P1-CORR-01, 2026-09-19.** The §1 rows for tasks and
+> manual actions no longer describe the client. Tasks: the method/path is
+> corrected from the invalid `PATCH` assumption to the verified
+> `PUT /tasks/{id}`, but task mutation remains disabled because the `PUT`
+> request body has not yet been verified; `soar_update_task_status` refuses
+> every call and no task version is required or invented. Manual actions are
+> read from the `actions` list the incident object carries. Action invocation is
+> not implemented and `soar_invoke_action` refuses every call. Details and the
+> remaining open points: `08-GREENFIELD-AMENDMENTS.md §21`.
+
 All paths are relative to `https://{host}/rest/orgs/{org_id}` unless noted.
 Auth: HTTP Basic with API key id/secret. Common params `handle_format=names`
 and `text_content_output_format=always_text` as already implemented.

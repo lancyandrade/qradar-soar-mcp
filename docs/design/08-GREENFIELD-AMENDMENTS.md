@@ -6,9 +6,10 @@ conflicts with `00-` to `07-`, this document wins *for that point only*. It
 does not license any other redesign; anything not listed here is governed by
 `00-` to `07-` unchanged.
 
-`00-` to `07-` are the baseline and are not edited, with two recorded
+`00-` to `07-` are the baseline and are not edited, with three recorded
 exceptions: before first publication the private lab topology was replaced by
-generic placeholders (§17), and P2-00 added a status pointer to `05` (§20).
+generic placeholders (§17), P2-00 added a status pointer to `05` (§20), and
+P1-CORR-01 added an implementation-status note to `05` (§21).
 
 ---
 
@@ -95,7 +96,7 @@ behaviour".
 | `soar_list_attachments` | 0 | — | `GET /incidents/{id}/attachments` (metadata only) |
 | `soar_list_users` | 0 | — | `GET /users` |
 | `soar_describe_incident_fields` | 0 | — | `GET /types/incident/fields` |
-| `soar_list_incident_actions` | 0 | — | `GET /incidents/{id}/actions` |
+| `soar_list_incident_actions` | 0 | — | `GET /incidents/{id}` (the `actions` list it carries; §21) |
 | `soar_check_approval` | 0 | — | none (broker files) |
 | `soar_get_incident_full` | 0 | — | composition of the reads above |
 | `soar_find_similar_incidents` | 0 | — | composition of `query_paged` + artifact reads (§9) |
@@ -105,8 +106,8 @@ behaviour".
 | `soar_update_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | `GET` + `PATCH /incidents/{id}` |
 | `soar_assign_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | `GET` + `PATCH /incidents/{id}` |
 | `soar_close_incident` | 2 | `SOAR_ALLOW_INCIDENT_CLOSE` | `GET` + `PATCH /incidents/{id}` |
-| `soar_update_task_status` | 2 | `SOAR_ALLOW_TASK_WRITES` | `GET /incidents/{id}/tasks` + `PATCH /tasks/{id}` |
-| `soar_invoke_action` | per policy (1–5) | `SOAR_ALLOW_ACTIONS` (+ `SOAR_ALLOW_DESTRUCTIVE_ACTIONS` when the rule is destructive) | `GET /incidents/{id}/actions` + `POST /incidents/{id}/action_invocations` |
+| `soar_update_task_status` | 2 | `SOAR_ALLOW_TASK_WRITES` | none: disabled, every call is refused as `DENY_UNSUPPORTED` until the verified `PUT /tasks/{id}` has a verified body (§21) |
+| `soar_invoke_action` | per policy (1–5) | `SOAR_ALLOW_ACTIONS` (+ `SOAR_ALLOW_DESTRUCTIVE_ACTIONS` when the rule is destructive) | none: every call is refused as `DENY_UNSUPPORTED`; the invocation contract is unverified (§21) |
 
 **Explicitly not in Phase 1:** `soar_ping`, `soar_security_status`, data-table
 reads, `/functions`, org-level `/actions`, any playbook tool, any generic REST
@@ -130,22 +131,21 @@ unless absolute; every request carries `handle_format=names` and
 | GET | `incidents/{id}` | |
 | POST | `incidents` | `discovered_date` required |
 | PATCH | `incidents/{id}` | PatchDTO `{version, changes: [{field: {name}, old_value: {object}, new_value: {object}}]}`; `success:false` raises |
-| GET | `incidents/{id}/tasks` | also the source of a task's current DTO/version for PATCH (`GET /tasks/{id}` is not in the known-good list; see open questions) |
-| PATCH | `tasks/{id}` | PatchDTO, **not** PUT |
+| GET | `incidents/{id}/tasks` | |
 | GET / POST | `incidents/{id}/artifacts` | |
 | GET / POST | `incidents/{id}/comments` | `{"text": {"format": "text", "content": ...}}` |
 | GET | `incidents/{id}/attachments` | metadata only; contents endpoint is ⚠️ and not used |
 | GET | `users` | |
 | GET | `types/incident/fields` | field definitions incl. `prefix: properties` for custom fields |
-| GET | `incidents/{id}/actions` | manual actions available on the incident |
-| POST | `incidents/{id}/action_invocations` | body exactly `{"action_id": N}` |
 
-Precedence over any prior implementation: task updates use PATCH; `query_paged`
-sends `return_level=normal`; manual actions come from the incident-scoped
-endpoint; the invocation body has no other keys; reachability (`--check` and
-`ping`) uses `query_paged`. `/types`, `/functions`, table data, org-level
-`/actions`, `/rest/const`, `/rest/orgs/{org}`, attachment contents, incident
-history and every `05 §2–3` endpoint stay out of Phase 1.
+Precedence over any prior implementation: nothing is sent to a single task —
+the verified method is `PUT /tasks/{id}`, not `PATCH`, but its body is
+unverified, so task updates are disabled (§21); `query_paged` sends
+`return_level=normal`; manual actions come from the `actions` list the
+incident object carries, and nothing is invoked (§21);
+reachability (`--check` and `ping`) uses `query_paged`. `/types`, `/functions`,
+table data, org-level `/actions`, `/rest/const`, `/rest/orgs/{org}`, attachment
+contents, incident history and every `05 §2–3` endpoint stay out of Phase 1.
 
 ## 5. Approval key custody — intentional security correction (P1-10)
 
@@ -335,3 +335,43 @@ record. On 2026-09-18 one status note was added under the confidence legend of
 `51.0.9.0.20848`. Nothing else in `05` was changed: its marks and research text
 are preserved as the pre-verification history, and the verified record states
 where it disagrees. No other baseline document was touched by P2-00.
+
+## 21. P1-CORR-01 — Phase 1 reconciled with the verified v51 API
+
+Decided by the owner on 2026-09-19. `docs/soar-api-verified.md §3` found four
+Phase-1 assumptions contradicted on QRadar SOAR `51.0.9.0.20848`. Each is
+corrected from what that record verified and nothing else; where the record
+does not verify a request shape, the tool is disabled rather than guessed. This
+section amends the rows of §3 and §4 marked §21 and supersedes, for these
+points only, the task, manual-action and invocation items of §2.1 and the two
+`tools/actions.py` notes of §18.
+
+| # | Phase 1 | Now |
+|---|---|---|
+| D1 | `PATCH /tasks/{id}` | Method/path corrected from the invalid `PATCH` assumption to the verified `PUT` endpoint, but **task mutation remains disabled because the `PUT` request body has not yet been verified.** `soar_update_task_status` stays registered and refuses every call; the client sends nothing to a single task by any method (no `PUT`, no `PATCH`, no `GET /tasks/{id}`), and no body is guessed: not a partial body, a PatchDTO, a full-object `PUT`, a version or any other lock field. Enabling it waits for a live verification of the body (`P2-00b`). |
+| D2 | the task's `vers` was required | **Resolved.** Tasks carry no version on this API. Nothing requires one and none is invented; the offline model's tasks have none. |
+| D3 | `GET /incidents/{id}/actions` (500, undocumented) | **Resolved.** The `actions` list the incident object carries (`GET /incidents/{id}`). The list was empty on the verified appliance, so its entries' shape is unverified: only a positive integer `id` and a non-empty `name` are used, and anything else fails closed. Actions carried by tasks and artifacts are not listed. |
+| D4 | `POST /incidents/{id}/action_invocations` `{"action_id": N}` | **Fail-closed; the invocation contract is unresolved.** `soar_invoke_action` keeps its tier, flag, `approval_id` and `describe()` and refuses every call; the client has no invocation method. With no verified invocation there is no per-call policy classification either, so its effective tier is its declared Tier 3. |
+
+**How the two refusals work.** A tool may be declared `unsupported` with a fixed
+refusal text (`tools/registry.py`). `enforce()` gates it like any other tool —
+capability flag, configuration, Tier-5 and transport gates first — and then
+denies it with `DENY_UNSUPPORTED`, before the approval step. The denial takes
+the pipeline's normal denial path, so, as `02 §6` requires of every denial, it
+is audited as `DECISION_DENIED`; no `MUTATION_PENDING` is written, no approval
+is requested or consumed, the rate counters are untouched and nothing is sent
+to SOAR. The tool bodies raise the same fixed refusal as a backstop. Keeping
+the two tools registered departs from the last paragraph of §3 (a tool that
+cannot be built without guessing is left unregistered): they stay so that the
+20-tool contract is stable and the gap stays visible.
+
+Unchanged: incident `PATCH` and its version check; every other row of §4; the
+pipeline order. `client/` still has no `PUT` and no `DELETE`.
+
+Still open, and not guessed: the `PUT /tasks/{task_id}` request body, and what,
+if anything, protects a task against a concurrent edit; the entry shape of the
+carried `actions` lists; the invocation contract; `return_level` (not in this
+ticket). See `docs/open-questions.md`.
+
+This ticket's only edit to the baseline is one implementation-status note in
+`05`, under the P2-00 note.
