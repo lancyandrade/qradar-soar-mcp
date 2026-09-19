@@ -322,6 +322,30 @@ must go through a sanitiser before reaching MCP output, and there must be a
 test that injects a known secret value and asserts it appears in no tool
 response and no log line.
 
+### 7.1 TLS trust for the SOAR connection (P2-TLS)
+
+> Added 2026-09-19 by ticket `P2-TLS`; the exception to the frozen baseline is
+> recorded in `08-GREENFIELD-AMENDMENTS.md §22`, which holds the detail.
+
+The API key is sent with every request, so the channel to SOAR is part of secret
+handling. The public trust model is:
+
+| State | Configuration | Trust |
+|---|---|---|
+| Default | `SOAR_VERIFY_SSL=true` (or unset), no `SOAR_CA_BUNDLE` | Python's default TLS trust configuration: whatever `ssl.create_default_context()` exposes on the current platform and Python distribution |
+| Private / self-signed CA | + `SOAR_CA_BUNDLE=<pem>` | only the explicitly supplied bundle |
+| Lab only | `SOAR_VERIFY_SSL=false` **and** `SOAR_LAB_MODE=true` | none; loud warning on every start |
+
+The exact default trust-store behaviour varies by platform and Python build; it
+is often, but not always, the operating system's store. In both verifying states
+the certificate chain **and the host name** are checked; a CA bundle changes whom
+we trust, never what we check. An unusable
+bundle or an unrecognised setting refuses to start, before any request. There is
+no fallback from verified to unverified TLS, no retry with weaker settings, no
+pinning, no trust-on-first-use, no bundled certificate, and the operating-system
+trust store is never modified. Verification failures reach MCP output as a
+sanitised category with advice; the OpenSSL detail is log-only.
+
 ---
 
 ## 8. Threat model summary

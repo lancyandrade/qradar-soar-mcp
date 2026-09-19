@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 from qradar_soar_mcp.client.base import DEFAULT_PARAMS, MAX_RESPONSE_BYTES, SoarClient
-from qradar_soar_mcp.config import Settings
+from qradar_soar_mcp.config import ConfigError, Settings
 from qradar_soar_mcp.errors import (
     SoarAuthError,
     SoarConfigError,
@@ -172,7 +172,8 @@ async def test_tls_failure_is_reported_as_tls():
             await c.get(INC)
     err = info.value
     assert err.__cause__ is None and err.__context__ is None
-    assert "SOAR_VERIFY_SSL" in str(err) and "handshake" not in str(err)
+    assert "SOAR_CA_BUNDLE" in str(err) and "handshake" not in str(err)
+    assert "SOAR_VERIFY_SSL" not in str(err)  # the advice is never "turn it off"
 
 
 async def test_malformed_json_and_empty_body(client: SoarClient, fake: FakeSoar):
@@ -328,14 +329,21 @@ async def test_ping_fails_when_search_fails(client: SoarClient, fake: FakeSoar):
 
 
 async def test_verify_ssl_settings_are_applied(fake: FakeSoar, tmp_path, caplog):
+    """The trust model itself is covered in test_tls.py and test_tls_handshake.py (08 §22)."""
     bogus = tmp_path / "ca.pem"
     bogus.write_text("not really a cert")
-    with pytest.raises(Exception):  # noqa: B017 - ssl raises SSLError; never a silent fallback
-        SoarClient(Settings.load(connection_env(SOAR_VERIFY_SSL=str(bogus))))
+    for env in ({"SOAR_VERIFY_SSL": str(bogus)}, {"SOAR_CA_BUNDLE": str(bogus)}):
+        with pytest.raises(SoarConfigError, match="could not be loaded") as info:
+            SoarClient(Settings.load(connection_env(**env)))  # never a silent fallback
+        assert str(tmp_path) not in str(info.value)
+    with pytest.raises(ConfigError, match="SOAR_LAB_MODE=true"):
+        Settings.load(connection_env(SOAR_VERIFY_SSL="false"))
     with caplog.at_level("WARNING"):
-        c = SoarClient(Settings.load(connection_env(SOAR_VERIFY_SSL="false")))
+        c = SoarClient(Settings.load(connection_env(SOAR_VERIFY_SSL="false", SOAR_LAB_MODE="true")))
     await c.aclose()
-    assert any("TLS verification is DISABLED" in r.getMessage() for r in caplog.records)
+    assert c.tls.mode == "insecure"
+    assert any("verification is DISABLED" in r.getMessage() for r in caplog.records)
+    assert fake.requests == []
 
 
 async def test_accessors_are_cached(client: SoarClient):

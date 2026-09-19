@@ -5,7 +5,9 @@ which owns:
 
 * HTTP Basic auth with the API key id/secret;
 * ``handle_format=names`` and ``text_content_output_format=always_text`` on every call;
-* TLS verification from ``SOAR_VERIFY_SSL`` (bool or CA bundle) and the timeout;
+* TLS trust as resolved by :func:`qradar_soar_mcp.tls.build_trust` before any request
+  (Python's default trust, or ``SOAR_CA_BUNDLE``; never a silent downgrade), and the
+  timeout;
 * a streamed response-size cap (08 §13);
 * the mapping of every failure to a sanitised :class:`SoarError`, raised *outside*
   the ``except`` block so no ``httpx`` exception is ever chained;
@@ -19,7 +21,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import ssl
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import TracebackType
@@ -41,6 +42,7 @@ from qradar_soar_mcp.errors import (
     from_httpx,
     from_status,
 )
+from qradar_soar_mcp.tls import TlsTrust, build_trust
 
 if TYPE_CHECKING:
     from qradar_soar_mcp.client.actions import ActionsClient
@@ -97,18 +99,13 @@ class SoarClient:
         basic = base64.b64encode(f"{settings.api_key_id}:{secret}".encode()).decode()
         # Anything the server (or a proxy) could echo that identifies the credential.
         self._sensitive: tuple[str, ...] = (secret, basic)
-        verify: bool | ssl.SSLContext
-        if isinstance(settings.verify_ssl, bool):
-            verify = settings.verify_ssl
-            if not verify:
-                logger.warning("TLS verification is DISABLED (SOAR_VERIFY_SSL=false)")
-        else:
-            # Raises at startup if the bundle is unreadable; never falls back silently.
-            verify = ssl.create_default_context(cafile=str(settings.verify_ssl))
+        # Raises SoarConfigError before any I/O if the trust configuration is unusable.
+        # This is the only TLS decision: no retry and no downgrade happens after it.
+        self.tls: TlsTrust = build_trust(settings)
         self._http = httpx.AsyncClient(
             base_url=settings.base_url_clean,
             auth=(settings.api_key_id, secret),
-            verify=verify,
+            verify=self.tls.httpx_verify,
             timeout=settings.timeout,
             follow_redirects=False,
             headers={
@@ -191,7 +188,11 @@ class SoarClient:
             # Map by type only; the exception is dropped here and never chained.
             failure = from_httpx(exc, method, path)
         if failure is not None:
-            logger.debug("soar %s %s -> %s", method, path, failure.code)
+            if failure.code == "tls":
+                # The cause (class names, OpenSSL verify code, category) is log-only.
+                logger.warning("soar %s %s -> tls failure: %s", method, path, failure.detail)
+            else:
+                logger.debug("soar %s %s -> %s", method, path, failure.code)
             raise failure
 
         body: JSON = None

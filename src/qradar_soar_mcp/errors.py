@@ -9,9 +9,11 @@ Every :class:`SoarError` carries two texts:
   or :meth:`to_dict`.
 
 ``httpx`` exceptions carry the ``Request``, which carries the ``Authorization``
-header. :func:`from_httpx` reads the exception's *type* and nothing else, and
-callers raise the result outside their ``except`` block so no ``httpx``
-exception is ever chained (``__cause__`` and ``__context__`` stay ``None``).
+header. :func:`from_httpx` reads the exception's *type* and, for a certificate
+verification failure, OpenSSL's integer ``verify_code`` — nothing else, never a
+message — and callers raise the result outside their ``except`` block so no
+``httpx`` exception is ever chained (``__cause__`` and ``__context__`` stay
+``None``).
 """
 
 from __future__ import annotations
@@ -242,24 +244,44 @@ def from_status(
     return build(SoarError)
 
 
+# OpenSSL X509_V_ERR_* codes (stable across OpenSSL 1.1 and 3.x), grouped by what the
+# operator has to do about them. The advice never includes disabling verification.
+_TLS_HOST_MISMATCH = frozenset({62, 64})  # HOSTNAME_MISMATCH, IP_ADDRESS_MISMATCH
+_TLS_UNTRUSTED_ISSUER = frozenset({2, 18, 19, 20, 21})  # no issuer / self-signed / no chain
+_TLS_VALIDITY = frozenset({9, 10})  # CERT_NOT_YET_VALID, CERT_HAS_EXPIRED
+_TLS_ADVICE: dict[str, str] = {
+    "host name mismatch": (
+        "the certificate is not valid for the host in SOAR_BASE_URL. Use the host name the "
+        "certificate was issued for; verification is never bypassed automatically"
+    ),
+    "untrusted issuer": (
+        "the certificate's issuer is not trusted. For a private or self-signed CA, set "
+        "SOAR_CA_BUNDLE to its PEM certificate"
+    ),
+    "validity period": (
+        "the certificate is expired or not yet valid (check the appliance certificate and "
+        "this host's clock)"
+    ),
+    "verification failed": "check SOAR_CA_BUNDLE, or the certificate on the appliance",
+}
+
+
 def from_httpx(exc: httpx.HTTPError, method: str, path: str) -> SoarError:
     """Map a transport-level ``httpx`` failure by *type only*.
 
     The exception's message is deliberately not used: it can include the URL
     and, for some error types, fragments of request state. ``detail`` records
-    only the exception class name.
+    only exception class names and, for a certificate verification failure,
+    OpenSSL's integer ``verify_code`` and the category derived from it.
     """
     where = _where(method, path)
     detail = type(exc).__name__
     if isinstance(exc, httpx.TimeoutException):
         return SoarTimeoutError(f"Timeout waiting for SOAR on {where}", detail=detail)
     if isinstance(exc, httpx.ConnectError):
-        if _is_tls_failure(exc):
-            return SoarTLSError(
-                f"TLS failure connecting to SOAR for {where} "
-                "(check SOAR_VERIFY_SSL, or the certificate on the appliance)",
-                detail=detail,
-            )
+        cause = _tls_cause(exc)
+        if cause is not None:
+            return _tls_error(cause, where, detail)
         return SoarConnectionError(f"Could not connect to SOAR for {where}", detail=detail)
     if isinstance(exc, httpx.RemoteProtocolError | httpx.ReadError | httpx.WriteError):
         return SoarConnectionError(f"Connection to SOAR dropped during {where}", detail=detail)
@@ -272,13 +294,41 @@ def from_httpx(exc: httpx.HTTPError, method: str, path: str) -> SoarError:
     return SoarConnectionError(f"Transport failure on {where}", detail=detail)
 
 
-def _is_tls_failure(exc: BaseException) -> bool:
+def _tls_error(cause: ssl.SSLError, where: str, detail: str) -> SoarTLSError:
+    detail = f"{detail}; cause={type(cause).__name__}"
+    if not isinstance(cause, ssl.SSLCertVerificationError):
+        return SoarTLSError(
+            f"TLS failure connecting to SOAR for {where} "
+            "(check SOAR_CA_BUNDLE, or the certificate on the appliance)",
+            detail=detail,
+        )
+    code = getattr(cause, "verify_code", None)
+    code = code if isinstance(code, int) and not isinstance(code, bool) else None
+    if code in _TLS_HOST_MISMATCH:
+        category = "host name mismatch"
+    elif code in _TLS_UNTRUSTED_ISSUER:
+        category = "untrusted issuer"
+    elif code in _TLS_VALIDITY:
+        category = "validity period"
+    else:
+        category = "verification failed"
+    return SoarTLSError(
+        f"TLS certificate verification failed for {where}: {_TLS_ADVICE[category]}",
+        detail=f"{detail}; verify_code={code}; category={category}",
+    )
+
+
+def _tls_cause(exc: BaseException) -> ssl.SSLError | None:
     seen: set[int] = set()
     current: BaseException | None = exc
     while current is not None and id(current) not in seen:
         seen.add(id(current))
         if isinstance(current, ssl.SSLError):
-            return True
+            return current
         # httpx wraps the underlying error in ``__cause__`` / ``__context__``.
         current = current.__cause__ or current.__context__
-    return False
+    return None
+
+
+def _is_tls_failure(exc: BaseException) -> bool:
+    return _tls_cause(exc) is not None

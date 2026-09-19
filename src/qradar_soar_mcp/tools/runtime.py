@@ -131,10 +131,13 @@ class Runtime:
         if settings.connection_ready:
             try:
                 client = SoarClient(settings, transport=http_transport)
+            except SoarConfigError as exc:  # e.g. an unloadable CA bundle (08 §22)
+                return cls.unusable(exc.safe_message, effective)
             except Exception as exc:
                 return cls.unusable(
                     f"SOAR client could not be created ({type(exc).__name__})", effective
                 )
+            warnings.extend(client.tls.warnings)
         else:
             warnings.append(
                 "SOAR connection is not configured; every tool that reaches SOAR fails "
@@ -185,6 +188,10 @@ class Runtime:
         if self.settings is not None:
             out["capabilities"] = self.settings.enabled_capabilities()
             out["approval_mode"] = self.settings.approval_mode
+            out["tls"] = {
+                "verify": self.settings.tls_verify,
+                "trust": self.settings.tls_trust,
+            }
             out["audit"] = {
                 "path": str(self.settings.audit_log_path),
                 "open": bool(self.audit and self.audit.opened),

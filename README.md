@@ -150,8 +150,9 @@ search actually works, not just that TLS handshook. Exit codes: 0 reachable,
 1 not configured or unreachable, 2 configuration refused.
 
 Create the API key in **Administrator Settings → API Keys**. Start with a
-read-only permission set. Point `SOAR_VERIFY_SSL` at your appliance CA bundle
-rather than setting it to `false`.
+read-only permission set. TLS verification is on by default; if your appliance
+uses a private or self-signed CA, see [TLS trust](#tls-trust) rather than
+turning verification off.
 
 ### Claude Desktop / Claude Code (stdio — the supported transport)
 
@@ -166,7 +167,7 @@ rather than setting it to `false`.
         "SOAR_ORG_ID": "201",
         "SOAR_API_KEY_ID": "...",
         "SOAR_API_KEY_SECRET": "...",
-        "SOAR_VERIFY_SSL": "/etc/pki/ca-trust/source/anchors/soar-ca.pem",
+        "SOAR_CA_BUNDLE": "/etc/qradar-soar-mcp/soar-ca.pem",
         "SOAR_AUDIT_LOG_PATH": "/var/log/qradar-soar-mcp/audit.jsonl"
       }
     }
@@ -176,7 +177,78 @@ rather than setting it to `false`.
 
 The server writes nothing to stdout except the MCP protocol; logs go to stderr
 with secrets redacted. It refuses to start if the audit log cannot be written
-(`SOAR_AUDIT_REQUIRED=true`, the default).
+(`SOAR_AUDIT_REQUIRED=true`, the default). Leave `SOAR_CA_BUNDLE` out if
+Python's default TLS trust already covers your appliance's certificate; see
+[TLS trust](#tls-trust).
+
+---
+
+## TLS trust
+
+The API key travels in every request, so the connection to SOAR is always
+verified unless you explicitly say otherwise. There are three states; `--check`
+reports which one is in force (`tls.trust`: `python_default`, `ca_bundle` or
+`insecure`).
+
+**1. Python's default TLS trust configuration (the default).** Nothing to
+configure. With no `SOAR_CA_BUNDLE`, the default trust source is whatever
+Python's `ssl.create_default_context()` exposes on the current platform and
+Python distribution. That is often the operating system's trust store, in which
+case a public CA, or an enterprise CA your organisation has deployed, simply
+works. But the exact default trust-store behaviour varies by platform and Python
+build, and this server does not paper over the difference: if the default
+exposes no CA certificates at all, it says so at start-up, connections fail
+verification, and the fix is state 2.
+
+```bash
+SOAR_BASE_URL=https://soar.example.internal
+SOAR_VERIFY_SSL=true        # the default; shown for clarity
+```
+
+**2. A private or self-signed CA.** Export the CA certificate (PEM) that issued
+the appliance's certificate and point `SOAR_CA_BUNDLE` at it. Verification stays
+on. The explicitly supplied bundle is used *instead of* Python's default trust
+for this connection, so only that CA is trusted.
+
+```bash
+SOAR_BASE_URL=https://soar.example.internal
+SOAR_VERIFY_SSL=true
+SOAR_CA_BUNDLE=/etc/qradar-soar-mcp/soar-ca.pem
+```
+
+A CA bundle changes *whom* the server trusts, never *what* it checks: the host
+name in `SOAR_BASE_URL` must still be one the certificate was issued for. If the
+certificate names `soar.example.internal`, use that name, not an IP address.
+There is no setting that skips the host-name check while keeping the rest.
+
+**3. No verification — lab only.**
+
+> ⚠️ **`SOAR_VERIFY_SSL=false` exposes your SOAR API key to anyone on the network
+> path.** It is refused unless `SOAR_LAB_MODE=true` is also set, it is logged as
+> a warning on every start, and it has no place outside a throwaway lab. If you
+> are reaching for it because of a self-signed certificate, use state 2 instead.
+
+```bash
+SOAR_VERIFY_SSL=false
+SOAR_LAB_MODE=true          # required; without it the server refuses to start
+```
+
+What the server will never do: fall back from verified to unverified TLS, retry
+a failed handshake with weaker settings, fetch or pin the appliance's
+certificate, trust on first use, ship a certificate of its own, or touch your
+operating system's trust store. A `SOAR_CA_BUNDLE` that is missing or is not PEM
+refuses to start; it does not quietly revert to Python's default trust.
+
+When verification fails, the tool error says which kind of failure it was and
+what to change (an untrusted issuer → `SOAR_CA_BUNDLE`; a host-name mismatch →
+the name in `SOAR_BASE_URL`; an expired certificate → the appliance). The
+OpenSSL detail is written to the log only. Python 3.13 and later also apply
+stricter RFC 5280 checks by default; a certificate they reject needs reissuing,
+not a weaker client.
+
+`SOAR_VERIFY_SSL=/path/to/ca.pem`, the form used before `SOAR_CA_BUNDLE`
+existed, still works and means the same as state 2; it logs a deprecation
+warning.
 
 ---
 
@@ -282,7 +354,8 @@ All variables, with defaults. `.env.example` is the annotated copy.
 | `SOAR_BASE_URL` | — | `https://` URL of the appliance (plain `http://` only on loopback) |
 | `SOAR_ORG_ID` | — | organisation id (unparseable ⇒ connection disabled, with a warning) |
 | `SOAR_API_KEY_ID` / `SOAR_API_KEY_SECRET` | — | API key (Basic auth) |
-| `SOAR_VERIFY_SSL` | `true` | `true`, `false`, or a CA-bundle path; anything else refuses to start |
+| `SOAR_VERIFY_SSL` | `true` | TLS verification. `false` is lab-only and refused without `SOAR_LAB_MODE=true`. Anything unrecognised refuses to start. (A CA-bundle path is still accepted here, deprecated.) See [TLS trust](#tls-trust) |
+| `SOAR_CA_BUNDLE` | — | PEM CA bundle for a private or self-signed CA. Empty ⇒ Python's default TLS trust configuration; set ⇒ the supplied bundle is used instead of it. Missing or not PEM ⇒ refuses to start |
 | `SOAR_TIMEOUT` | `30` | request timeout, seconds |
 | `SOAR_MAX_RESULTS` | `50` | page-size cap for search and for similar-incident candidates (max 500) |
 | `SOAR_ALLOW_COMMENTS` / `SOAR_ALLOW_ARTIFACTS` | `false` | Tier 1 |
@@ -310,7 +383,7 @@ All variables, with defaults. `.env.example` is the annotated copy.
 | `SOAR_MCP_HOST` / `SOAR_MCP_PORT` | `127.0.0.1` / `8090` | HTTP bind |
 | `SOAR_HTTP_AUTH_TOKEN` | — | required for HTTP; sent as `Authorization: Bearer` |
 | `SOAR_HTTP_ACKNOWLEDGE_EXPOSURE` | `false` | required to bind all interfaces |
-| `SOAR_LAB_MODE` | `false` | relaxes the approval-mode rule; never in production |
+| `SOAR_LAB_MODE` | `false` | lab acknowledgement: permits `in_band`/`disabled` approval and `SOAR_VERIFY_SSL=false`, each only when also set explicitly; never in production |
 | `SOAR_ALLOW_WRITES` | — | **deprecated**; maps to the Tier 1–2 flags only and never to actions |
 
 Command-line: `qradar-soar-mcp [--check] [--transport stdio|streamable-http]`,
