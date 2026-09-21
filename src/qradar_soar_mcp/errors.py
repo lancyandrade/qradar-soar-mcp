@@ -52,7 +52,9 @@ class SoarError(Exception):
         self.status = status
         self.detail = detail[:_MAX_DETAIL] if detail else None
         # True only on reliable evidence that the request never left this process: the
-        # client refused to send it, or no connection was established. Never inferred.
+        # client refused to send it, or no connection was established. Never inferred, and
+        # never a synonym for "failed early": anything after the first request byte may
+        # have been written (write/read timeouts and errors, protocol errors) is False.
         self.not_sent = not_sent
 
     def __str__(self) -> str:

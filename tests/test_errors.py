@@ -163,6 +163,14 @@ def test_not_sent_is_claimed_only_when_no_connection_was_established(
     assert from_httpx(exc, "PUT", "/rest/orgs/201/tasks/1").not_sent is unsent
 
 
+def test_a_tls_error_after_the_connection_was_up_is_not_not_sent():
+    """Only the handshake is a connect failure; an SSL error mid-stream may follow a write."""
+    exc = httpx.ReadError("x")
+    exc.__cause__ = ssl.SSLError("record layer failure")
+    err = from_httpx(exc, "PUT", "/x")
+    assert err.code == "connection" and err.not_sent is False
+
+
 def test_not_sent_defaults_to_false_and_stays_out_of_mcp_output():
     tls = httpx.ConnectError("x")
     tls.__cause__ = ssl.SSLCertVerificationError("bad")

@@ -339,35 +339,66 @@ async def test_a_state_the_contract_was_not_verified_for_sends_no_put(
 # ---------------------------------------------------------------- failure paths
 #
 # Three outcomes of the one PUT, kept apart (08 §24):
-#   refused      - SOAR said no (a 4xx, or success: false), or the request provably never
-#                  left: the error is returned as it is, and nothing is read back;
-#   accepted     - success: true, then the verifying GET;
-#   ambiguous    - anything else once the PUT may have reached SOAR. The verifying GET is
-#                  made exactly once and alone decides; the PUT is never sent again.
+#   not sent     - reliable local evidence that the request never left this process: the
+#                  error is returned as it is, and nothing needs reading back;
+#   rejected     - SOAR's own application-level refusal, HTTP 200 + StatusDTO with
+#                  success: false: the error is returned, and nothing is read back;
+#   ambiguous    - anything else once the PUT may have reached SOAR, EVERY HTTP error
+#                  status included (no status is evidence that the task was left alone).
+#                  The verifying GET is made exactly once and alone decides; the PUT is
+#                  never sent again.
+#   (accepted    - success: true, then the same verifying GET.)
 
+GET_ONLY = [("GET", "/tasks/9001")]
 GET_PUT = [("GET", "/tasks/9001"), ("PUT", "/tasks/9001")]
 GET_PUT_GET = [*GET_PUT, ("GET", "/tasks/9001")]
 
-REFUSED: dict[str, tuple[dict[str, Any], str]] = {
-    "401": ({"status": 401, "body": {"message": f"bad key {SENTINEL}"}}, "auth_failed"),
-    "403": ({"status": 403, "body": {"message": f"no permission {SENTINEL}"}}, "forbidden"),
-    "404": ({"status": 404, "body": {"message": "gone"}}, "not_found"),
-    "409": ({"status": 409, "body": {"message": "Conflicting PUT operation"}}, "conflict"),
-    "400": ({"status": 400, "body": {"message": "bad task"}}, "validation"),
-    "422": ({"status": 422, "body": {"message": f"invalid {SENTINEL}"}}, "validation"),
-    "429": ({"status": 429, "body": {"message": "slow down"}}, "soar_rate_limited"),
-    "success_false": (
-        {"status": 200, "body": {"success": False, "message": f"nope {SENTINEL}"}},
-        "validation",
-    ),
-    # Nothing was sent: no connection was ever established.
-    "connect_refused": ({"exc": httpx.ConnectError}, "connection"),
-    "connect_timeout": ({"exc": httpx.ConnectTimeout}, "timeout"),
-    "pool_timeout": ({"exc": httpx.PoolTimeout}, "timeout"),
+# No connection was ever established, so no request was written to one.
+NOT_SENT: dict[str, tuple[type[httpx.HTTPError], str]] = {
+    "connect_refused": (httpx.ConnectError, "connection"),
+    "connect_timeout": (httpx.ConnectTimeout, "timeout"),
+    "pool_timeout": (httpx.PoolTimeout, "timeout"),
+}
+
+REJECTED: dict[str, dict[str, Any]] = {
+    "message": {"success": False, "message": f"nope {SENTINEL}"},
+    "status_dto": {
+        "success": False,
+        "title": None,
+        "message": "Task cannot be closed",
+        "hints": [],
+        "error_code": "generic",
+        "error_payload": None,
+    },
+    "bare": {"success": False},
 }
 
 # fault -> the reason the error names. Each leaves open whether SOAR processed the PUT.
 AMBIGUOUS: dict[str, tuple[dict[str, Any], str]] = {
+    # HTTP error statuses. The reference lists 400/401/403/404/409 (and 500/503) for this
+    # call as boilerplate without meaning; 418, 422 and 429 are not listed at all. None is
+    # evidence that the task was left alone, so none is allowed to skip the read-back.
+    "400": ({"status": 400, "body": {"message": f"bad task {SENTINEL}"}}, "HTTP 400"),
+    "401": ({"status": 401, "body": {"message": f"bad key {SENTINEL}"}}, "HTTP 401"),
+    "403": ({"status": 403, "body": {"message": f"no permission {SENTINEL}"}}, "HTTP 403"),
+    "404": ({"status": 404, "body": {"message": "gone"}}, "HTTP 404"),
+    "409": ({"status": 409, "body": {"message": "Conflicting PUT operation"}}, "HTTP 409"),
+    "418": ({"status": 418, "body": {"message": f"teapot {SENTINEL}"}}, "HTTP 418"),
+    "422": ({"status": 422, "body": {"message": f"invalid {SENTINEL}"}}, "HTTP 422"),
+    "429": ({"status": 429, "body": {"message": "slow down"}}, "HTTP 429"),
+    "403_generic_error_object": (
+        {
+            "status": 403,
+            "body": {
+                "success": False,
+                "title": None,
+                "message": f"Forbidden {SENTINEL}",
+                "hints": [],
+                "error_code": "generic",
+            },
+        },
+        "HTTP 403",
+    ),
     "not_an_object": ({"status": 200, "body": ["not", "a", SENTINEL]}, "malformed_response"),
     "no_success_flag": ({"status": 200, "body": {"title": SENTINEL}}, "malformed_response"),
     "success_is_a_string": ({"status": 200, "body": {"success": "true"}}, "malformed_response"),
@@ -382,8 +413,9 @@ AMBIGUOUS: dict[str, tuple[dict[str, Any], str]] = {
         {"status": 200, "raw_body": b'{"pad": "' + SENTINEL.encode() * 20_000 + b'"}'},
         "response_too_large",
     ),
-    "500": ({"status": 500, "raw_body": f"<html>{SENTINEL}</html>".encode()}, "server_error"),
-    "502": ({"status": 502, "body": {"message": f"bad gateway {SENTINEL}"}}, "server_error"),
+    "500": ({"status": 500, "raw_body": f"<html>{SENTINEL}</html>".encode()}, "HTTP 500"),
+    "502": ({"status": 502, "body": {"message": f"bad gateway {SENTINEL}"}}, "HTTP 502"),
+    "503": ({"status": 503, "body": {"message": "unavailable"}}, "HTTP 503"),
     "read_timeout": ({"exc": httpx.ReadTimeout}, "timeout"),
     "write_timeout": ({"exc": httpx.WriteTimeout}, "timeout"),
     "read_error": ({"exc": httpx.ReadError}, "connection"),
@@ -402,15 +434,70 @@ def _one_put(fake: FakeSoar) -> None:
     assert len(fake.mutating_requests) == 1
 
 
-@pytest.mark.parametrize("name", sorted(REFUSED))
-async def test_a_refused_put_is_a_failed_mutation_and_nothing_is_read_back(
+@pytest.mark.parametrize("name", sorted(NOT_SENT))
+async def test_a_put_that_was_never_sent_fails_without_a_read_back(
     rt: Runtime, fake: FakeSoar, tmp_path: Path, name: str
 ):
-    fault, code = REFUSED[name]
+    """No connection, so no request: nothing reached SOAR and nothing needs verifying."""
+    exc, code = NOT_SENT[name]
     before = copy.deepcopy(fake.task_objects[9001])
-    fake.fault("PUT", r"/tasks/9001$", **fault)
+    fake.fault("PUT", r"/tasks/9001$", exc=exc)
     out = await call(rt, **CLOSE)
     assert out["ok"] is False and out["error"]["code"] == code, out
+    assert set(out) == {"ok", "request_id", "error"}
+    assert _calls(fake) == GET_ONLY  # no PUT arrived, and no GET was spent on verifying
+    assert fake.mutating_requests == [] and fake.task_objects[9001] == before
+    assert "was sent" not in out["error"]["message"]
+    records = audit_records(tmp_path)
+    assert [r["event"] for r in records] == ["MUTATION_PENDING", "MUTATION_FAILED"]
+    assert records[1]["soar_response"]["code"] == code
+    _no_leak(out, tmp_path)
+
+
+async def test_not_sent_is_the_only_failure_that_rules_the_write_out():
+    """The classification itself: no HTTP status, 4xx included, skips the read-back."""
+    from qradar_soar_mcp.client.tasks import _rules_out_the_write
+    from qradar_soar_mcp.errors import from_httpx, from_status
+
+    path = f"{ORG}/tasks/9001"
+    for status in range(400, 600):
+        assert _rules_out_the_write(from_status(status, "PUT", path)) is False, status
+    sent_or_unknown = (
+        httpx.ReadTimeout,
+        httpx.WriteTimeout,
+        httpx.ReadError,
+        httpx.WriteError,
+        httpx.RemoteProtocolError,
+        httpx.DecodingError,
+        httpx.TooManyRedirects,
+        httpx.ProxyError,
+        httpx.UnsupportedProtocol,
+    )
+    for exc in sent_or_unknown:
+        assert _rules_out_the_write(from_httpx(exc("x"), "PUT", path)) is False, exc
+    for exc in (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
+        assert _rules_out_the_write(from_httpx(exc("x"), "PUT", path)) is True, exc
+
+
+async def test_a_client_side_refusal_of_the_put_is_not_sent(fake: FakeSoar):
+    from qradar_soar_mcp.client.tasks import _rules_out_the_write
+
+    async with SoarClient(Settings.load(connection_env())) as client:
+        with pytest.raises(SoarValidationError) as info:
+            await client.request("PUT", f"{ORG}/tasks/9001", json_body={})
+    assert _rules_out_the_write(info.value) is True and fake.requests == []
+
+
+@pytest.mark.parametrize("name", sorted(REJECTED))
+async def test_an_explicitly_rejected_put_is_a_failed_mutation_and_nothing_is_read_back(
+    rt: Runtime, fake: FakeSoar, tmp_path: Path, name: str
+):
+    """HTTP 200 + StatusDTO success: false is SOAR's own answer that it refused."""
+    before = copy.deepcopy(fake.task_objects[9001])
+    fake.fault("PUT", r"/tasks/9001$", status=200, body=REJECTED[name])
+    out = await call(rt, **CLOSE)
+    assert out["ok"] is False and out["error"]["code"] == "validation", out
+    assert out["error"]["message"].startswith("Task update rejected on PUT ")
     assert set(out) == {"ok", "request_id", "error"}
     # One attempt: no retry, no alternate body, and no claim that anything was written.
     assert _calls(fake) == GET_PUT
@@ -419,9 +506,33 @@ async def test_a_refused_put_is_a_failed_mutation_and_nothing_is_read_back(
     assert fake.task_objects[9001] == before
     records = audit_records(tmp_path)
     assert [r["event"] for r in records] == ["MUTATION_PENDING", "MUTATION_FAILED"]
-    assert records[1]["soar_response"]["code"] == code
+    assert records[1]["soar_response"]["code"] == "validation"
     assert records[1].get("post_image") is None
     _no_leak(out, tmp_path)
+
+
+@pytest.mark.parametrize("status", [402, 405, 410, 412, 418, 423, 451, 499])
+async def test_an_unclassified_4xx_never_means_the_task_is_unchanged(
+    rt: Runtime, fake: FakeSoar, tmp_path: Path, status: int
+):
+    """Regression (PR #6 review 2): lying between 400 and 499 proves nothing. Here SOAR
+    applied the write and answered with a 4xx this project has no contract for: the
+    read-back finds the change, and the call must not end as a bare client error."""
+    fake.fault("PUT", r"/tasks/9001$", processed=True, status=status, body={"message": "no"})
+    out = await call(rt, **CLOSE)
+    assert out["ok"] is True, out
+    assert _calls(fake) == GET_PUT_GET
+    _one_put(fake)
+    committed = audit_records(tmp_path)[-1]
+    assert committed["event"] == "MUTATION_COMMITTED"
+    assert committed["soar_response"] == {"put": f"unconfirmed (HTTP {status})"}
+    # The same answer with the task left as it was: unverified, never "soar_error".
+    fake.faults.clear()
+    fake.fault("PUT", r"/tasks/9002$", status=status, body={"message": "no"})
+    out = await call(rt, **REOPEN)
+    assert out["ok"] is False and out["error"]["code"] == "unverified_write", out
+    assert f"(HTTP {status})" in out["error"]["message"]
+    assert [r.method for r in fake.requests[3:]] == ["GET", "PUT", "GET"]
 
 
 async def test_an_accepted_put_that_is_not_reflected_fails_the_mutation(
@@ -482,7 +593,9 @@ async def test_an_ambiguous_put_that_is_not_reflected_is_an_unverified_write(
     message = out["error"]["message"]
     assert "(O -> C) was sent" in message and f"({reason})" in message
     assert "does not show status 'C'" in message and "unverified" in message
+    # Never a success, never "unchanged", and a 409 is quoted as a status, not as a conflict.
     assert "accepted" not in message and "conflict" not in message.lower()
+    assert "unchanged" not in message
     assert set(out) == {"ok", "request_id", "error"} and "http_status" not in out["error"]
     assert _calls(fake) == GET_PUT_GET
     _one_put(fake)

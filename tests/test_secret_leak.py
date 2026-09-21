@@ -72,7 +72,18 @@ TASK_TOOL = "soar_update_task_status"
 PUT_ONLY = "put_"
 PUT_DONE = "putdone_"
 # PUT outcomes that do not rule the write out: read back, and reported as unverified.
-AMBIGUOUS_PUT_FAULTS = {"500", "timeout", "malformed", "oversized"}
+# Every HTTP error status is one of them; only "refused" (no connection) is not.
+AMBIGUOUS_PUT_FAULTS = {
+    "401",
+    "403",
+    "404",
+    "409",
+    "422",
+    "500",
+    "timeout",
+    "malformed",
+    "oversized",
+}
 
 
 def _tls_transport() -> httpx.MockTransport:

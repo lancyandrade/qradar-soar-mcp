@@ -487,14 +487,32 @@ wider; where that record is silent, the tool refuses rather than guesses.
    passed through as read, and no version field is sent because none was observed.
 3. `PUT /tasks/{task_id}` with that object and the same two headers, **once**. It is
    never sent again and there is no alternate body. Its outcome is one of three:
-   - **refused** — SOAR said no (a 4xx, or a StatusDTO with `success: false`), or there
-     is reliable evidence the request never left (no connection was established, or the
-     client refused to send it). The error is returned as it is and nothing is read back.
+   - **not sent** — reliable local evidence that the request never left this process:
+     the client refused to send it, or no connection was established (connection refused,
+     TLS handshake failure, connect timeout, no pooled connection). The error is returned
+     as it is; there is nothing to read back. A failure *after* a connection existed
+     (write or read timeout, write or read error, protocol error) is never counted here.
+   - **rejected** — SOAR's own application-level refusal: HTTP 200 with a StatusDTO whose
+     `success` is `false`, the documented answer type of this call saying no. The
+     rejection is returned and nothing is read back.
    - **accepted** — a StatusDTO with `success: true`.
    - **ambiguous** — everything else once the request may have reached SOAR: an HTTP-200
      answer that is not JSON, not an object, or carries no boolean `success`; an oversized
-     answer; a 5xx; a timeout; a dropped connection. None of these says whether SOAR
-     processed the request, so none of them is reported as it is.
+     answer; **any HTTP error status, 4xx as much as 5xx**; a timeout; a dropped
+     connection. None of these says whether SOAR processed the request, so none of them is
+     reported as it is.
+
+   No HTTP status is treated as proof that the task was left alone, because the record
+   for `51.0.9.0.20848` gives no basis for one. The reference lists 400, 401, 403, 404,
+   409, 500 and 503 for `PUT /tasks/{task_id}`, the same boilerplate list it gives for
+   the `GET`, with no meaning attached; 422 and 429 are not listed. The only error
+   statuses seen live (403, 404, 500) answered reads and one export `POST`, all with the
+   same generic error object, and of that 403 the record itself says it proves nothing
+   about side effects (`docs/soar-api-verified.md` Q2). No refused task `PUT` was ever
+   observed. "4xx means nothing happened" is an HTTP convention, not appliance evidence.
+   What SOAR answered is not lost: the message names the status (`HTTP 403`), as a status
+   and never under this server's name for it, so a 409 is not presented as a detected
+   conflict.
 4. For *accepted* and *ambiguous* alike, `GET /tasks/{task_id}` again, exactly once, and
    that read alone decides. If the task shows the requested status the call succeeds
    (after an ambiguous answer the audit record says `unconfirmed (<why>)` instead of
@@ -546,8 +564,9 @@ seen, so
 a change made by someone else between the read and the write can be overwritten; the
 read and the write are adjacent, which narrows that window and does not close it. What
 closing the last required task of a phase does. Which SOAR permission is the minimum:
-the key needs the appliance's task-edit capability, a refusal by SOAR is returned as
-the usual sanitised error, and the tool never assumes an administrator key.
+the key needs the appliance's task-edit capability; a refusal by SOAR is read back like
+any other error answer and, with the task unchanged, reported as `unverified_write`
+naming the status; and the tool never assumes an administrator key.
 
 **Evidence for this ticket is offline only.** No request was sent to an appliance; the
 live evidence is `P2-00b`'s (§23). The offline fake models §3.1 and is deliberately

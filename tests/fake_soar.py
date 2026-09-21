@@ -53,6 +53,9 @@ REQUIRED_PARAMS = {"handle_format": "names", "text_content_output_format": "alwa
 # Kept apart from the client's constant on purpose; a test asserts the two agree.
 TASK_FORMAT_HEADERS = {"handle_format": "ids", "text_content_output_format": "objects_convert"}
 TASK_CLOSED_AT = 1758030000000  # what this server stamps on close; no client can know it
+# Failures of connection establishment: the request never reached the server, so the fake
+# does not record it either.
+NEVER_ARRIVED = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
 CLOSE_FIELDS = ("plan_status", "resolution_id", "resolution_summary")
 
 
@@ -208,6 +211,8 @@ class FakeSoar:
                 if fault.processed:
                     self._respond(request, method, path, params, body)
                 if fault.exc is not None:
+                    if issubclass(fault.exc, NEVER_ARRIVED):
+                        self.requests.pop()  # no connection: nothing arrived here
                     # Note: respx rewrites __cause__ on the way out; a TLS cause cannot be
                     # modelled here (see test_client_base.test_tls_failure_is_reported_as_tls).
                     raise fault.exc("injected", request=request)

@@ -11,10 +11,13 @@ nothing is dropped, added or normalised, ``closed_date`` is the server's and is 
 through as read, and no version field is sent because none was observed.
 
 The ``PUT`` is sent once and never retried. Once it may have reached SOAR, only the
-read-back says what the task's status is: an explicit refusal (a 4xx, or a StatusDTO
-with ``success: false``) ends the call as a refusal; every other outcome (``success:
-true``, an answer that establishes neither, a 5xx, a timeout, a dropped connection)
-is settled by that one ``GET``, and is a success only if it shows the requested status.
+read-back says what the task's status is. Two outcomes end the call without it: reliable
+evidence that the request was never sent, and SOAR's own application-level refusal (an
+HTTP-200 StatusDTO with ``success: false``). Every other outcome (``success: true``, an
+answer that establishes neither, **any HTTP error status, 4xx included**, a timeout, a
+dropped connection) is settled by that one ``GET``, and is a success only if it shows the
+requested status. No HTTP status is taken as proof that the task was left alone: nothing
+in docs/soar-api-verified.md establishes that for this call (08 §24).
 
 Nothing here protects a task against a concurrent edit: on that appliance no conflict
 was ever observed and no version field was seen on a task. The read and the write are
@@ -47,11 +50,18 @@ PUT_ACCEPTED = "success"
 def _rules_out_the_write(failure: SoarError) -> bool:
     """Whether a failed PUT leaves no doubt that the task was not changed by it.
 
-    Only two things do: reliable evidence that the request was never sent, and a 4xx, by
-    which SOAR refuses the request. A 5xx, a timeout, a dropped connection or an
-    unusable answer leave it open whether SOAR processed the request.
+    Only reliable evidence that the request never left this process does (``not_sent``).
+
+    No HTTP status does, 4xx included. The record for QRadar SOAR 51.0.9.0.20848
+    (docs/soar-api-verified.md) has no basis for it: the reference lists 400, 401, 403,
+    404, 409, 500 and 503 for this call as the same boilerplate it lists for the GET,
+    with no meaning attached; 422 and 429 are not listed at all; the only error statuses
+    seen live (403, 404, 500) were answers to reads and to one export POST, all with
+    the same generic error object; and of that 403 the record states that it proves
+    nothing about side effects (Q2). No refused task PUT was ever observed. A status
+    class convention is not appliance evidence, so every answered PUT is read back.
     """
-    return failure.not_sent or (failure.status is not None and 400 <= failure.status < 500)
+    return failure.not_sent
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +160,14 @@ class TasksClient:
             put_answer = PUT_ACCEPTED
             lead = f"PUT {path} ({before} -> {code}) was accepted"
         else:
-            reason = put_failure.code if put_failure is not None else "malformed_response"
+            if put_failure is None:
+                reason = "malformed_response"
+            elif put_failure.status is not None and put_failure.status >= 400:
+                # The status itself, not this server's name for it: a 409 is reported as
+                # what SOAR answered, never as a detected conflict.
+                reason = f"HTTP {put_failure.status}"
+            else:
+                reason = put_failure.code
             put_answer = f"unconfirmed ({reason})"
             lead = (
                 f"PUT {path} ({before} -> {code}) was sent, but SOAR's answer did not "
