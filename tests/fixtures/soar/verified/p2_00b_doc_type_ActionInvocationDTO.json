@@ -1,0 +1,73 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "data_type": "ActionInvocationDTO",
+    "enum_values": [],
+    "properties": {
+      "action": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "PartialActionDTO"
+      },
+      "create_date": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "number"
+      },
+      "create_user": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "JustUserDTO"
+      },
+      "creator_principal": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "PrincipalReferenceDTO"
+      },
+      "function": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "FunctionDTO"
+      },
+      "id": {
+        "constraints": "required int",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "number"
+      },
+      "messages": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "array of ActionInvocationMessageDTO"
+      },
+      "status": {
+        "constraints": "required int",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "number"
+      },
+      "workflow": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "WorkflowDTO"
+      }
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "property names, JSON types and flags from the appliance's API reference",
+  "_question": "docs",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-00b",
+  "shape": null
+}

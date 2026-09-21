@@ -1,0 +1,44 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "status": [
+      "canceled",
+      "completed",
+      "error",
+      "running",
+      "suspended"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "any_execution_recorded": false,
+    "top_level_keys": [
+      "data",
+      "title"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "is there any execution for an execution query to return?",
+  "_question": "Q8",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/playbooks/execution/statistics",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": {
+    "data": [
+      {
+        "count": "int",
+        "status": "str",
+        "status_label": "str"
+      }
+    ],
+    "title": "str"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "active_incident_seen": true,
+    "answered": [
+      "task"
+    ],
+    "closed_incident_seen": false,
+    "first_incident_object_perms": {
+      "annotate": "at least one true",
+      "edit_assign_create_delete": "all false",
+      "perms_map_present": true,
+      "read": "all true"
+    },
+    "incidents_available": "1-9",
+    "incidents_looked_at": 1,
+    "limit": 10,
+    "not_found_within_limit": [
+      "actions",
+      "attachment",
+      "comments"
+    ],
+    "source": "bounded scan, newest first",
+    "training_incident_seen": false
+  },
+  "_fixture": "verified-shape",
+  "_note": "at most 10 incidents; each search stops at its first hit",
+  "_question": "scan",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-00b",
+  "shape": null
+}

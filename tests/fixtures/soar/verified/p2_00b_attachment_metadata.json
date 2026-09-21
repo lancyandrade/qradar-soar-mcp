@@ -1,0 +1,50 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {},
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "Q7",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/incidents/{incident_id}/attachments/{attachment_id}",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": {
+    "actions": [],
+    "content_type": "str",
+    "created": "int",
+    "creator_id": "str",
+    "description": "str",
+    "id": "int",
+    "inc_id": "int",
+    "inc_name": "str",
+    "inc_owner": "str",
+    "last_modified_by": {
+      "display_name": "str",
+      "id": "int",
+      "name": "str",
+      "type": "str"
+    },
+    "last_modified_time": "int",
+    "name": "str",
+    "playbooks": [],
+    "reconciliation_status": "str",
+    "size": "int",
+    "task_at_id": "null",
+    "task_custom": "null",
+    "task_id": "null",
+    "task_members": "null",
+    "task_name": "null",
+    "type": "str",
+    "uuid": "str",
+    "vers": "int"
+  }
+}

@@ -30,6 +30,13 @@
 > not implemented and `soar_invoke_action` refuses every call. Details and the
 > remaining open points: `08-GREENFIELD-AMENDMENTS.md §21`.
 
+> **Research status — P2-00b, 2026-09-21.** The `PUT /tasks/{id}` request body is no
+> longer unverified: a full task object from the documented `GET /tasks/{id}`, with
+> `status` as the only change, closed and reopened a disposable task on
+> `51.0.9.0.20848` (`../soar-api-verified.md §3.1`). No product code changed:
+> `soar_update_task_status` still refuses every call until `P1-CORR-02` implements that
+> contract. See `08-GREENFIELD-AMENDMENTS.md §23`.
+
 All paths are relative to `https://{host}/rest/orgs/{org_id}` unless noted.
 Auth: HTTP Basic with API key id/secret. Common params `handle_format=names`
 and `text_content_output_format=always_text` as already implemented.

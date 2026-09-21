@@ -1,0 +1,103 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "status": [
+      "O"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "active": true,
+    "carried_actions": "0",
+    "closed_date_is_null": true,
+    "custom": true,
+    "frozen": false,
+    "has_inc_id": true,
+    "in_training_incident": false,
+    "key_count": 41,
+    "object_perms": {
+      "annotate": "at least one true",
+      "edit_assign_create_delete": "all false",
+      "perms_map_present": true,
+      "read": "all true"
+    },
+    "required": true,
+    "status_is_single_letter": true,
+    "status_value": "O",
+    "version_like_keys": []
+  },
+  "_fixture": "verified-shape",
+  "_note": "the owner-designated disposable task; read only, nothing is changed",
+  "_question": "1B",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/tasks/{task_id}",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": {
+    "actions": [],
+    "active": "bool",
+    "at_id": "null",
+    "attachments_count": "int",
+    "auto_deactivate": "bool",
+    "cat_name": "str",
+    "category_id": "null",
+    "closed_date": "null",
+    "creator_principal": {
+      "display_name": "str",
+      "id": "int",
+      "name": "str",
+      "type": "str"
+    },
+    "custom": "bool",
+    "description": "null",
+    "due_date": "null",
+    "form": "null",
+    "frozen": "bool",
+    "id": "int",
+    "inc_id": "int",
+    "inc_name": "str",
+    "inc_owner_id": "str",
+    "inc_training": "bool",
+    "init_date": "int",
+    "instr_text": "null",
+    "instructions": "null",
+    "manual_predefined": "bool",
+    "members": "null",
+    "name": "str",
+    "notes": [],
+    "notes_count": "int",
+    "owner_fname": "null",
+    "owner_id": "null",
+    "owner_lname": "null",
+    "perms": {
+      "assign": "bool",
+      "attach_file": "bool",
+      "change_header": "bool",
+      "change_members": "bool",
+      "close": "bool",
+      "comment": "bool",
+      "delete_attachments": "bool",
+      "playbook_progress_enabled": "bool",
+      "read": "bool",
+      "read_attachments": "bool",
+      "write": "bool"
+    },
+    "phase_id": "str",
+    "playbooks": [],
+    "private": "null",
+    "regs": {},
+    "required": "bool",
+    "src_name": "null",
+    "status": "str",
+    "task_layout": [],
+    "timeframe_name": "null",
+    "user_notes": "str"
+  }
+}

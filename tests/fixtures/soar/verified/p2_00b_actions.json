@@ -1,0 +1,35 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "enabled": "10-99",
+    "enabled_rules_on_tasks": "0",
+    "rules": "10-99",
+    "targets_builtin": {
+      "artifact": "1-9",
+      "incident": "10-99",
+      "note": "1-9"
+    },
+    "targets_other": "0",
+    "type_distribution": {
+      "0": "10-99",
+      "1": "1-9"
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "the org's rules; a task change can trigger an enabled automatic rule on tasks",
+  "_question": "D4",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/actions",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": null
+}

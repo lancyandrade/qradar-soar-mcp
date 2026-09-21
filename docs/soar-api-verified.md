@@ -1,8 +1,9 @@
-# SOAR API — verified record (ticket P2-00)
+# SOAR API — verified record (tickets P2-00 and P2-00b)
 
 > **Scope. Every statement here is about one appliance: IBM QRadar SOAR
-> `51.0.9.0.20848`, probed on 2026-09-18.** The server reported exactly that
-> version (`GET /rest/const`). Nothing below is a claim about any other version;
+> `51.0.9.0.20848`, probed on 2026-09-18 (`P2-00`) and again from 2026-09-19 to
+> 2026-09-21 (`P2-00b`).** The server reported exactly that version
+> (`GET /rest/const`) each time. Nothing below is a claim about any other version;
 > IBM's configuration API has changed shape across releases.
 
 This is the authoritative record for that version. It supersedes the ⚠️/❓ marks
@@ -19,6 +20,31 @@ original research text is kept unchanged as history.
 | TLS | Verified: a supplied CA bundle with normal host-name validation. The lab-only pinned mode was never used. See §6. |
 | What is stored | **Shapes, not values**: key names, JSON types, status codes, size buckets, booleans. No host, address, org id, object id, user, incident or artifact content. Evidence: [`tests/fixtures/soar/verified/`](../tests/fixtures/soar/verified/) (64 files, each passed `scripts/probe/sanitise.py`), with every request in `_ledger.json`. |
 | Tooling | [`scripts/probe/`](../scripts/probe/README.md). Not part of the installed package. |
+
+### P2-00b (2026-09-19 to 2026-09-21)
+
+`P2-00b` closed what `P2-00` had to leave open. It is marked `P2-00b` wherever it
+adds to the record below; §3.1 is entirely its work.
+
+| | |
+|---|---|
+| Reads | The same read-only key, `GET` plus the `query_paged` `POST`s already approved, and **one** owner-approved `POST /playbooks/execution/query_paged` with the exact body `{"filters": [], "start": 0, "length": 1}`. Every search was bounded: at most 10 incidents, pages of at most 10. |
+| The appliance's own reference | Read as evidence for request bodies that must not be sent blind: the HTML reference under `/docs/rest-api/` and the Swagger 2.0 description published beside it at `/docs/rest-api/ui/swagger.json` (not linked from the index). Only type names, property names, JSON types, response codes and two flags ("read-only", "create-only") are stored; no prose. |
+| Browser observation | The owner watched the web UI change a disposable task and piped **only the request payload** through an offline reducer ([`shape_request.py`](../scripts/probe/shape_request.py)) that keeps key names, JSON types and a few state facts. No cookie, token, header dump, HAR or URL was ever given to the tooling. |
+| Writes | **Four `PUT /tasks/{task_id}` requests in total**, in two owner-authorised controlled experiments on one owner-designated disposable custom task of a disposable lab appliance: close then reopen, twice (§3.1). Each experiment was capped at 9 requests, never retried anything, and restored the task. No other write, no `DELETE`, no other `POST`. The read-only probe client still refuses every `PUT`; only [`task_experiment.py`](../scripts/probe/task_experiment.py) can send one. |
+| Credential for the writes | An existing lab API key. The experiments ran only once the task's own `perms` map reported `read`, `write` and `close` true for that key (§3.1). This is research access to a test bed and changes nothing about the product's least-privilege model. |
+| TLS | Verified only: the CA bundle and normal host-name validation. `P2-00b` never opens an unverified connection, not even to describe the certificate. |
+| What is stored | 58 more shape-only files, `p2_00b_*.json`, and `_ledger_00b.json`, all passed by the same verifier. Object ids, the incident phase, timestamps, names and text stayed in memory. |
+
+**How far each `P2-00b` finding goes.** "Verified" below always means *seen live on this
+appliance*; a documented finding was read in the appliance's reference and **not**
+exercised.
+
+| Status | Findings |
+|---|---|
+| ✅ Verified experimentally | The task-status `PUT` contract and the documented `GET /tasks/{task_id}` as its source (§3.1); the server's handling of `closed_date`; the `StatusDTO`-compatible success response; attachment content for one attachment (Q7); the execution-query route and its wrapper, with zero rows (Q8); a note row carrying `children` and `parent_id`; the task tree's representation of a task (provenance only). |
+| 📄 Documented by the appliance, **not** seen live | The filter logic defaults (`ALL` within a filter, `ANY` across filters); the entry shape of a carried `actions` list (`ActionInfoDTO`); the invoke data types and the one e-mail endpoint that uses them; the execution detail and activity types; the meaning of the `write` and `close` flags of a task's `perms` map; the documented read-only and create-only `TaskDTO` properties. |
+| ❓ Unresolved | How a reply to a note is nested; the workflow object; the row shape of an execution and whether function results are retrievable; export contents; action invocation for incidents, tasks and artifacts; conflict (`409`) behaviour; what closing the last required task of a phase does. |
 
 An earlier pass with a different key was halted when that key proved to be
 broader than read-only; its output was deleted and is not evidence here. Two
@@ -165,7 +191,7 @@ saying that the SOAR permission set is the operator's control. `L5` validation
 can check "can this key read what the playbook needs", not "is this key unable
 to do harm".
 
-### Q7. Attachment content — 📄 path documented; ❓ content type unverified
+### Q7. Attachment content — ✅ verified for one attachment (`P2-00b`)
 
 📄 `GET /incidents/{inc_id}/attachments/{attach_id}/contents`, the single
 metadata read `GET …/attachments/{attach_id}`, the task equivalents under
@@ -176,8 +202,17 @@ neither it nor its first task has an attachment. `GET …/attachments` and
 `GET /tasks/{task_id}/attachments` → ✅ **200**, empty lists. The probe requests
 the content endpoint for status and headers only and never reads a body.
 
-**To resolve:** set `P2_PROBE_INCIDENT_ID` to an incident known to carry an
-attachment and re-run `--only attachment_scan,attachment_metadata,attachment_contents`.
+**`P2-00b`, on an owner-designated disposable incident with one attachment:**
+
+| Request | Result |
+|---|---|
+| `GET /incidents/{incident_id}/attachments` | ✅ **200**, a bare list. |
+| `GET /incidents/{incident_id}/attachments/{attachment_id}` | ✅ **200**, 23 keys, among them `content_type`, `size`, `type`, `name`, `created`, `creator_id`, `inc_id`, `task_id`, `uuid`, `vers`. |
+| `GET /incidents/{incident_id}/attachments/{attachment_id}/contents` | ✅ **200**, `Content-Type: text/plain` (the attachment's own media type, not JSON), `Content-Length` present, `Content-Disposition` present, not chunked. |
+
+Only the status and headers of the content request were read: the stream was closed
+without reading the body, and nothing was hashed or stored. One attachment of one type
+is the whole evidence; other media types and large files are untested.
 
 ### Q8. Incident history and past function results — ✅ history exists; 🚫 no function results in it
 
@@ -189,17 +224,27 @@ attachment and re-run `--only attachment_scan,attachment_metadata,attachment_con
 | `GET /incidents/{incident_id}/workflow_instances` | ✅ **200** `{entities: []}` (none here). |
 | `GET /playbooks/execution/statistics` | ✅ **200**: counts per `status` (`canceled`, `completed`, `error`, `running`, `suspended`). |
 
-📄 Not exercised (unapproved `POST`): `POST /playbooks/execution/query_paged`,
-`POST /playbooks/execution/{execution_id}/activities`,
-`POST /workflow_instances/{inc_id}/query_paged`; and
-`GET /playbooks/execution/{execution_id}/playbook` (no execution id).
+**`P2-00b`.** The reference documents `POST /playbooks/execution/query_paged` as a query
+for playbook execution details whose body is the same `QueryPagedDTO` that
+`incidents/query_paged` takes (filters, sorts, paging). Sent once, with the owner's
+approval and the body `{"filters": [], "start": 0, "length": 1}`: ✅ **200**,
+`{data, recordsFiltered, recordsTotal}`, **zero rows** — the appliance has recorded no
+playbook execution (`GET /playbooks/execution/statistics` agrees). The route and the
+wrapper are verified; the row shape is not. 📄 The documented detail and activity types
+(`PlaybookExecutionDetailDTO`, `PlaybookExecutionActivityStatusDTO`) carry a status,
+times and status messages, and no function output.
+
+📄 Still not exercised: `POST /playbooks/execution/{execution_id}/activities`
+(unapproved, and there is no execution to ask about),
+`POST /workflow_instances/{inc_id}/query_paged`, and
+`GET /playbooks/execution/{execution_id}/playbook`.
 
 **Design impact.** The "recorded" mocking strategy of `04 §3.3` has no source in
 the history endpoints on this version. Default the simulator to
 **schema-generated mocks from `output_json_schema` / `output_json_example`**,
 which the function object does expose (Q5). Whether playbook-execution
-activities expose real results is ❓, and answering it needs one more read-only
-`POST` to be approved.
+activities expose real results is still ❓: it needs an appliance that has run a
+playbook, and the `…/activities` `POST`, which is not approved.
 
 ---
 
@@ -271,12 +316,97 @@ separate ticket `P1-CORR-01` (§8) and must wait for this report to be reviewed.
 
 | # | Phase-1 assumption (`05 §1`, `08 §4`) | Evidence on 51.0.9.0.20848 | Consequence today |
 |---|---|---|---|
-| D1 | Task status is changed with `PATCH /tasks/{id}` ("PATCH, not PUT") | 📄 The reference documents `GET`, `PUT` and `DELETE` on `/tasks/{task_id}`; **no `PATCH`**. It does document `PATCH` for incidents, so the omission is not a gap in the reference. Not exercised. | `soar_update_task_status` is expected to fail. |
+| D1 | Task status is changed with `PATCH /tasks/{id}` ("PATCH, not PUT") | 📄 The reference documents `GET`, `PUT` and `DELETE` on `/tasks/{task_id}`; **no `PATCH`**. It does document `PATCH` for incidents, so the omission is not a gap in the reference. ✅ **`P2-00b` verified the `PUT` contract live: §3.1.** | `soar_update_task_status` stays disabled until the verified contract is implemented (`P1-CORR-02`, §8). |
 | D2 | A task carries a version (`vers`) for optimistic concurrency | ✅ Neither the rows of `GET /incidents/{id}/tasks` nor `GET /tasks/{task_id}` contain `vers` or any version-like key (41 keys checked). | The client refuses to send a task change without a version, so the tool refuses every time. It fails closed. |
 | D3 | `GET /incidents/{id}/actions` lists the manual actions of an incident | 🚫 **500** `Internal Server Error`, and the path is absent from the reference. | `soar_list_incident_actions` fails; `soar_invoke_action` cannot classify its target, so it refuses. It fails closed. |
 | D4 | `POST /incidents/{id}/action_invocations` with `{"action_id": N}` invokes an action | The path is absent from the reference. A **`GET` on it returns 200** `{entities: []}`, so the route exists; the `POST` and its body are unverified (a write). The incident, task and artifact objects each carry an `actions` list (empty for this key). | The invocation design needs re-verification before it can be relied on: where the list of available actions really comes from, and the exact invocation contract. |
 
 None of these weakens a control: each makes a tool fail, never succeed wrongly.
+
+### 3.1 Task status change — the verified contract (`P2-00b`, D1)
+
+**Two conclusions, kept apart.**
+
+**A. The `PUT` contract — ✅ verified experimentally**, for this version, one custom
+task and one API-key configuration:
+
+| | |
+|---|---|
+| Request | `PUT /rest/orgs/{org_id}/tasks/{task_id}`, HTTP Basic with an API key, no query string, and the two format controls as headers: `handle_format: ids`, `text_content_output_format: objects_convert`. 📄 The reference documents the body as a `TaskDTO` and the two controls as usable in the query string or as headers. |
+| Body | The **full task object**, 41 keys, exactly as a fresh read returned it, with **`status` as the only deliberate change**. It includes every property the reference calls read-only, the create-only `private`, and four keys the reference does not document (`auto_deactivate`, `form`, `task_layout`, `user_notes`). That is also what the web UI was observed to send. |
+| Version | **No version field was observed or required in this experiment.** No version, lock or token key appeared in the documented `TaskDTO`, in the live object or in the UI's request. 📄 The `409` "Conflicting PUT" response code is boilerplate: the reference lists it for the `GET` and `DELETE` sections too. A conflict was never observed. |
+| Response | **200**, `{success, title, message, hints}` with `success: true` — a subset of the documented `StatusDTO` (`success`, `title`, `message`, `hints`, `error_code`, `error_payload`). |
+| `closed_date` | **Server state.** Close: the request carries `closed_date: null`; afterwards the server has set it. Reopen: the request passes the existing value through unchanged; afterwards the server has cleared it. The client never sets, clears or invents it. |
+| Result | Close: a fresh read shows `status: "C"`, `closed_date` non-null, the same 41 keys; the only field names that changed are `status` and `closed_date`. Reopen: `status: "O"`, `closed_date` null, and **no field differs from the baseline**. The incident's `phase_id` did not change at any point. |
+
+**B. The source representation — ✅ the documented `GET /tasks/{task_id}` is
+round-trippable as it is**, for the same test case. The task was read with
+`GET /tasks/{task_id}` (same two format headers), deep-copied, `status` changed, and sent
+back; then read again, and the same to reopen. In that representation `task_layout` is an
+**empty list**, and it was passed through **unchanged**, both times; after each `PUT` the
+documented `GET` still returned an empty list.
+
+So, on this evidence, a client needs only documented endpoints:
+
+```
+GET /tasks/{task_id}  →  deep copy  →  change status only  →  PUT /tasks/{task_id}  →  GET to verify
+```
+
+and does **not** need the undocumented task tree, any `task_layout` normalisation, a
+client-generated `closed_date`, or a version field (none was observed or required in this experiment).
+
+**The task tree (provenance only).** The web UI does not read the task with
+`GET /tasks/{task_id}`; it reads `GET /incidents/{incident_id}/tasktree`, in which the same
+task has `task_layout: null` — which is why the UI's own `PUT` bodies carry `null` where
+the documented `GET` gives `[]`. The first controlled experiment used that representation
+and also succeeded. **`tasktree` appears nowhere in the appliance's reference or its
+Swagger description (0 of 279 paths): it is UI-internal and undocumented.** It helped the
+research; it is not a supported API as far as this record can tell, the recommended
+design does not use it, and it is not part of this project's API surface.
+
+**Permissions — what was observed, and no more.** 📄 The reference describes a task's
+`perms` map (`TaskPermsDTO`, from `ObjectPermsDTO`) as the permissions of the caller on
+that task: `write` is whether the caller may write to the object, `close` whether the
+caller may close it. With the read-only key, the designated task reported `write` and
+`close` as not both true, and no `PUT` was attempted: a refusal would have verified
+nothing. After the owner enabled the key's task-edit capability in the appliance, the same
+map reported `read`, `write` and `close` true, and every `PUT` succeeded. Three different
+things are in play — the key's configuration, the object's flags, and the outcome of a
+`PUT` — and this record observed them agreeing once. It does **not** establish a minimal
+permission set, nor that the flags decide the `PUT` on their own.
+
+**Limited evidence, still open.**
+
+- One custom task, one appliance version, one API-key configuration.
+- A conflict (`409`) was never observed, so what protects a task against a concurrent
+  edit is still unknown; the full-object body makes a lost update possible in principle.
+- The task reported `required: true`. IBM's product guide ties a *mandatory* task to
+  the incident entering its next phase; whether the API's `required` is that flag is not
+  stated anywhere, the phase did not move here, and closing the last required task of a
+  phase was **not** tested.
+- Whether the UI changes any value other than `status` is unknown: the observation
+  records structure, not values. Passing every other value through is the conservative
+  reading, and it worked.
+- Early in the research the same task's `perms` map read differently in two runs an hour
+  apart; that discrepancy was never explained.
+
+Evidence: `p2_00b_task_experiment.json` (task-tree source),
+`p2_00b_task_experiment_documented.json` (documented source), `p2_00b_ui_request_close.json`,
+`p2_00b_ui_request_reopen.json`, `p2_00b_ui_request_pair.json`, `p2_00b_doc_task_put.json`,
+`p2_00b_doc_type_TaskDTO.json`, `p2_00b_doc_swagger_task_put.json`,
+`p2_00b_tasktree_task.json`, `p2_00b_designated_task_ui_formats.json`,
+`p2_00b_preflight_close.json`.
+
+**D3 and D4 after `P2-00b`.** 📄 The reference documents the carried `actions` list as
+`ActionInfoDTO` — `id` (number), `name` (string), `enabled` (boolean) — "available to the
+caller", which is consistent with the `id` + `name` reader of `P1-CORR-01`; ❓ every
+carried list was still empty for the research keys, so the entry shape is not verified
+live. 📄 The reference defines `ActionInvokeDTO` (`action_id`, `properties`,
+`type_id_handle`) and `MultipleActionInvokeDTO`, but a sweep of all 57 resource pages and
+of the Swagger description finds them used by exactly one endpoint,
+`POST /email/messages/action_invocations` (inbox e-mail messages). **No incident, task or
+artifact invocation endpoint is documented**, and nothing was invoked. D4 stays
+unresolved and `soar_invoke_action` stays disabled.
 
 ### Confirmed
 
@@ -308,13 +438,16 @@ None of these weakens a control: each makes a tool fail, never succeed wrongly.
 - The PatchDTO shape, `success:false` on a stale version, and the close
   semantics (writes).
 - AND-within / OR-across filter semantics: the queries ran and were consistent,
-  but the org has **no closed incident**, so the check could not distinguish the
-  two. ❓
+  but the research key sees **no closed incident**, so the check could not distinguish
+  the two. ❓ live. 📄 `P2-00b`: the reference states it — a filter's `logic_type`
+  defaults to `ALL` over its conditions, and the query's defaults to `ANY` over its
+  filters.
 - The effect of `text_content_output_format`: `description` was a plain string
   in all three variants.
-- Comment threading (`children`, `parent_id`): the sampled incident has no notes. ❓
+- Comment threading: ✅ `P2-00b` saw a note row, with `children` (an empty list) and
+  `parent_id` (null) among its 26 keys; ❓ no reply existed, so nesting was not observed.
 - The workflow object (`content.xml`): the org has no workflows. ❓
-- Attachment metadata keys: no attachment seen. ❓
+- Attachment metadata keys: ✅ `P2-00b`, Q7.
 
 ---
 
@@ -402,10 +535,11 @@ IP. See `P2-TLS` (§8).
 ### P1-CORR-01 — reconcile Phase-1 client semantics with the verified v51 API
 > **Status, 2026-09-19:** addressed for D1–D4 only, from this record alone; see
 > [`design/08-GREENFIELD-AMENDMENTS.md §21`](design/08-GREENFIELD-AMENDMENTS.md).
-> D2 and D3 are resolved. For D1 this record verifies the endpoint and method
-> (`PUT /tasks/{task_id}`) but not the mutation request body, so the
-> implementation is intentionally disabled pending `P2-00b`; D4 likewise fails
-> closed. The live checks (a) and (b) below are still open; (c) was out of scope.
+> D2 and D3 are resolved. For D1 that ticket had the endpoint and method
+> (`PUT /tasks/{task_id}`) but not the request body, so it disabled the tool.
+> **`P2-00b` has since supplied the missing contract evidence (§3.1);** the tool stays
+> disabled until `P1-CORR-02` below implements it. D4 still fails closed. Of the live
+> checks below, (a) is answered by §3.1, (b) is open, (c) was out of scope.
 
 **Separate from P2-00. Not to be implemented until this report is reviewed.**
 Scope: D1–D4 of §3. Establish, with a suitably scoped key in a disposable org,
@@ -437,12 +571,43 @@ unknown issuer, and "the certificate does not name the host in
 entry must be addressed by name. Consider whether a host-name override is ever
 safe to offer; this research did not need one.
 
-### P2-00b — finish the read-only record (small)
+### P2-00b — finish the record
+> **Status, 2026-09-21:** done for what the lab could show. Verified: the task-status
+> `PUT` contract and its documented source representation (§3.1), attachment content
+> for one attachment (Q7), the execution-query route (Q8). Documented but not seen live:
+> filter logic, the carried-action entry shape, comment nesting. Unchanged: the workflow
+> object (the org has none), export contents (Q2), action invocation (D4).
+
 With owner approval for each: an incident that has an attachment (Q7); one
 `POST /playbooks/execution/query_paged` to see whether execution activities
 expose function results (Q8); an org with a closed incident, notes and a
 workflow (the ❓ items of §3); the export contents, with a key that may export,
 in a disposable org (Q2).
+
+### P1-CORR-02 — implement the verified task-status contract (proposal — not started)
+**Separate from `P2-00b`, which changed no product code.** Re-enable
+`soar_update_task_status` on the contract of §3.1, and nothing wider:
+
+- read the task with the documented `GET /tasks/{task_id}`, immediately before the
+  change, with `handle_format: ids` and `text_content_output_format: objects_convert`;
+- deep-copy that fresh representation and change **`status` only**; send it with the
+  documented `PUT /tasks/{task_id}` and the same two controls;
+- no dependency on the undocumented task tree; no `task_layout` normalisation; no
+  client-generated `closed_date`; no version field (none was observed or required in the
+  experiment);
+- keep the single mutation chokepoint and the existing order of flag, configuration,
+  tier, transport, approval, rate limit and audit exactly as they are;
+- fail closed on permissions: never assume an administrator key, and treat a refusal by
+  SOAR as a refusal, with the usual sanitised error;
+- verify with a fresh `GET` after the `PUT`, and define the behaviour for `success: false`,
+  a non-2xx answer, a `409`, and a task whose state is not the one the change expects
+  (already closed, inactive, frozen);
+- state the residual lost-update risk of a full-object `PUT` without a version, and keep
+  the read and the write adjacent;
+- offline tests, and an offline fake, derived from the `P2-00b` fixtures; amend `08 §4`
+  and the contract tests with the client;
+- replace the refusal texts, docstrings and test comments in `src/` and `tests/` that
+  still say the `PUT` body is unverified (`P2-00b` deliberately left them untouched).
 
 ---
 
@@ -458,6 +623,18 @@ uv run python scripts/probe/guarded.py probe.py --no-docs --with-export \
 uv run python scripts/probe/sanitise.py --check "tests/fixtures/soar/verified/*.json"
 uv run python scripts/check_no_secrets.py
 ```
+
+`P2-00b` (verified TLS only; see the probe README for the browser observation):
+
+```bash
+uv run python scripts/probe/guarded.py probe_00b.py                       # every read step
+uv run python scripts/probe/guarded.py probe_00b.py --designated          # owner-designated objects
+uv run python scripts/probe/guarded.py task_experiment.py --source documented            # dry run
+uv run python scripts/probe/guarded.py task_experiment.py --source documented --execute  # the experiment
+```
+
+The last line changes a task and restores it: it needs a disposable appliance, an
+owner-designated disposable task and the owner's explicit approval.
 
 Connection values come from a git-ignored `.env`; see
 [`scripts/probe/README.md`](../scripts/probe/README.md).

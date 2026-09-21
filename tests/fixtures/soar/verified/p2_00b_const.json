@@ -1,0 +1,34 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "matches_expected_version": true,
+    "server_version_keys": [
+      "build_number",
+      "f",
+      "m",
+      "major",
+      "minor",
+      "r",
+      "v",
+      "version"
+    ],
+    "top_level_keys": "10-99"
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "version",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/const",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": null
+}

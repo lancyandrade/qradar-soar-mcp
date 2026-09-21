@@ -1,0 +1,65 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "candidates": {
+      "application.wadl": {
+        "content_type": null,
+        "status": 404
+      },
+      "data.html": {
+        "content_type": "text/html",
+        "status": 200
+      },
+      "downloads.html": {
+        "content_type": null,
+        "status": 404
+      },
+      "openapi.json": {
+        "content_type": null,
+        "status": 404
+      },
+      "openapi.yaml": {
+        "content_type": null,
+        "status": 404
+      },
+      "swagger.json": {
+        "content_type": null,
+        "status": 404
+      },
+      "syntax_json.html": {
+        "content_type": "text/html",
+        "status": 200
+      },
+      "ui/index.html": {
+        "content_type": "text/html",
+        "status": 200
+      },
+      "ui/swagger.json": {
+        "content_type": "application/json",
+        "status": 200
+      }
+    },
+    "documentation_roots": {
+      "/docs/": {
+        "content_type": null,
+        "local_links": "0",
+        "status": 404
+      },
+      "/docs/index.html": {
+        "content_type": null,
+        "local_links": "0",
+        "status": 404
+      }
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "is a machine-readable request schema published next to the reference?",
+  "_question": "docs",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-00b",
+  "shape": null
+}

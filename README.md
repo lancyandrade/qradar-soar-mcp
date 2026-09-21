@@ -410,10 +410,12 @@ this repository against a live appliance**; ⚠️/❓ open, listed in
    `"A"` active / `"C"` closed.
 5. ✅ Closing sends `plan_status` + `resolution_id` + `resolution_summary`
    together and SOAR rejects it if a close-required custom field is empty.
-6. ❓ Task status changes are **not sent at all**. QRadar SOAR 51.0.9 documents
+6. ⚠️ Task status changes are **not sent at all** yet. QRadar SOAR 51.0.9 documents
    `PUT /tasks/{id}` for them (it has no `PATCH` there, and tasks carry no
-   version), but the `PUT` request body is unverified and is not guessed, so
-   `soar_update_task_status` refuses every call until it is verified.
+   version). The request body has now been verified on a lab appliance (the task
+   from the documented `GET /tasks/{id}`, with `status` as the only change; see
+   `docs/soar-api-verified.md` §3.1), but it is not implemented, so
+   `soar_update_task_status` still refuses every call.
 7. ✅ Manual actions are read from the `actions` list the incident object
    carries (`GET /incidents/{id}`); `GET /incidents/{id}/actions` answers 500
    on 51.0.9 and is not used. ❓ The shape of the list's entries is unverified,
@@ -444,8 +446,9 @@ ticket `P2-00`), every ✅ above is re-verified against a real appliance and
 - No manual action can be invoked: `soar_invoke_action` refuses every call as
   `DENY_UNSUPPORTED` until SOAR's invocation contract is verified.
 - No task can be opened or closed: `soar_update_task_status` refuses every call
-  as `DENY_UNSUPPORTED` until the request body of SOAR's `PUT /tasks/{id}` is
-  verified. Both refusals are audited as denials and send nothing to SOAR.
+  as `DENY_UNSUPPORTED` until the verified `PUT /tasks/{id}` contract is
+  implemented (ticket `P1-CORR-02`). Both refusals are audited as denials and
+  send nothing to SOAR.
 - `soar_list_incident_actions` lists the incident's own actions, not those its
   tasks and artifacts carry.
 - Attachment contents are never read; there is no text extraction.

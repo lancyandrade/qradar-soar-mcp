@@ -1,0 +1,155 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "status": [
+      "C"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "active": true,
+    "against_the_observed_put": {
+      "close": {
+        "keys_whose_json_type_differs": {
+          "closed_date": {
+            "fresh": "int",
+            "observed": "null"
+          }
+        },
+        "same_key_set": true
+      },
+      "reopen": {
+        "keys_whose_json_type_differs": {},
+        "same_key_set": true
+      }
+    },
+    "carried_actions": "0",
+    "closed_date_is_null": false,
+    "content_type": "application/json",
+    "custom": true,
+    "designated_task_found_exactly_once": true,
+    "documented_status_change_flags": {
+      "flags": [
+        "write",
+        "close"
+      ],
+      "statement": "not all true"
+    },
+    "format_controls": {
+      "handle_format": "ids",
+      "sent_as": "headers",
+      "text_content_output_format": "objects_convert"
+    },
+    "frozen": false,
+    "handle_forms": {
+      "at_id": "null",
+      "category_id": "null",
+      "inc_owner_id": "int",
+      "owner_id": "null",
+      "phase_id": "int"
+    },
+    "has_inc_id": true,
+    "http_status": 200,
+    "in_training_incident": false,
+    "instructions_form": "null",
+    "key_count": 41,
+    "live_only_keys_present": {
+      "auto_deactivate": true,
+      "form": true,
+      "task_layout": true,
+      "user_notes": true
+    },
+    "not_found_because": null,
+    "object_perms": {
+      "annotate": "at least one true",
+      "edit_assign_create_delete": "all false",
+      "perms_map_present": true,
+      "read": "all true"
+    },
+    "path_template": "/rest/orgs/{org_id}/incidents/{incident_id}/tasktree",
+    "required": true,
+    "status_is_single_letter": true,
+    "status_value": "C",
+    "task_belongs_to_the_designated_incident": true,
+    "task_layout_class": {
+      "direct_task_get": "empty list",
+      "fresh_read": "null",
+      "observed_close_put": "null",
+      "observed_reopen_put": "null"
+    },
+    "tree_top_level_keys": [],
+    "tree_top_level_type": "list",
+    "version_like_keys": []
+  },
+  "_fixture": "verified-shape",
+  "_note": "the designated task as the incident's task tree returns it; GET only; the rest of the tree is not kept",
+  "_question": "1B",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/incidents/{incident_id}/tasktree",
+    "query_keys": []
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": {
+    "actions": [],
+    "active": "bool",
+    "at_id": "null",
+    "attachments_count": "int",
+    "auto_deactivate": "bool",
+    "cat_name": "str",
+    "category_id": "null",
+    "closed_date": "int",
+    "creator_principal": {
+      "display_name": "str",
+      "id": "int",
+      "name": "str",
+      "type": "str"
+    },
+    "custom": "bool",
+    "description": "null",
+    "due_date": "null",
+    "form": "null",
+    "frozen": "bool",
+    "id": "int",
+    "inc_id": "int",
+    "inc_name": "str",
+    "inc_owner_id": "int",
+    "inc_training": "bool",
+    "init_date": "int",
+    "instr_text": "null",
+    "instructions": "null",
+    "manual_predefined": "bool",
+    "members": "null",
+    "name": "str",
+    "notes": [],
+    "notes_count": "int",
+    "owner_fname": "null",
+    "owner_id": "null",
+    "owner_lname": "null",
+    "perms": {
+      "assign": "bool",
+      "attach_file": "bool",
+      "change_header": "bool",
+      "change_members": "bool",
+      "close": "bool",
+      "comment": "bool",
+      "delete_attachments": "bool",
+      "playbook_progress_enabled": "bool",
+      "read": "bool",
+      "read_attachments": "bool",
+      "write": "bool"
+    },
+    "phase_id": "int",
+    "playbooks": [],
+    "private": "null",
+    "regs": {},
+    "required": "bool",
+    "src_name": "null",
+    "status": "str",
+    "task_layout": "null",
+    "timeframe_name": "null",
+    "user_notes": "str"
+  }
+}

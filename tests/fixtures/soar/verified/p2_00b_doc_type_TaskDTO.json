@@ -1,0 +1,241 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "data_type": "TaskDTO",
+    "enum_values": [],
+    "properties": {
+      "actions": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "array of ActionInfoDTO"
+      },
+      "active": {
+        "constraints": "required boolean",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "boolean"
+      },
+      "at_id": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "ObjectHandle"
+      },
+      "attachments_count": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "number"
+      },
+      "cat_name": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "string"
+      },
+      "category_id": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "ObjectHandle"
+      },
+      "closed_date": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "number"
+      },
+      "creator_principal": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "PrincipalReferenceDTO"
+      },
+      "custom": {
+        "constraints": "required boolean",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "boolean"
+      },
+      "description": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "string"
+      },
+      "due_date": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "number"
+      },
+      "frozen": {
+        "constraints": "required boolean",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "boolean"
+      },
+      "id": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "number"
+      },
+      "inc_id": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "number"
+      },
+      "inc_name": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "string"
+      },
+      "inc_owner_id": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "ObjectHandle"
+      },
+      "inc_training": {
+        "constraints": "required boolean",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "boolean"
+      },
+      "init_date": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "number"
+      },
+      "instr_text": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "string"
+      },
+      "instructions": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "TextContentDTO"
+      },
+      "manual_predefined": {
+        "constraints": "required boolean",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "boolean"
+      },
+      "members": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "array of object"
+      },
+      "name": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "string"
+      },
+      "notes": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "array of CommentDTO"
+      },
+      "notes_count": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "number"
+      },
+      "owner_fname": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "string"
+      },
+      "owner_id": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "ObjectHandle"
+      },
+      "owner_lname": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "string"
+      },
+      "perms": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "TaskPermsDTO"
+      },
+      "phase_id": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "ObjectHandle"
+      },
+      "playbooks": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "array of PlaybookActionInfoDTO"
+      },
+      "private": {
+        "constraints": "",
+        "documented_create_only": true,
+        "documented_read_only": false,
+        "type": "object"
+      },
+      "regs": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "map of string"
+      },
+      "required": {
+        "constraints": "required boolean",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "boolean"
+      },
+      "src_name": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "string"
+      },
+      "status": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "string"
+      },
+      "timeframe_name": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "string"
+      }
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "property names, JSON types and flags from the appliance's API reference",
+  "_question": "docs",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-00b",
+  "shape": null
+}

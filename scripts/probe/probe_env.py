@@ -19,9 +19,14 @@ OPTIONAL = (
     "SOAR_TIMEOUT",
     "P2_PROBE_TLS_MODE",
     "P2_PROBE_CA_BUNDLE",
+    # The package's own CA-bundle variable (P2-TLS, 08 §22). P2-00b accepts either name.
+    "SOAR_CA_BUNDLE",
     # An incident the owner picked (for example one known to carry an attachment).
     # Used in memory to build paths; never printed or recorded.
     "P2_PROBE_INCIDENT_ID",
+    # P2-00b: a disposable task the owner designated, inside P2_PROBE_INCIDENT_ID.
+    # Used in memory only, like the incident id.
+    "P2_PROBE_TASK_ID",
 )
 
 
@@ -59,6 +64,8 @@ class ProbeEnv:
     ca_bundle: str = field(default="", repr=False)
     incident_id: str = field(default="", repr=False)
     source: str = "environment"
+    soar_ca_bundle: str = field(default="", repr=False)
+    task_id: str = field(default="", repr=False)
 
     @property
     def host(self) -> str:
@@ -84,9 +91,14 @@ class ProbeEnv:
         }
         if self.incident_id:
             out["chosen incident id"] = self.incident_id
+        if self.task_id:
+            out["chosen task id"] = self.task_id
         if self.ca_bundle:
             out["ca bundle path"] = self.ca_bundle
             out["ca bundle name"] = Path(self.ca_bundle).name
+        if self.soar_ca_bundle:
+            out["soar ca bundle path"] = self.soar_ca_bundle
+            out["soar ca bundle name"] = Path(self.soar_ca_bundle).name
         if self.verify_ssl.lower() not in ("true", "false", ""):
             out["verify path"] = self.verify_ssl
             out["verify name"] = Path(self.verify_ssl).name
@@ -120,6 +132,8 @@ def load_env(*, required: bool = True) -> ProbeEnv:
         ca_bundle=merged.get("P2_PROBE_CA_BUNDLE") or "",
         incident_id=(merged.get("P2_PROBE_INCIDENT_ID") or "").strip(),
         source=source,
+        soar_ca_bundle=merged.get("SOAR_CA_BUNDLE") or "",
+        task_id=(merged.get("P2_PROBE_TASK_ID") or "").strip(),
     )
 
 

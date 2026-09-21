@@ -1,0 +1,98 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "input_type": [
+      "number",
+      "select"
+    ],
+    "type_id": [
+      6
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "rows": "1-9"
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "D4",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/types/actioninvocation/fields",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": [
+    {
+      "allow_default_value": "bool",
+      "blank_option": "bool",
+      "calculated": "bool",
+      "changeable": "bool",
+      "chosen": "bool",
+      "default_chosen_by_server": "bool",
+      "deprecated": "bool",
+      "hide_notification": "bool",
+      "id": "int",
+      "input_type": "str",
+      "internal": "bool",
+      "is_tracked": "bool",
+      "json_example": "null",
+      "json_schema": "null",
+      "name": "str",
+      "operation_perms": {
+        "<name>": {
+          "show_in_auto_actions": "bool",
+          "show_in_manual_actions": "bool",
+          "show_in_notifications": "bool"
+        }
+      },
+      "operations": [
+        "str"
+      ],
+      "perms": {
+        "delete": "bool",
+        "modify_blank": "bool",
+        "modify_chosen": "bool",
+        "modify_default": "bool",
+        "modify_name": "bool",
+        "modify_operations": "bool",
+        "modify_required": "bool",
+        "modify_type": [
+          "str"
+        ],
+        "modify_values": "bool",
+        "show_in_auto_actions": "bool",
+        "show_in_manual_actions": "bool",
+        "show_in_notifications": "bool",
+        "show_in_scripts": "bool",
+        "sort": "bool"
+      },
+      "prefix": "str",
+      "read_only": "bool",
+      "required": "str",
+      "rich_text": "bool",
+      "tags": [],
+      "templates": [],
+      "text": "str",
+      "tooltip": "str",
+      "type_id": "int",
+      "uuid": "str",
+      "values": [
+        {
+          "default": "bool",
+          "enabled": "bool",
+          "hidden": "bool",
+          "label": "str",
+          "properties": "null",
+          "uuid": "str",
+          "value": "int"
+        }
+      ]
+    }
+  ]
+}
