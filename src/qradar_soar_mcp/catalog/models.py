@@ -49,6 +49,8 @@ SECRET_INPUT_TYPES = frozenset({"password"})
 # Input types whose values are people and groups (seen on 51.0.9.0.20848).
 PRINCIPAL_INPUT_TYPES = frozenset({"select_owner", "multiselect_members"})
 VALUELESS_INPUT_TYPES = SECRET_INPUT_TYPES | PRINCIPAL_INPUT_TYPES
+# The object types whose field definitions the catalog holds (``client.discovery``).
+FIELD_OBJECT_TYPES: tuple[str, ...] = ("incident", "task", "artifact")
 
 
 class CatalogFormatError(ValueError):

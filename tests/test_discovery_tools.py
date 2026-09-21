@@ -384,7 +384,8 @@ async def test_invalid_list_input_is_refused(tool: str, args: dict[str, Any], rt
     assert "x" * 50 not in error["message"]
 
 
-async def test_get_function_returns_what_validation_needs(rt: Runtime):
+async def test_get_function_returns_what_validation_needs(rt: Runtime, fake: FakeSoar):
+    fake.discovery["function_fields"][0]["required"] = "token-100"  # synthetic token
     data = await ok(rt, "soar_get_function", name="function_200")
     assert set(data) == {"function", "catalog", "note"}
     function = data["function"]
@@ -406,8 +407,8 @@ async def test_get_function_returns_what_validation_needs(rt: Runtime):
     assert function["unresolved_inputs"] == 0
     # The acceptance criterion: input names, types and required-ness, for every input.
     assert [(i["name"], i["input_type"], i["required"]) for i in function["inputs"]] == [
-        ("input_100", "boolean", "required-100"),
-        ("input_101", "select", "required-101"),
+        ("input_100", "boolean", "token-100"),
+        ("input_101", "select", None),
     ]
     for item in function["inputs"]:
         assert {"name", "label", "input_type", "required", "tooltip", "placeholder"} <= set(item)
@@ -469,6 +470,7 @@ PERSON = "person.name.do.not.leak"
 async def test_password_and_principal_inputs_keep_their_restrictions(rt: Runtime, fake: FakeSoar):
     secret, people = fake.discovery["function_fields"]
     secret.update(
+        required="token-100",
         input_type="password",
         placeholder=PW,
         tooltip=f"default is {PW}",
@@ -487,7 +489,7 @@ async def test_password_and_principal_inputs_keep_their_restrictions(rt: Runtime
         "name": "input_100",
         "label": first["label"],
         "input_type": "password",
-        "required": "required-100",
+        "required": "token-100",
     }
     assert second["input_type"] == "multiselect_members"
     assert "values" not in second and "values_omitted" not in second

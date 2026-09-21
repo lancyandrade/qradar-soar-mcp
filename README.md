@@ -33,8 +33,9 @@ whole incident in one call under a size budget; find incidents that share
 artifacts with this one. The server also keeps a cached, read-only catalog of the
 SOAR configuration (functions, scripts, rules, playbooks, fields, data tables, …)
 and answers discovery questions from it: which functions exist and what inputs each
-takes, which scripts and message destinations exist, and, read-only and capped, what
-a script's source says. `soar_refresh_catalog` reloads it. Nothing can write or run a
+takes, which scripts and message destinations exist, which incident types, phases and
+data tables are defined, which fields an incident, task or artifact has and which
+values a picklist accepts, and, read-only and capped, what a script's source says. `soar_refresh_catalog` reloads it. Nothing can write or run a
 script.
 
 **Annotate and modify (Tiers 1–2, off by default)** — add notes and artifacts,
@@ -107,6 +108,10 @@ failure.
 | `soar_list_scripts` | 0 | — | scripts in the cached catalog: metadata only, never a body; paged, sorted by programmatic name |
 | `soar_get_script` | 0 | — | one script: catalog metadata plus a safety-filtered representation of its source, read on demand (`GET /scripts/{id}`), read-only: credential-like text may be redacted, then the result is cut at 20,000 characters; `body.redacted`, `body.truncated` and `body.text_is` say which happened; untrusted data, never run |
 | `soar_list_message_destinations` | 0 | — | message destinations in the cached catalog; never the API keys or users bound to one |
+| `soar_list_incident_types` | 0 | — | incident types in the cached catalog: name, id, uuid, enabled, hidden, system, parent id as SOAR gives it; paged, sorted by name |
+| `soar_list_phases` | 0 | — | phases in the cached catalog: name, id, uuid, enabled, order; paged, sorted by order |
+| `soar_list_fields` | 0 | — | field definitions of `incident`, `task` or `artifact` from the cached catalog: api name (`properties.<name>` for custom), label, input type, SOAR's raw `required` token, read-only, internal, and picklist values (label and stored value); paged |
+| `soar_list_datatables` | 0 | — | data tables (SOAR types with `type_id == 8`) in the cached catalog, with their columns; definitions only, never a row |
 | `soar_add_comment` | 1 | `SOAR_ALLOW_COMMENTS` | one note |
 | `soar_add_artifact` | 1 | `SOAR_ALLOW_ARTIFACTS` | one artifact |
 | `soar_create_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | one incident |
@@ -165,6 +170,22 @@ another source and never answer "empty" for something unknown.
   other inputs add tooltip, placeholder and select values (100 per input, 200 per
   function, the remainder counted in `values_omitted`). `unresolved_inputs` > 0 means the
   input list is known to be incomplete.
+- **Fields** (`soar_list_fields`) are listed for exactly one of `incident`, `task` or
+  `artifact`; nothing else is accepted, and data-table columns are in
+  `soar_list_datatables`. A custom field's `api_name` is `properties.<name>`. A select
+  field lists its choices as `label` (what SOAR shows) and `value` (what SOAR stores),
+  100 per field, the remainder counted in `values_omitted`; owner, members and
+  `password` fields list none. **`required` is SOAR's own token, unchanged.** On
+  51.0.9.0.20848 the tokens seen were `always` (incident, task, artifact) and `close`
+  (incident). What they make SOAR enforce is not documented on the appliance and was not
+  tested (that needs a write), so **no `close_required` flag is derived**; every answer
+  says so under `required_semantics`, and a token not seen before is unknown, never
+  optional. SOAR itself decides whether a close is accepted.
+- **Data tables** are definitions only: type name, display name, parent types and
+  columns (`name`, `label`, `input_type`, `order`, and SOAR's raw `required`; SOAR sent
+  no such key on any column seen, so it is null). No row of a table is read, kept or returned.
+- **Phases** are sorted by SOAR's `order`; **incident types** show `parent_id` as SOAR
+  gives it, with no hierarchy worked out.
 - **Script source** is read only when `soar_get_script` is asked for it, from
   `GET /scripts/{id}` (`script_text`), and is not kept. The tool returns a
   **safety-filtered representation** of it as `body.text`, not necessarily the exact
@@ -549,9 +570,14 @@ evidence and wins wherever it disagrees with a mark above.
   no script bodies, no playbook XML and no people (an owner or members field has no
   values in the catalog). `SOAR_CATALOG_SOURCE=export` does not work.
   One load costs one request per function on top of the collections.
-- Discovery covers functions, scripts and message destinations. Incident types,
-  phases, fields, data tables, rules, workflows and playbooks are in the catalog but
-  have no tool yet; the Tier-4 flags are accepted and unused.
+- Discovery covers functions, scripts, message destinations, incident types, phases,
+  fields and data tables. Rules, workflows and playbooks are in the catalog but have no
+  tool yet; the Tier-4 flags are accepted and unused.
+- `soar_list_fields` reports a field's `required` as SOAR's raw token and derives no
+  close-required flag: `always` and `close` were observed on 51.0.9.0.20848, but what
+  they enforce is not documented on the appliance and was not tested
+  (`docs/soar-api-verified.md §3.2`). `soar_describe_incident_fields` still reports
+  `close_required` from the unverified baseline reading (`required == "close"`).
 - `soar_get_script` returns at most the first 20,000 characters of a script; there is
   no way to read the rest. Its credential filter is a heuristic: it can replace harmless
   code that looks like a credential (`authorization = settings.value`), always reported
@@ -564,7 +590,7 @@ evidence and wins wherever it disagrees with a mark above.
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Investigation + controlled actions + security architecture | **this release, v0.2.0** |
-| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); the rest planned |
+| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); incident-type, phase, field and data-table discovery in (`P2-03`); the rest planned |
 | 3 | Playbook IR, validation, offline simulation | planned |
 | 4 | Compilation, export, import (always disabled) | planned |
 | 5 | Controlled enablement | planned |

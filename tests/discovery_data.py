@@ -6,7 +6,10 @@ into a payload by filling it with obviously made-up values (``name-1``, a counte
 ``uuid-1``), so the offline fake serves objects that have every key, wrapper and type
 the appliance was seen to return, and nothing from it. The only values taken from the
 record are the enumerations it kept on purpose (input types, object types, statuses) and
-the appliance version.
+the appliance version. A field definition's ``required`` is one of them: the P2-03
+addendum recorded its tokens for ``incident``, ``task`` and ``artifact`` fields, and for
+nothing else, so a function input (a ``__function`` field) carries no ``required`` here
+rather than a made-up one.
 
 The payloads feed ``FakeSoar`` and, through the real collections backend, the committed
 ``tests/fixtures/catalog/lab-v51.json``.
@@ -138,6 +141,7 @@ def build_payloads(minimal: bool = False) -> dict[str, Any]:
     field_doc = verified("function_fields")
     inputs = _rows("function_fields", field_doc["shape"][0], "input", {}, 100, minimal)
     for i, row in enumerate(inputs):
+        row.pop("required", None)  # an optional key whose values were never recorded
         row["uuid"] = uuid(row["id"])
         row["input_type"] = field_doc["_enums"]["input_type"][i * 3 % 6]  # boolean, select
         row["type_id"] = field_doc["_enums"]["type_id"][0]
@@ -161,6 +165,11 @@ def build_payloads(minimal: bool = False) -> dict[str, Any]:
             kinds = [k for k in doc["_enums"]["input_type"] if k not in PRINCIPAL_INPUT_TYPES]
             row["input_type"] = kinds[i % len(kinds)]
             row["prefix"] = "properties" if i else None  # one built-in and one custom field
+            # As observed (P2-03): tokens on built-in fields only, the key absent elsewhere.
+            tokens = verified(f"p2_03_fields_{type_name}_required")["_enums"]["required"]
+            row.pop("required", None)
+            if not i and tokens and not minimal:
+                row["required"] = tokens[0]
             for value in row["values"]:
                 value.pop("principal_type", None)  # an ordinary select value, not a person
         out[f"fields:{type_name}"] = rows

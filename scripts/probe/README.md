@@ -14,6 +14,7 @@ and nothing here changes Phase-1 behaviour.
 | `sanitise.py` | Shape extraction, the enum allow-list, and the verifier that rejects environment-specific text. Also a CLI: `--check FILE…`. |
 | `probe.py` | The plan, mapped to the eight P2-00 priority questions, and the runner. |
 | `probe_00b.py` | `P2-00b`: the follow-up research (see below). Same read-only client, verified TLS only. |
+| `probe_p2_03.py` | `P2-03` addendum: four `GET`s (the Swagger description, and the `incident` / `task` / `artifact` field lists) to record the `required` tokens of field definitions and nothing else. Stops without writing if a field list no longer matches the `P2-00` record. |
 | `shape_request.py` | `P2-00b`, offline: reduces a request the web UI sent (the JSON payload only, on stdin) to key names and JSON types. Refuses a HAR, a copied cURL/fetch, any session header and any path that contains an id. Sends nothing. |
 | `guarded.py` | Outer guard for live runs: runs a probe script in a child process, captures stdout and stderr, verifies them like a fixture, and shows them only if clean. |
 | `selftest.py` | Offline proof of the properties below against a hostile in-process fake. |

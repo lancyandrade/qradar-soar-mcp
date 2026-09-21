@@ -29,6 +29,7 @@ ALLOWED = frozenset(
         "tls_check.py",
         "probe.py",
         "probe_00b.py",
+        "probe_p2_03.py",  # P2-03 addendum: four approved GETs, the `required` property
         "probe_env.py",
         "sanitise.py",
         "selftest.py",

@@ -1,0 +1,73 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_fixture": "verified-ledger",
+  "_ticket": "P2-03",
+  "refused_by_policy": [],
+  "requests": [
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/docs/rest-api/ui/swagger.json",
+      "query_keys": [],
+      "question": "docs",
+      "size": "<10MB",
+      "status": 200,
+      "step": "doc:ui/swagger.json"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/types/incident/fields",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P2-03",
+      "size": "<1MB",
+      "status": 200,
+      "step": "fields_incident"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/types/task/fields",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P2-03",
+      "size": "<100KB",
+      "status": 200,
+      "step": "fields_task"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/types/artifact/fields",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P2-03",
+      "size": "<100KB",
+      "status": 200,
+      "step": "fields_artifact"
+    }
+  ]
+}

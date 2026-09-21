@@ -30,6 +30,7 @@ from typing import Any
 
 import httpx
 import probe_00b
+import probe_p2_03
 import shape_request
 import task_candidate
 import task_experiment
@@ -1589,6 +1590,136 @@ def test_00b_docs() -> None:
     client.close()
 
 
+# P2-03: field definitions laid out like the recorded ones, hostile in every value that is
+# not the `required` token, and a description with a documented string `required`.
+P2_03_SWAGGER = {
+    "swagger": "2.0",
+    "definitions": {
+        **SWAGGER_DOC["definitions"],
+        "FieldDefDTO": {
+            "properties": {
+                "required": {
+                    "type": "string",
+                    "enum": ["always", "close", HOST],
+                    "description": f"Needed when closing; see {HOST}.",
+                },
+                "name": {"type": "string"},
+            }
+        },
+    },
+}
+
+
+def _p2_03_rows(type_name: str, requireds: list[Any]) -> list[dict[str, Any]]:
+    shape = json.loads(
+        (probe_p2_03.OUT_DIR / f"fields_{type_name}.json").read_text(encoding="utf-8")
+    )["shape"][0]
+    rows = []
+    for i, required in enumerate(requireds):
+        row: dict[str, Any] = {k: None for k in shape if not k.endswith("?")}
+        row.update(
+            name=f"{HOSTILE_FIELD}_{i}",
+            text=f"Payroll breach on {HOST} for {EMAIL}",
+            prefix="properties" if i % 2 else None,
+        )
+        if required != "<absent>":
+            row["required"] = required
+        rows.append(row)
+    return rows
+
+
+def _run_p2_03(handler: Any, step: Any) -> tuple[int, str, dict[str, Any], list[tuple[str, str]]]:
+    seen: list[tuple[str, str]] = []
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path))
+        return handler(request)
+
+    client = new_client(transport)
+    printed: list[str] = []
+    files: dict[str, Any] = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        rec = probe_00b.Recorder(ENV, client, Path(tmp), echo=printed.append)
+        code = step(rec)
+        probe_p2_03.finish(rec)
+        for path in sorted(Path(tmp).glob("*.json")):
+            text = path.read_text(encoding="utf-8")
+            verify_clean(text, ENV.literals(), what=path.name)
+            files[path.name] = json.loads(text)
+    client.close()
+    return code, " | ".join(printed), files, seen
+
+
+def test_p2_03() -> None:
+    values = {
+        "incident": ["always", "close", None, "<absent>", f"see {HOST}", 7, "close"],
+        "task": ["<absent>", "always"],
+        "artifact": ["<absent>"],
+    }
+
+    def good(request: httpx.Request) -> httpx.Response:
+        type_name = request.url.path.split("/")[-2]
+        return httpx.Response(200, json=_p2_03_rows(type_name, values[type_name]))
+
+    code, text, files, seen = _run_p2_03(good, probe_p2_03.field_tokens)
+    org = f"/rest/orgs/{ORG}/types/"
+    check(code == 0 and seen == [("GET", f"{org}{t}/fields") for t in probe_p2_03.FIELD_TYPES],
+          "p2-03: the field step is exactly three GETs, in a closed order")  # fmt: skip
+    inc = files["p2_03_fields_incident_required.json"]
+    check(inc["_enums"] == {"required": ["always", "close"]} and inc["_ticket"] == "P2-03"
+          and inc["_facts"]["required"]["rows_by_token"]["close"]
+          == {"builtin": "1-9", "custom": "1-9", "rows": "1-9"}
+          and inc["_facts"]["required"]["rows_by_token"]["always"]["custom"] == "0"
+          and inc["_facts"]["required"]["rows_without_a_token"]
+          == {"absent": "1-9", "not_a_string": "1-9", "not_a_token": "1-9", "null": "1-9"}
+          and inc["_request"]["query_keys"] == ["handle_format", "text_content_output_format"],
+          "p2-03: tokens and buckets are kept; a non-token value is only counted")  # fmt: skip
+    check(files["p2_03_fields_task_required.json"]["_enums"] == {"required": ["always"]}
+          and files["p2_03_fields_artifact_required.json"]["_enums"] == {"required": []},
+          "p2-03: each object type keeps its own tokens; none seen is an empty list")  # fmt: skip
+    check(not _leaks(text, files) and sorted(files) == [
+        "_ledger_p2_03.json", "p2_03_fields_artifact_required.json",
+        "p2_03_fields_incident_required.json", "p2_03_fields_task_required.json"],
+          "p2-03: no field name, label or connection value gets out")  # fmt: skip
+
+    def drifted(request: httpx.Request) -> httpx.Response:
+        rows = _p2_03_rows("incident", ["always"])
+        return httpx.Response(200, json=[{**rows[0], "brand_new_key": 1}])
+
+    for why, handler in {
+        "an unrecorded key": drifted,
+        "a 403": lambda _: httpx.Response(403, json={"message": f"denied {KEY_ID}"}),
+        "a wrapper instead of a list": lambda _: httpx.Response(200, json={"entities": []}),
+    }.items():
+        code, text, files, seen = _run_p2_03(handler, probe_p2_03.field_tokens)
+        check(code == probe_p2_03.EXIT_STOP and len(seen) == 1 and "STOPPED" in text
+              and sorted(files) == ["_ledger_p2_03.json"] and not _leaks(text, files),
+              f"p2-03: {why} stops the run after one GET; nothing is written")  # fmt: skip
+
+    code, text, files, seen = _run_p2_03(
+        lambda _: httpx.Response(200, json=P2_03_SWAGGER), probe_p2_03.swagger_required
+    )
+    doc = files["p2_03_doc_swagger_required.json"]["_facts"]
+    check(code == 0 and seen == [("GET", "/docs/rest-api/ui/swagger.json")]
+          and list(doc["data_types"]) == ["FieldDefDTO"]
+          and doc["data_types"]["FieldDefDTO"]["enum"] == ["always", "close"]
+          and doc["data_types"]["FieldDefDTO"]["type"] == "string"
+          and doc["data_types"]["FieldDefDTO"]["description_mentions_closing"] is True
+          and doc["data_types_with_a_boolean_required"] == "1-9",
+          "p2-03: the description step is one static GET; type, enum, a flag")  # fmt: skip
+    check("withheld" in text and not _leaks(text, files) and "Needed when" not in json.dumps(files),
+          "p2-03: a description is shown, never stored, withheld if it leaks")  # fmt: skip
+    for method in ("PUT", "POST", "PATCH", "DELETE"):
+        client = new_client(lambda _: httpx.Response(200, json=[]))
+        try:
+            client.request(method, f"/rest/orgs/{ORG}/types/incident/fields", "t", json_body={})
+            refused = False
+        except ProbePolicyError:
+            refused = True
+        client.close()
+        check(refused, f"p2-03: {method} to a field list is refused by the client it uses")
+
+
 def main() -> int:
     tests = (test_policy, test_verifier, test_shape, test_full_run, test_smoke,
              test_dotenv_encodings,
@@ -1601,7 +1732,7 @@ def main() -> int:
              test_experiment_stops, test_experiment_documented_source,
              test_experiment_client_policy,
              test_00b_threading, test_shape_request, test_00b_swagger_grep,
-             test_00b_docs)  # fmt: skip
+             test_00b_docs, test_p2_03)  # fmt: skip
     for test in tests:
         test()
     print(f"\n{'OK' if not failures else 'FAILED'}: {len(failures)} failure(s)")

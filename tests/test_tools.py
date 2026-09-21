@@ -25,7 +25,7 @@ from tests.fake_soar import FakeSoar
 from tests.tool_harness import audit_records, build_runtime, write_keys, write_policy
 
 # The Phase-1 contract, verbatim from 08 §3, plus the one tool of P2-01 (08 §25) and the
-# five of P2-02 (08 §26).
+# five of P2-02 (08 §26) and the four of P2-03 (08 §28).
 APPROVED_TOOLS = {
     "soar_search_incidents": 0,
     "soar_get_incident": 0,
@@ -45,6 +45,10 @@ APPROVED_TOOLS = {
     "soar_list_scripts": 0,
     "soar_get_script": 0,
     "soar_list_message_destinations": 0,
+    "soar_list_incident_types": 0,
+    "soar_list_phases": 0,
+    "soar_list_fields": 0,
+    "soar_list_datatables": 0,
     "soar_add_comment": 1,
     "soar_add_artifact": 1,
     "soar_create_incident": 2,

@@ -63,7 +63,7 @@
       "name": "artifact_field_800",
       "prefix": null,
       "read_only": true,
-      "required": "required-800",
+      "required": "always",
       "type_name": "artifact",
       "values": [
         {
@@ -83,7 +83,7 @@
       "name": "artifact_field_801",
       "prefix": "properties",
       "read_only": true,
-      "required": "required-801",
+      "required": null,
       "type_name": "artifact",
       "values": [
         {
@@ -445,7 +445,7 @@
       "name": "task_field_801",
       "prefix": "properties",
       "read_only": true,
-      "required": "required-801",
+      "required": null,
       "type_name": "task",
       "values": [
         {
@@ -465,7 +465,7 @@
       "name": "task_field_800",
       "prefix": null,
       "read_only": true,
-      "required": "required-800",
+      "required": "always",
       "type_name": "task",
       "values": [
         {
@@ -490,7 +490,7 @@
           "label": "text-100",
           "name": "input_100",
           "placeholder": "placeholder-100",
-          "required": "required-100",
+          "required": null,
           "tooltip": "tooltip-100",
           "uuid": "uuid-100",
           "values": [
@@ -507,7 +507,7 @@
           "label": "text-101",
           "name": "input_101",
           "placeholder": "placeholder-101",
-          "required": "required-101",
+          "required": null,
           "tooltip": "tooltip-101",
           "uuid": "uuid-101",
           "values": [
@@ -536,7 +536,7 @@
           "label": "text-100",
           "name": "input_100",
           "placeholder": "placeholder-100",
-          "required": "required-100",
+          "required": null,
           "tooltip": "tooltip-100",
           "uuid": "uuid-100",
           "values": [
@@ -553,7 +553,7 @@
           "label": "text-101",
           "name": "input_101",
           "placeholder": "placeholder-101",
-          "required": "required-101",
+          "required": null,
           "tooltip": "tooltip-101",
           "uuid": "uuid-101",
           "values": [

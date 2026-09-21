@@ -18,10 +18,15 @@ from qradar_soar_mcp.catalog.models import (
     SECRET_INPUT_TYPES,
     VALUELESS_INPUT_TYPES,
     Catalog,
+    DataTableSpec,
+    FieldSpec,
     FunctionInput,
     FunctionSpec,
     MDSpec,
+    PhaseSpec,
     ScriptSpec,
+    SelectValue,
+    TypeSpec,
 )
 from qradar_soar_mcp.logging import REDACTED
 
@@ -211,6 +216,16 @@ def catalog_stamp(catalog: Catalog) -> dict[str, Any]:
     }
 
 
+def describe_select_value(value: SelectValue) -> dict[str, Any]:
+    """Every field of ``SelectValue``: the label SOAR shows and the value it stores."""
+    return {
+        "label": trim(value.label, LIST_NAME_LIMIT),
+        "value": value.value,
+        "enabled": value.enabled,
+        "default": value.default,
+    }
+
+
 def summarise_function(spec: FunctionSpec) -> dict[str, Any]:
     return {
         "name": spec.name,
@@ -241,15 +256,7 @@ def describe_function_input(
         out["placeholder"] = spec.placeholder
     if spec.input_type not in VALUELESS_INPUT_TYPES and spec.values:
         shown = spec.values[: max(0, min(max_values, INPUT_VALUES_MAX))]
-        out["values"] = [
-            {
-                "label": trim(v.label, LIST_NAME_LIMIT),
-                "value": v.value,
-                "enabled": v.enabled,
-                "default": v.default,
-            }
-            for v in shown
-        ]
+        out["values"] = [describe_select_value(v) for v in shown]
         out["values_omitted"] = len(spec.values) - len(shown)
     return out
 
@@ -353,3 +360,121 @@ def summarise_message_destination(spec: MDSpec) -> dict[str, Any]:
         "destination_type": spec.destination_type,
         "expect_ack": spec.expect_ack,
     }
+
+
+# ------------------------------------------------------- discovery (P2-03; 08 §28)
+TABLE_COLUMNS_MAX = 100  # columns shown per data table
+FIELD_VALUES_MAX = 100  # select values shown per field
+
+
+def summarise_incident_type(spec: TypeSpec) -> dict[str, Any]:
+    """Every field of ``TypeSpec``. ``parent_id`` is what SOAR gave, an id or a name or
+    nothing; no hierarchy is worked out from it."""
+    return {
+        "name": trim(spec.name, NAME_LIMIT),
+        "id": spec.id,
+        "uuid": spec.uuid,
+        "enabled": spec.enabled,
+        "hidden": spec.hidden,
+        "system": spec.system,
+        "parent_id": spec.parent_id,
+    }
+
+
+def summarise_phase(spec: PhaseSpec) -> dict[str, Any]:
+    """Every field of ``PhaseSpec``. ``order`` is SOAR's number for the phase's position."""
+    return {
+        "name": trim(spec.name, NAME_LIMIT),
+        "id": spec.id,
+        "uuid": spec.uuid,
+        "enabled": spec.enabled,
+        "order": spec.order,
+    }
+
+
+def summarise_datatable(spec: DataTableSpec) -> dict[str, Any]:
+    """A data table's definition: identity and columns. Never a row: the catalog holds
+    none, and no tool reads one. A column's ``required`` is the raw value the catalog
+    holds, uninterpreted (08 §28.5); a column's select values are not kept at all."""
+    shown = spec.columns[:TABLE_COLUMNS_MAX]
+    return {
+        "type_name": spec.type_name,
+        "id": spec.id,
+        "display_name": trim(spec.display_name, NAME_LIMIT),
+        "uuid": spec.uuid,
+        "parent_types": list(spec.parent_types),
+        "column_count": len(spec.columns),
+        "columns": [
+            {
+                "name": column.name,
+                "label": trim(column.label, LIST_NAME_LIMIT),
+                "input_type": column.input_type,
+                "order": column.order,
+                "required": column.required,
+            }
+            for column in shown
+        ],
+        "columns_omitted": len(spec.columns) - len(shown),
+    }
+
+
+# What is known about a field definition's ``required`` token (P2-03 addendum; 08 §28.3,
+# ``docs/soar-api-verified.md`` §3.2). Observed: the distinct tokens the three field lists
+# of QRadar SOAR 51.0.9.0.20848 carried, read-only. Documented: nothing; the description
+# published with the on-box reference has no data type whose ``required`` property is a
+# string or an enumeration. Behaviour: never exercised; no incident was closed.
+OBSERVED_REQUIRED_TOKENS: dict[str, tuple[str, ...]] = {
+    "incident": ("always", "close"),
+    "task": ("always",),
+    "artifact": ("always",),
+}
+REQUIRED_SEMANTICS: dict[str, Any] = {
+    "status": "unresolved",
+    "required": (
+        "SOAR's own token for the field, unchanged; null when the field definition carries none."
+    ),
+    "observed_tokens": {
+        "soar_version": "51.0.9.0.20848",
+        **{name: list(tokens) for name, tokens in OBSERVED_REQUIRED_TOKENS.items()},
+    },
+    "meaning": (
+        "What a token makes SOAR enforce is not documented in the on-box API description "
+        "and was not verified by behaviour: no incident was closed and no field was "
+        "written to find out. The observed names read as 'always required' and 'required "
+        "to close an incident'; that is a reading of the names, not an established fact, "
+        "so this server derives no required or close-required flag from them. A token "
+        "that is not listed under observed_tokens is unknown: it does not mean optional. "
+        "SOAR itself decides whether a write or a close is accepted."
+    ),
+}
+
+
+def summarise_field(spec: FieldSpec) -> dict[str, Any]:
+    """A field definition, with what a caller needs to address and fill the field.
+
+    ``required`` is SOAR's own token, exactly as the catalog holds it, and nothing is
+    derived from it: what a token means is unresolved (``REQUIRED_SEMANTICS``), and a
+    boolean here would turn a reading of the token's name into a fact. In particular no
+    token, known or not, ever becomes ``close_required: false``.
+
+    ``values`` are the catalog's select values, label and stored value apart. The catalog
+    keeps none for a credential- or people-typed field (08 §25.2); this does not rely on
+    it.
+    """
+    out: dict[str, Any] = {
+        "object_type": spec.type_name,
+        "name": spec.name,
+        "api_name": spec.api_name,
+        "prefix": spec.prefix,
+        "label": trim(spec.label, NAME_LIMIT),
+        "input_type": spec.input_type,
+        "custom": spec.custom,
+        "required": spec.required,
+        "read_only": spec.read_only,
+        "internal": spec.internal,
+    }
+    if spec.input_type not in VALUELESS_INPUT_TYPES and spec.values:
+        shown = spec.values[:FIELD_VALUES_MAX]
+        out["values"] = [describe_select_value(v) for v in shown]
+        out["values_omitted"] = len(spec.values) - len(shown)
+    return out

@@ -1,0 +1,45 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "required": [
+      "always"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "required": {
+      "rows": "10-99",
+      "rows_by_token": {
+        "always": {
+          "builtin": "1-9",
+          "custom": "0",
+          "rows": "1-9"
+        }
+      },
+      "rows_without_a_token": {
+        "absent": "10-99",
+        "not_a_string": "0",
+        "not_a_token": "0",
+        "null": "0"
+      },
+      "tokens": [
+        "always"
+      ]
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "observed, read-only: the distinct `required` tokens of this object type's field definitions on this appliance, counts as buckets. Not every token SOAR knows, and nothing about what closing an incident enforces",
+  "_question": "P2-03",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/types/task/fields",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-03",
+  "shape": null
+}

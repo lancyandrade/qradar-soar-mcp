@@ -32,11 +32,14 @@ P2_02_TOOLS = [
     "soar_get_script",
     "soar_list_message_destinations",
 ]
-PHASE_TWO_TOOLS_NOT_YET_IMPLEMENTED = {
+# P2-03 (08 §28) added these four; tests/test_discovery_types_fields.py covers them.
+P2_03_TOOLS = [
     "soar_list_incident_types",
     "soar_list_phases",
-    "soar_list_fields",
     "soar_list_datatables",
+    "soar_list_fields",
+]
+PHASE_TWO_TOOLS_NOT_YET_IMPLEMENTED = {
     "soar_list_rules",
     "soar_get_rule",
     "soar_list_workflows",
@@ -61,11 +64,11 @@ def test_it_is_a_tier_0_read_with_no_capability_and_no_mutation():
     assert list(inspect.signature(spec.func).parameters) == ["rt"]  # nothing to pass in
 
 
-def test_the_discovery_module_holds_the_catalog_tool_and_the_five_of_p2_02_only():
+def test_the_discovery_module_holds_the_catalog_tool_and_those_of_p2_02_and_p2_03_only():
     assert not (set(TOOL_REGISTRY) & PHASE_TWO_TOOLS_NOT_YET_IMPLEMENTED)
     tree = ast.parse(Path(discovery_tools.__file__).read_text(encoding="utf-8"))
     functions = [n.name for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef)]
-    assert functions == [TOOL, *P2_02_TOOLS]
+    assert functions == [TOOL, *P2_02_TOOLS, *P2_03_TOOLS]
 
 
 def test_there_is_no_capability_flag_for_catalog_reads():
