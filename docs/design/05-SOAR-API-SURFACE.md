@@ -37,6 +37,12 @@
 > `soar_update_task_status` still refuses every call until `P1-CORR-02` implements that
 > contract. See `08-GREENFIELD-AMENDMENTS.md §23`.
 
+> **Implementation status — P1-CORR-02, 2026-09-21.** `soar_update_task_status` now
+> implements that verified contract and nothing wider; it is verified for
+> `51.0.9.0.20848` only, and nothing is known to protect a task against a concurrent
+> edit. `soar_invoke_action` still refuses every call. See
+> `08-GREENFIELD-AMENDMENTS.md §24`.
+
 All paths are relative to `https://{host}/rest/orgs/{org_id}` unless noted.
 Auth: HTTP Basic with API key id/secret. Common params `handle_format=names`
 and `text_content_output_format=always_text` as already implemented.

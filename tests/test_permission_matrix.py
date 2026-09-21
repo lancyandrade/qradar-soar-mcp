@@ -120,27 +120,10 @@ _ARTIFACTS = _flagged({"tier1", "tier2", "tier2_no_close", "legacy_allow_writes"
 _INCIDENT_WRITES = _flagged({"tier2", "tier2_no_close", "legacy_allow_writes"})
 _INCIDENT_CLOSE = _flagged({"tier2", "legacy_allow_writes"})
 
-# soar_update_task_status is declared unsupported (P1-CORR-01 D1, 08 §21): the verified
-# PUT /tasks/{id} has an unverified request body, so enforce() refuses every call that
-# the flag, config and transport gates would otherwise let through — including under the
-# kill switch, which is never consulted because the denial comes first. The refusal is an
-# ordinary audited DECISION_DENIED and nothing reaches SOAR.
-_TASK_WRITES = _row(
-    default="DENY_DISABLED",
-    comments_only="DENY_DISABLED",
-    tier1="DENY_DISABLED",
-    tier2="DENY_UNSUPPORTED",
-    tier2_no_close="DENY_UNSUPPORTED",
-    actions_no_policy="DENY_CONFIG",
-    actions_with_policy="DENY_DISABLED",
-    actions_destructive="DENY_DISABLED",
-    legacy_allow_writes="DENY_UNSUPPORTED",
-    playbook_draft="DENY_DISABLED",
-    playbook_export="DENY_DISABLED",
-    playbook_deploy="DENY_DISABLED",
-    playbook_enable="DENY_DISABLED",
-    kill_switch_active="DENY_UNSUPPORTED",
-)
+# soar_update_task_status is an ordinary Tier-2 tool again (P1-CORR-02, 08 §24): P2-00b
+# verified the PUT /tasks/{id} contract it needed, so it is gated by SOAR_ALLOW_TASK_WRITES
+# exactly like the incident writes are by their flag, kill switch included.
+_TASK_WRITES = _flagged({"tier2", "tier2_no_close", "legacy_allow_writes"})
 
 # soar_invoke_action is declared unsupported too (P1-CORR-01 D4, 08 §21): the invocation
 # contract is unverified, and with no verified target list there is no per-call policy

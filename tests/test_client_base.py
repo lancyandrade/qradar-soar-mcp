@@ -67,12 +67,43 @@ async def test_basic_auth_and_default_params_on_every_request(client: SoarClient
         assert rec.headers["user-agent"].startswith("qradar-soar-mcp/")
 
 
-async def test_only_get_post_patch_exist(client: SoarClient):
-    assert not hasattr(client, "put") and not hasattr(client, "delete")
-    with pytest.raises(SoarValidationError, match="not part of the Phase-1 contract"):
+async def test_only_get_post_patch_exist_and_put_for_one_task_path(
+    client: SoarClient, fake: FakeSoar
+):
+    """PUT is transport support for the verified task update only (08 §24)."""
+    assert not hasattr(client, "delete")
+    with pytest.raises(SoarValidationError, match="/tasks/"):
         await client.request("PUT", INC, json_body={})
-    with pytest.raises(SoarValidationError, match="not part of the Phase-1 contract"):
-        await client.request("DELETE", INC)
+    with pytest.raises(SoarValidationError, match="/tasks/"):
+        await client.put(INC, json_body={}, format_headers={})
+    with pytest.raises(SoarValidationError, match="verified form"):
+        await client.request("PUT", "/rest/orgs/201/tasks/9001", json_body={})
+    for method in ("DELETE", "HEAD", "OPTIONS"):
+        with pytest.raises(SoarValidationError, match="not part of the Phase-1 contract"):
+            await client.request(method, INC)
+    assert fake.requests == []
+
+
+async def test_format_headers_replace_the_default_query_parameters(
+    client: SoarClient, fake: FakeSoar
+):
+    controls = {"handle_format": "ids", "text_content_output_format": "objects_convert"}
+    await client.get("/rest/orgs/201/tasks/9001", format_headers=controls)
+    rec = fake.requests[-1]
+    assert rec.params == {} and {k: rec.headers[k] for k in controls} == controls
+    assert rec.headers["authorization"].startswith("Basic ")
+    for bad in ({}, {"handle_format": "ids"}, {**controls, "X-Forwarded-For": "x"}):
+        with pytest.raises(SoarValidationError, match="format controls"):
+            await client.get(INC, format_headers=bad)
+    # Not a header facility: the verified pair is accepted on the single-task calls only.
+    for path in (INC, "/rest/orgs/201/users", "/rest/orgs/201/incidents/42/tasks"):
+        with pytest.raises(SoarValidationError, match="GET and PUT /tasks/"):
+            await client.get(path, format_headers=controls)
+    with pytest.raises(SoarValidationError, match="GET and PUT /tasks/"):
+        await client.request(
+            "POST", "/rest/orgs/201/tasks/9001", json_body={}, format_headers=controls
+        )
+    assert len(fake.requests) == 1
 
 
 async def test_query_string_in_path_is_rejected(client: SoarClient):

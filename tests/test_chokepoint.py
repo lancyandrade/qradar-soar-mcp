@@ -37,6 +37,7 @@ MUTATING_CLIENT_METHODS = {
     "post",
     "patch",
     "patch_object",
+    "put",
 }
 API_ACCESSORS = {"require_client"}
 

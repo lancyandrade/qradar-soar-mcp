@@ -140,6 +140,47 @@ def test_httpx_mapping_uses_type_only(exc: httpx.HTTPError, cls: type[SoarError]
     assert err.__cause__ is None and err.__context__ is None
 
 
+@pytest.mark.parametrize(
+    ("exc", "unsent"),
+    [
+        (httpx.ConnectError("x"), True),
+        (httpx.ConnectTimeout("x"), True),
+        (httpx.PoolTimeout("x"), True),
+        (httpx.ReadTimeout("x"), False),
+        (httpx.WriteTimeout("x"), False),
+        (httpx.ReadError("x"), False),
+        (httpx.WriteError("x"), False),
+        (httpx.RemoteProtocolError("x"), False),
+        (httpx.DecodingError("x"), False),
+        (httpx.TooManyRedirects("x"), False),
+        (httpx.UnsupportedProtocol("x"), False),
+    ],
+)
+def test_not_sent_is_claimed_only_when_no_connection_was_established(
+    exc: httpx.HTTPError, unsent: bool
+):
+    """A write that may have reached SOAR must never be reported as not sent (08 §24)."""
+    assert from_httpx(exc, "PUT", "/rest/orgs/201/tasks/1").not_sent is unsent
+
+
+def test_a_tls_error_after_the_connection_was_up_is_not_not_sent():
+    """Only the handshake is a connect failure; an SSL error mid-stream may follow a write."""
+    exc = httpx.ReadError("x")
+    exc.__cause__ = ssl.SSLError("record layer failure")
+    err = from_httpx(exc, "PUT", "/x")
+    assert err.code == "connection" and err.not_sent is False
+
+
+def test_not_sent_defaults_to_false_and_stays_out_of_mcp_output():
+    tls = httpx.ConnectError("x")
+    tls.__cause__ = ssl.SSLCertVerificationError("bad")
+    assert from_httpx(tls, "PUT", "/x").not_sent is True  # the handshake never completed
+    for status in (400, 403, 404, 409, 500, 503):
+        assert from_status(status, "PUT", "/x").not_sent is False
+    err = SoarError("x", not_sent=True)
+    assert "not_sent" not in err.to_dict() and "not_sent" not in err.log_fields()
+
+
 def test_tls_failure_detected_through_cause_and_context_chains():
     exc = httpx.ConnectError("tls", request=_request())
     exc.__cause__ = ssl.SSLCertVerificationError(1, "CERTIFICATE_VERIFY_FAILED")

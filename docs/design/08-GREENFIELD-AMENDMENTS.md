@@ -6,12 +6,13 @@ conflicts with `00-` to `07-`, this document wins *for that point only*. It
 does not license any other redesign; anything not listed here is governed by
 `00-` to `07-` unchanged.
 
-`00-` to `07-` are the baseline and are not edited, with five recorded
+`00-` to `07-` are the baseline and are not edited, with six recorded
 exceptions: before first publication the private lab topology was replaced by
 generic placeholders (§17), P2-00 added a status pointer to `05` (§20),
 P1-CORR-01 added an implementation-status note to `05` (§21), P2-TLS added
-the TLS trust model to `02` as §7.1 (§22), and P2-00b added a research-status
-note to `05` (§23).
+the TLS trust model to `02` as §7.1 (§22), P2-00b added a research-status
+note to `05` (§23), and P1-CORR-02 added an implementation-status note to
+`05` (§24).
 
 ---
 
@@ -108,7 +109,7 @@ behaviour".
 | `soar_update_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | `GET` + `PATCH /incidents/{id}` |
 | `soar_assign_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | `GET` + `PATCH /incidents/{id}` |
 | `soar_close_incident` | 2 | `SOAR_ALLOW_INCIDENT_CLOSE` | `GET` + `PATCH /incidents/{id}` |
-| `soar_update_task_status` | 2 | `SOAR_ALLOW_TASK_WRITES` | none: disabled, every call is refused as `DENY_UNSUPPORTED` until the verified `PUT /tasks/{id}` has a verified body (§21) |
+| `soar_update_task_status` | 2 | `SOAR_ALLOW_TASK_WRITES` | `GET` + `PUT` + `GET /tasks/{id}` (§24) |
 | `soar_invoke_action` | per policy (1–5) | `SOAR_ALLOW_ACTIONS` (+ `SOAR_ALLOW_DESTRUCTIVE_ACTIONS` when the rule is destructive) | none: every call is refused as `DENY_UNSUPPORTED`; the invocation contract is unverified (§21) |
 
 **Explicitly not in Phase 1:** `soar_ping`, `soar_security_status`, data-table
@@ -124,7 +125,7 @@ DEFERRED-P2 (see §9).
 
 Only these calls may appear in `client/` (all under `/rest/orgs/{org_id}`
 unless absolute; every request carries `handle_format=names` and
-`text_content_output_format=always_text`):
+`text_content_output_format=always_text`, except the two single-task calls, §24):
 
 | Method | Path | Notes |
 |---|---|---|
@@ -134,15 +135,16 @@ unless absolute; every request carries `handle_format=names` and
 | POST | `incidents` | `discovered_date` required |
 | PATCH | `incidents/{id}` | PatchDTO `{version, changes: [{field: {name}, old_value: {object}, new_value: {object}}]}`; `success:false` raises |
 | GET | `incidents/{id}/tasks` | |
+| GET | `tasks/{id}` | §24: `handle_format: ids` and `text_content_output_format: objects_convert` as headers, no query string |
+| PUT | `tasks/{id}` | §24: the same two headers; the body is the whole object that `GET` returned with `status` as the only change; a StatusDTO answer; sent once, and any outcome that is not an explicit refusal is settled by the verifying `GET`. The only `PUT` there is |
 | GET / POST | `incidents/{id}/artifacts` | |
 | GET / POST | `incidents/{id}/comments` | `{"text": {"format": "text", "content": ...}}` |
 | GET | `incidents/{id}/attachments` | metadata only; contents endpoint is ⚠️ and not used |
 | GET | `users` | |
 | GET | `types/incident/fields` | field definitions incl. `prefix: properties` for custom fields |
 
-Precedence over any prior implementation: nothing is sent to a single task —
-the verified method is `PUT /tasks/{id}`, not `PATCH`, but its body is
-unverified, so task updates are disabled (§21); `query_paged` sends
+Precedence over any prior implementation: a task's status is changed with the
+verified `PUT /tasks/{id}`, never `PATCH`, and only as §24 describes; `query_paged` sends
 `return_level=normal`; manual actions come from the `actions` list the
 incident object carries, and nothing is invoked (§21);
 reachability (`--check` and `ping`) uses `query_paged`. `/types`, `/functions`,
@@ -379,8 +381,8 @@ Still open, and not guessed: the `PUT /tasks/{task_id}` request body, and what,
 if anything, protects a task against a concurrent edit; the entry shape of the
 carried `actions` lists; the invocation contract; `return_level` (not in this
 ticket). See `docs/open-questions.md`. *(The request body has since been verified
-by `P2-00b`: §23. Everything this section disables stays disabled until the
-implementation ticket named there.)*
+by `P2-00b`: §23. `P1-CORR-02` then implemented it and re-enabled
+`soar_update_task_status`: §24. `soar_invoke_action` stays disabled.)*
 
 This ticket's only edit to the baseline is one implementation-status note in
 `05`, under the P2-00 note.
@@ -453,7 +455,8 @@ record is `docs/soar-api-verified.md §3.1`.
 | The task tree | `GET /incidents/{id}/tasktree` is what the web UI reads, and the first experiment used it. It is **not in the appliance's reference or its Swagger description**: UI-internal and undocumented. It stays out of §4 and out of `client/`; the rule "no invented APIs" covers it. |
 | Limits | One custom task, one version, one API-key configuration; no conflict (`409`) was ever seen; closing the last required task of a phase was not tested; an early discrepancy in the task's `perms` map was never explained. |
 
-**What this changes here.** Nothing yet. §4 still has no single-task call, `client/` still
+**What this changes here.** Nothing yet *(at the time of this section; the ticket named
+below has since landed, §24)*. §4 still has no single-task call, `client/` still
 has no `PUT`, and `soar_update_task_status` still refuses with `DENY_UNSUPPORTED` exactly
 as §21 describes. Implementing the verified contract is the separate ticket
 **`P1-CORR-02`** (`docs/soar-api-verified.md §8`, `docs/open-questions.md` D7). That
@@ -465,3 +468,111 @@ about what a deployment should grant.
 
 This ticket's only edit to the baseline is one research-status note in `05`, under the
 P1-CORR-01 note (the fifth exception).
+
+## 24. P1-CORR-02 — the verified task-status contract, implemented
+
+Assigned by the owner on 2026-09-21 (`docs/open-questions.md` D7). This section amends
+the `soar_update_task_status` row of §3 and adds two rows to §4. It implements what
+`docs/soar-api-verified.md §3.1` verified on QRadar SOAR `51.0.9.0.20848` and nothing
+wider; where that record is silent, the tool refuses rather than guesses.
+
+**The sequence** (`client/tasks.py`, `TasksClient.set_status`):
+
+1. `GET /tasks/{task_id}`, with `handle_format: ids` and
+   `text_content_output_format: objects_convert` **as headers and no query string** — the
+   form the contract was verified in. (Every other call keeps the two Phase-1 query
+   parameters.)
+2. Deep-copy the object and set `status` (`O` or `C`). Nothing else is touched: no key
+   is dropped, added or normalised, `task_layout` goes back as it came, `closed_date` is
+   passed through as read, and no version field is sent because none was observed.
+3. `PUT /tasks/{task_id}` with that object and the same two headers, **once**. It is
+   never sent again and there is no alternate body. Its outcome is one of three:
+   - **not sent** — reliable local evidence that the request never left this process:
+     the client refused to send it, or no connection was established (connection refused,
+     TLS handshake failure, connect timeout, no pooled connection). The error is returned
+     as it is; there is nothing to read back. A failure *after* a connection existed
+     (write or read timeout, write or read error, protocol error) is never counted here.
+   - **rejected** — SOAR's own application-level refusal: HTTP 200 with a StatusDTO whose
+     `success` is `false`, the documented answer type of this call saying no. The
+     rejection is returned and nothing is read back.
+   - **accepted** — a StatusDTO with `success: true`.
+   - **ambiguous** — everything else once the request may have reached SOAR: an HTTP-200
+     answer that is not JSON, not an object, or carries no boolean `success`; an oversized
+     answer; **any HTTP error status, 4xx as much as 5xx**; a timeout; a dropped
+     connection. None of these says whether SOAR processed the request, so none of them is
+     reported as it is.
+
+   No HTTP status is treated as proof that the task was left alone, because the record
+   for `51.0.9.0.20848` gives no basis for one. The reference lists 400, 401, 403, 404,
+   409, 500 and 503 for `PUT /tasks/{task_id}`, the same boilerplate list it gives for
+   the `GET`, with no meaning attached; 422 and 429 are not listed. The only error
+   statuses seen live (403, 404, 500) answered reads and one export `POST`, all with the
+   same generic error object, and of that 403 the record itself says it proves nothing
+   about side effects (`docs/soar-api-verified.md` Q2). No refused task `PUT` was ever
+   observed. "4xx means nothing happened" is an HTTP convention, not appliance evidence.
+   What SOAR answered is not lost: the message names the status (`HTTP 403`), as a status
+   and never under this server's name for it, so a 409 is not presented as a detected
+   conflict.
+4. For *accepted* and *ambiguous* alike, `GET /tasks/{task_id}` again, exactly once, and
+   that read alone decides. If the task shows the requested status the call succeeds
+   (after an ambiguous answer the audit record says `unconfirmed (<why>)` instead of
+   `success`, so it is visible that the read-back, not SOAR's answer, established the
+   change). If it shows another status, or cannot be read back, the call fails as
+   `unverified_write` (a new error class beside the existing ones; it is deliberately not
+   `conflict`, because nothing here detects a concurrent edit). The message names the
+   transition and says either that the write was accepted or that it was sent and SOAR's
+   answer did not establish its result, and never that the task is unchanged.
+
+This is a read-back, not a transaction: the appliance offers none, and a task that reads
+unchanged after an ambiguous answer is reported as unverified, not as untouched. In the
+audit log an `unverified_write` is `MUTATION_FAILED` like any other tool error, without
+pre/post images; the message carries the requested transition (`O -> C`). The unusable
+answer itself goes to the redacting log only, scrubbed, and never to MCP output or the
+audit log.
+
+**Refused before any `PUT`**, each as an ordinary tool error after `MUTATION_PENDING`,
+like every other Tier-2 validation failure: a status other than `open` / `closed`
+(nothing is sent, not even the read); a task that does not exist; a task whose `inc_id`
+is not the given `incident_id`, also reported as `not_found` (the pair does not exist),
+so an incident id cannot be paired with an unrelated task; a task already in the
+requested status (only O → C and C → O were verified); a task that does not report
+`active: true` and `frozen: false` (the contract was verified on an active, unfrozen
+task). The last two are conservative choices of this ticket, not appliance behaviour,
+and are the owner's to relax.
+
+**Security model: unchanged.** The tool is Tier 2 behind `SOAR_ALLOW_TASK_WRITES`, one
+mutation per call, no approval step (Tier 2 has none), declared with `@soar_tool` and
+executed only by `run_pipeline`: flag, configuration, tier, transport, kill switch,
+breaker, mutation cap, `MUTATION_PENDING` before any SOAR traffic, the hourly Tier-2
+limit, then exactly one of `MUTATION_COMMITTED` / `MUTATION_FAILED`, then redaction.
+Only the `unsupported=` declaration was removed from this one tool; `enforce()`, the
+denial order and the `unsupported` mechanism are untouched, and `soar_invoke_action`
+still uses it. The audit images are a fixed six-field projection (`id`, `inc_id`,
+`status`, `closed_date`, `active`, `frozen`), not the 41-key object; the response is the
+existing task projection.
+
+**`PUT` in `client/`.** `SoarClient.put` exists as transport support for this one call.
+`request()` refuses `PUT` for any path other than this org's `tasks/{id}` and in any
+form but the verified one (the two headers, no query string), the format headers accept
+exactly the two verified name/value pairs, and the AST tests allow `PUT` for
+`tasks/{id}` only and `.put` in `client/tasks.py` only. No tool exposes a method, a path
+or a body to the MCP caller. There is still no `DELETE`.
+
+**Not claimed.** Any SOAR version other than `51.0.9.0.20848`. **Any protection against
+a concurrent edit:** no version field was observed on a task and no conflict was ever
+seen, so
+a change made by someone else between the read and the write can be overwritten; the
+read and the write are adjacent, which narrows that window and does not close it. What
+closing the last required task of a phase does. Which SOAR permission is the minimum:
+the key needs the appliance's task-edit capability; a refusal by SOAR is read back like
+any other error answer and, with the task unchanged, reported as `unverified_write`
+naming the status; and the tool never assumes an administrator key.
+
+**Evidence for this ticket is offline only.** No request was sent to an appliance; the
+live evidence is `P2-00b`'s (§23). The offline fake models §3.1 and is deliberately
+stricter: it refuses any body that is not the `GET` object with `status` as the only
+difference (so a reduced body, an invented version or a client-made `closed_date` cannot
+pass), owns `closed_date`, and models no conflict, permission or phase behaviour.
+
+This ticket's only edit to the baseline is one implementation-status note in `05`, under
+the P2-00b note (the sixth exception).

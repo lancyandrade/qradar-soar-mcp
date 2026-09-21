@@ -1,19 +1,20 @@
-"""P1-CORR-01: Phase 1 reconciled with the verified QRadar SOAR 51.0.9 API.
+"""P1-CORR-01 and P1-CORR-02: Phase 1 reconciled with the verified QRadar SOAR 51.0.9 API.
 
-``docs/soar-api-verified.md`` §3 recorded four discrepancies (D1-D4); 08 §21
-records the correction. These tests pin each one through the real pipeline:
+``docs/soar-api-verified.md`` §3 recorded four discrepancies (D1-D4); 08 §21 and
+§24 record the corrections. These tests pin each one through the real pipeline:
 
-* D1 - the method/path is corrected from the invalid ``PATCH`` to the verified
-  ``PUT /tasks/{id}``, but its request body is unverified, so task mutation is
-  disabled: ``soar_update_task_status`` stays registered and is refused, and no
-  GET, PUT or PATCH is ever sent to a task;
+* D1 - task status is changed with the verified ``PUT /tasks/{id}``, never the
+  invalid ``PATCH``. P1-CORR-01 disabled the tool while the ``PUT`` body was
+  unverified; P2-00b verified it and P1-CORR-02 implements exactly that contract
+  (its own suite is ``test_task_status_update.py``). Here: the task write surface
+  is that one call and nothing else, and no other tool touches a single task;
 * D2 - no task version is required or invented anywhere;
 * D3 - manual actions come from the list the incident object carries, and a
   malformed list fails closed without any other route being tried;
-* D4 - invocation is refused the same way, with its tier, flag and approval
-  contract intact.
+* D4 - invocation is still refused, with its tier, flag and approval contract
+  intact: its contract is unverified.
 
-Both refusals are ordinary ``enforce()`` denials (``DENY_UNSUPPORTED``): audited
+The refusal is an ordinary ``enforce()`` denial (``DENY_UNSUPPORTED``): audited
 as ``DECISION_DENIED``, never ``MUTATION_PENDING``, no approval requested or
 consumed, nothing sent to SOAR.
 """
@@ -34,7 +35,6 @@ from qradar_soar_mcp.errors import SoarUnsupportedError
 from qradar_soar_mcp.security.tiers import Tier
 from qradar_soar_mcp.tools import TOOL_REGISTRY, Runtime, run_pipeline
 from qradar_soar_mcp.tools.actions import INVOCATION_UNVERIFIED
-from qradar_soar_mcp.tools.investigation import TASK_UPDATE_UNVERIFIED
 from tests.conftest import SENTINEL
 from tests.fake_soar import BASE_URL, FakeSoar
 from tests.test_permission_matrix import MINIMAL_ARGS
@@ -44,14 +44,14 @@ pytestmark = pytest.mark.contract
 
 PKG = Path(qradar_soar_mcp.__file__).parent
 ORG = "/rest/orgs/201"
-TASK_ARGS = {"incident_id": 42, "task_id": 9001, "status": "closed"}
-UNSUPPORTED = {
-    "soar_update_task_status": TASK_UPDATE_UNVERIFIED,
-    "soar_invoke_action": INVOCATION_UNVERIFIED,
-}
+TASK_TOOL = "soar_update_task_status"
+UNSUPPORTED = {"soar_invoke_action": INVOCATION_UNVERIFIED}
 # Calls no tool may make on this API profile; None = any method.
 FORBIDDEN: tuple[tuple[str | None, re.Pattern[str]], ...] = (
-    (None, re.compile(r"/tasks/\d+")),  # no GET, PUT or PATCH to a single task (D1)
+    ("PATCH", re.compile(r"/tasks/\d+")),  # D1: the Phase-1 assumption, not on 51.0.9
+    ("POST", re.compile(r"/tasks/\d+")),
+    ("DELETE", re.compile(r".*")),
+    (None, re.compile(r"/tasktree")),  # UI-internal and undocumented (08 §23)
     ("GET", re.compile(r"/incidents/\d+/actions$")),  # D3
     (None, re.compile(r"/action_invocations")),  # D4
 )
@@ -81,12 +81,12 @@ def _forbidden(fake: FakeSoar) -> list[tuple[str, str]]:
     ]
 
 
-# --------------------------------------------------- D1 / D4: kept, and refused
+# ------------------------------------ D1 enabled (P1-CORR-02); D4 kept, and refused
 
 
 def test_the_catalog_keeps_both_tools_with_their_security_contract():
     assert len(TOOL_REGISTRY) == 20
-    task, invoke = (TOOL_REGISTRY[name] for name in UNSUPPORTED)
+    task, invoke = TOOL_REGISTRY[TASK_TOOL], TOOL_REGISTRY["soar_invoke_action"]
     assert task.tier is Tier.MODIFICATION and task.capability == "SOAR_ALLOW_TASK_WRITES"
     assert invoke.tier is Tier.CONTROL and invoke.capability == "SOAR_ALLOW_ACTIONS"
     assert invoke.needs_approval_arg and invoke.describe is not None
@@ -107,13 +107,9 @@ async def test_refusal_is_a_deterministic_audited_denial(fake: FakeSoar, tmp_pat
     )
     assert rt.usable, rt.config_error
     spec = TOOL_REGISTRY[tool]
-    variants: list[dict[str, Any]] = (
-        [TASK_ARGS, {**TASK_ARGS, "status": "open"}, {**TASK_ARGS, "task_id": 1, "incident_id": 7}]
-        if tool == "soar_update_task_status"
-        else [
-            {"incident_id": i, "action_id": a} for i, a in ((42, 47), (42, 49), (42, 999), (7, 1))
-        ]
-    )
+    variants: list[dict[str, Any]] = [
+        {"incident_id": i, "action_id": a} for i, a in ((42, 47), (42, 49), (42, 999), (7, 1))
+    ]
     outs = [await run_pipeline(spec, rt, dict(args)) for args in variants]
     assert all(out["ok"] is False for out in outs)
     assert {json.dumps(out["error"], sort_keys=True) for out in outs} == {
@@ -136,8 +132,8 @@ async def test_refusal_is_a_deterministic_audited_denial(fake: FakeSoar, tmp_pat
         ("flag_off", "soar_update_task_status", "DENY_DISABLED"),
         ("flag_off", "soar_invoke_action", "DENY_DISABLED"),
         ("http", "soar_invoke_action", "DENY_TRANSPORT"),
-        ("http", "soar_update_task_status", "DENY_UNSUPPORTED"),
-        ("kill_switch", "soar_update_task_status", "DENY_UNSUPPORTED"),
+        ("kill_switch", "soar_update_task_status", "DENY_KILL_SWITCH"),
+        ("kill_switch", "soar_invoke_action", "DENY_UNSUPPORTED"),
     ],
 )
 async def test_the_earlier_gates_still_come_first(
@@ -179,36 +175,74 @@ async def test_the_tool_body_refuses_too_if_ever_reached(fake: FakeSoar, tmp_pat
     await rt.aclose()
 
 
-def test_no_task_mutation_payload_exists_in_production_code():
-    """D1/D2: nothing in src/ builds, names or sends a task change of any shape."""
+def _code_strings(tree: ast.AST) -> set[str]:
+    """Every string constant outside docstrings."""
+    scopes = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+    docstrings = {
+        id(node.body[0].value)
+        for node in ast.walk(tree)
+        if isinstance(node, scopes) and node.body and isinstance(node.body[0], ast.Expr)
+    }
+    return {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        if id(node) not in docstrings
+    }
+
+
+def test_the_task_write_surface_is_exactly_the_verified_call():
+    """D1/D2 after P1-CORR-02: one PUT, to one task, built from the GET and nothing else."""
     tasks_client = (PKG / "client" / "tasks.py").read_text(encoding="utf-8")
     tree = ast.parse(tasks_client)
     assert [
         n.name
         for n in ast.walk(tree)
         if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef) and not n.name.startswith("_")
-    ] == ["list"]
-    for node in ast.walk(tree):  # outside docstrings, no verb but GET and no payload
-        if isinstance(node, ast.Attribute):
-            assert node.attr not in {"put", "patch", "patch_object", "post", "request"}, node.attr
-        if isinstance(node, ast.keyword):
-            assert node.arg != "json_body"
+    ] == ["list", "get", "set_status"]
+    attrs = [n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)]
+    assert attrs.count("put") == 1  # a single write, never retried with another body
+    assert not {"patch", "patch_object", "post", "request"} & set(attrs)
+    assert [n.arg for n in ast.walk(tree) if isinstance(n, ast.keyword)].count("json_body") == 1
+    # The body is a deep copy with one assignment; the client names no other task field
+    # it could set: no version, no closed_date, no task_layout.
+    assert "deepcopy" in attrs
+    stores = [
+        n.slice.value
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Subscript)
+        and isinstance(n.ctx, ast.Store)
+        and isinstance(n.slice, ast.Constant)
+    ]
+    assert stores == ["status"]
+    assert not {"update", "pop", "popitem", "setdefault", "clear"} & set(attrs)
+    assert not any(isinstance(n, ast.Delete) for n in ast.walk(tree))
+    strings = _code_strings(tree)
+    assert not {"vers", "version", "closed_date", "task_layout"} & strings
+    assert not any("tasktree" in text for text in strings)
+    # PUT is reachable from that one place: nothing else in the package calls or defines it.
     for path in sorted(PKG.rglob("*.py")):
         source = ast.parse(path.read_text(encoding="utf-8"))
+        where = path.relative_to(PKG).as_posix()
         for node in ast.walk(source):
-            if isinstance(node, ast.Attribute):
-                assert node.attr not in {"set_status", "put"}, f"{path.name}: .{node.attr}"
-            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-                assert node.name not in {"set_status", "put"}, f"{path.name}: def {node.name}"
-    # The task tool's body is a refusal and nothing else: it never asks for the client.
+            if isinstance(node, ast.Attribute) and node.attr == "put":
+                assert where == "client/tasks.py", f"{where}: .put"
+            if isinstance(node, ast.Attribute) and node.attr == "set_status":
+                assert where == "tools/investigation.py", f"{where}: .set_status"
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == "put":
+                assert where == "client/base.py", f"{where}: def put"
+    # The tool reaches the client through that one method, inside its @soar_tool body.
     tool_source = ast.parse((PKG / "tools" / "investigation.py").read_text(encoding="utf-8"))
     body = next(
         n
         for n in ast.walk(tool_source)
-        if isinstance(n, ast.AsyncFunctionDef) and n.name == "soar_update_task_status"
+        if isinstance(n, ast.AsyncFunctionDef) and n.name == TASK_TOOL
     )
-    statements = [s for s in body.body if not isinstance(s, ast.Expr)]  # drop the docstring
-    assert len(statements) == 1 and isinstance(statements[0], ast.Raise)
+    awaited = [n for n in ast.walk(body) if isinstance(n, ast.Await)]
+    assert len(awaited) == 1
+    call = awaited[0].value
+    assert isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+    assert call.func.attr == "set_status"
 
 
 # ------------------------------------------------------------- D3 discovery
@@ -256,12 +290,25 @@ async def test_no_tool_reaches_a_forbidden_call_even_with_everything_enabled(tmp
     fake = FakeSoar()
     with respx.mock(base_url=BASE_URL, assert_all_called=False, assert_all_mocked=True) as router:
         router.route().mock(side_effect=fake.handler)
+        by_tool: dict[str, list[tuple[str, str]]] = {}
         for name, spec in sorted(TOOL_REGISTRY.items()):
+            seen = len(fake.requests)
             out = await run_pipeline(spec, rt, dict(MINIMAL_ARGS[name]))
             expected = "DENY_UNSUPPORTED" if name in UNSUPPORTED else None
             assert (out.get("error") or {}).get("code") == expected, (name, out)
+            by_tool[name] = [(r.method, r.path.removeprefix(ORG)) for r in fake.requests[seen:]]
         await rt.aclose()
     assert _forbidden(fake) == []
-    assert {r.method for r in fake.requests} <= {"GET", "POST", "PATCH"}  # never PUT
-    assert not any("/tasks/" in r.path for r in fake.requests)
-    assert fake.tasks[9001]["status"] == "O"
+    assert {r.method for r in fake.requests} <= {"GET", "POST", "PATCH", "PUT"}
+    # A single task is touched by one tool only, with the verified sequence, and PUT goes
+    # nowhere else.
+    single_task = re.compile(r"/tasks/\d+$")
+    assert by_tool.pop(TASK_TOOL) == [
+        ("GET", "/tasks/9001"),
+        ("PUT", "/tasks/9001"),
+        ("GET", "/tasks/9001"),
+    ]
+    for name, calls in by_tool.items():
+        assert not [c for c in calls if c[0] == "PUT" or single_task.search(c[1])], name
+    assert by_tool["soar_invoke_action"] == []
+    assert fake.tasks[9001]["status"] == "C" and fake.tasks[9002]["status"] == "C"

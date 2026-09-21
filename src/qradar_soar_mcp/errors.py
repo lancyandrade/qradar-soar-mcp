@@ -45,11 +45,17 @@ class SoarError(Exception):
         *,
         status: int | None = None,
         detail: str | None = None,
+        not_sent: bool = False,
     ) -> None:
         super().__init__(safe_message)
         self.safe_message = safe_message
         self.status = status
         self.detail = detail[:_MAX_DETAIL] if detail else None
+        # True only on reliable evidence that the request never left this process: the
+        # client refused to send it, or no connection was established. Never inferred, and
+        # never a synonym for "failed early": anything after the first request byte may
+        # have been written (write/read timeouts and errors, protocol errors) is False.
+        self.not_sent = not_sent
 
     def __str__(self) -> str:
         return self.safe_message
@@ -126,6 +132,18 @@ class SoarPatchRejectedError(SoarConflictError):
                 str(f.get("field")) for f in self.field_failures if isinstance(f, dict)
             ]
         return out
+
+
+class SoarUnverifiedWriteError(SoarError):
+    """A write was sent, and reading the object back did not confirm it (08 §24).
+
+    Either SOAR accepted it, or its answer did not establish whether it did; the
+    object may or may not have changed. Not a conflict: nothing here detects a
+    concurrent edit. The caller reads the object again before deciding anything.
+    """
+
+    code = "unverified_write"
+    failure_class = "Unverified write"
 
 
 class SoarValidationError(SoarError):
@@ -277,12 +295,19 @@ def from_httpx(exc: httpx.HTTPError, method: str, path: str) -> SoarError:
     where = _where(method, path)
     detail = type(exc).__name__
     if isinstance(exc, httpx.TimeoutException):
-        return SoarTimeoutError(f"Timeout waiting for SOAR on {where}", detail=detail)
+        # No connection was obtained, so nothing was sent; any other timeout is unknown.
+        unsent = isinstance(exc, httpx.ConnectTimeout | httpx.PoolTimeout)
+        return SoarTimeoutError(
+            f"Timeout waiting for SOAR on {where}", detail=detail, not_sent=unsent
+        )
     if isinstance(exc, httpx.ConnectError):
+        # The connection (TLS handshake included) was never established: nothing was sent.
         cause = _tls_cause(exc)
         if cause is not None:
             return _tls_error(cause, where, detail)
-        return SoarConnectionError(f"Could not connect to SOAR for {where}", detail=detail)
+        return SoarConnectionError(
+            f"Could not connect to SOAR for {where}", detail=detail, not_sent=True
+        )
     if isinstance(exc, httpx.RemoteProtocolError | httpx.ReadError | httpx.WriteError):
         return SoarConnectionError(f"Connection to SOAR dropped during {where}", detail=detail)
     if isinstance(exc, httpx.DecodingError):
@@ -301,6 +326,7 @@ def _tls_error(cause: ssl.SSLError, where: str, detail: str) -> SoarTLSError:
             f"TLS failure connecting to SOAR for {where} "
             "(check SOAR_CA_BUNDLE, or the certificate on the appliance)",
             detail=detail,
+            not_sent=True,
         )
     code = getattr(cause, "verify_code", None)
     code = code if isinstance(code, int) and not isinstance(code, bool) else None
@@ -315,6 +341,7 @@ def _tls_error(cause: ssl.SSLError, where: str, detail: str) -> SoarTLSError:
     return SoarTLSError(
         f"TLS certificate verification failed for {where}: {_TLS_ADVICE[category]}",
         detail=f"{detail}; verify_code={code}; category={category}",
+        not_sent=True,
     )
 
 

@@ -233,11 +233,49 @@ async def test_tasks_list(client: SoarClient, fake: FakeSoar):
         await client.tasks.list(42)
 
 
-async def test_the_task_client_cannot_change_a_task(client: SoarClient, fake: FakeSoar):
-    """P1-CORR-01 D1: the verified PUT's body is unverified, so nothing is sent to a task."""
-    assert [name for name in vars(type(client.tasks)) if not name.startswith("_")] == ["list"]
+async def test_the_task_client_surface(client: SoarClient, fake: FakeSoar):
+    """P1-CORR-02: list, one read, and the verified status change; nothing else."""
+    assert [name for name in vars(type(client.tasks)) if not name.startswith("_")] == [
+        "list",
+        "get",
+        "set_status",
+    ]
     await client.tasks.list(42)
     assert _calls(fake) == [("GET", "/incidents/42/tasks")]
+
+
+async def test_task_get_uses_the_verified_representation(client: SoarClient, fake: FakeSoar):
+    task = await client.tasks.get(9001)
+    assert task == fake.task_objects[9001] and len(task) == 41 and "vers" not in task
+    rec = fake.requests[-1]
+    assert rec.params == {}  # the two controls travel as headers, as verified
+    assert rec.headers["handle_format"] == "ids"
+    assert rec.headers["text_content_output_format"] == "objects_convert"
+    with pytest.raises(SoarNotFoundError):
+        await client.tasks.get(1)
+    for body in ([], {"id": 9002}, {"status": "O"}):
+        fake.fault("GET", r"/tasks/9001$", status=200, body=body)
+        with pytest.raises(SoarMalformedResponseError):
+            await client.tasks.get(9001)
+
+
+async def test_task_set_status(client: SoarClient, fake: FakeSoar):
+    before = dict(fake.task_objects[9001])
+    out = await client.tasks.set_status(42, 9001, "closed")
+    assert out.changes == {"status": ("O", "C")}
+    assert out.pre_image == before and out.pre_image["closed_date"] is None
+    assert out.post_image["status"] == "C" and out.post_image["closed_date"] is not None
+    assert _calls(fake) == [("GET", "/tasks/9001"), ("PUT", "/tasks/9001"), ("GET", "/tasks/9001")]
+    assert fake.requests[1].json == {**before, "status": "C"}
+    n = len(fake.requests)
+    with pytest.raises(SoarValidationError):
+        await client.tasks.set_status(42, 9001, "C")  # the API code is not the tool's value
+    assert len(fake.requests) == n
+    with pytest.raises(SoarValidationError, match="already closed"):
+        await client.tasks.set_status(42, 9001, "closed")
+    with pytest.raises(SoarNotFoundError):
+        await client.tasks.set_status(42, 9101, "closed")  # a task of incident 43
+    assert [r.method for r in fake.requests[n:]] == ["GET", "GET"]
 
 
 # ------------------------------------------------------ comments / artifacts

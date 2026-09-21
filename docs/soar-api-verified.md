@@ -316,12 +316,14 @@ separate ticket `P1-CORR-01` (§8) and must wait for this report to be reviewed.
 
 | # | Phase-1 assumption (`05 §1`, `08 §4`) | Evidence on 51.0.9.0.20848 | Consequence today |
 |---|---|---|---|
-| D1 | Task status is changed with `PATCH /tasks/{id}` ("PATCH, not PUT") | 📄 The reference documents `GET`, `PUT` and `DELETE` on `/tasks/{task_id}`; **no `PATCH`**. It does document `PATCH` for incidents, so the omission is not a gap in the reference. ✅ **`P2-00b` verified the `PUT` contract live: §3.1.** | `soar_update_task_status` stays disabled until the verified contract is implemented (`P1-CORR-02`, §8). |
-| D2 | A task carries a version (`vers`) for optimistic concurrency | ✅ Neither the rows of `GET /incidents/{id}/tasks` nor `GET /tasks/{task_id}` contain `vers` or any version-like key (41 keys checked). | The client refuses to send a task change without a version, so the tool refuses every time. It fails closed. |
+| D1 | Task status is changed with `PATCH /tasks/{id}` ("PATCH, not PUT") | 📄 The reference documents `GET`, `PUT` and `DELETE` on `/tasks/{task_id}`; **no `PATCH`**. It does document `PATCH` for incidents, so the omission is not a gap in the reference. ✅ **`P2-00b` verified the `PUT` contract live: §3.1.** | `soar_update_task_status` implements exactly that contract (`P1-CORR-02`, §8; [`design/08-GREENFIELD-AMENDMENTS.md §24`](design/08-GREENFIELD-AMENDMENTS.md)). |
+| D2 | A task carries a version (`vers`) for optimistic concurrency | ✅ Neither the rows of `GET /incidents/{id}/tasks` nor `GET /tasks/{task_id}` contain `vers` or any version-like key (41 keys checked). | No version is required or sent (`P1-CORR-01`, `P1-CORR-02`). ❓ What protects a task against a concurrent edit is unknown (§3.1). |
 | D3 | `GET /incidents/{id}/actions` lists the manual actions of an incident | 🚫 **500** `Internal Server Error`, and the path is absent from the reference. | `soar_list_incident_actions` fails; `soar_invoke_action` cannot classify its target, so it refuses. It fails closed. |
 | D4 | `POST /incidents/{id}/action_invocations` with `{"action_id": N}` invokes an action | The path is absent from the reference. A **`GET` on it returns 200** `{entities: []}`, so the route exists; the `POST` and its body are unverified (a write). The incident, task and artifact objects each carry an `actions` list (empty for this key). | The invocation design needs re-verification before it can be relied on: where the list of available actions really comes from, and the exact invocation contract. |
 
 None of these weakens a control: each makes a tool fail, never succeed wrongly.
+(The right-hand column of D3 and D4 is the state `P2-00` found; `P1-CORR-01` has since
+changed the listing, see §8.)
 
 ### 3.1 Task status change — the verified contract (`P2-00b`, D1)
 
@@ -530,16 +532,16 @@ IP. See `P2-TLS` (§8).
 
 ---
 
-## 8. Proposed tickets (proposals only — not started)
+## 8. Proposed tickets (each carries its own status note)
 
 ### P1-CORR-01 — reconcile Phase-1 client semantics with the verified v51 API
 > **Status, 2026-09-19:** addressed for D1–D4 only, from this record alone; see
 > [`design/08-GREENFIELD-AMENDMENTS.md §21`](design/08-GREENFIELD-AMENDMENTS.md).
 > D2 and D3 are resolved. For D1 that ticket had the endpoint and method
 > (`PUT /tasks/{task_id}`) but not the request body, so it disabled the tool.
-> **`P2-00b` has since supplied the missing contract evidence (§3.1);** the tool stays
-> disabled until `P1-CORR-02` below implements it. D4 still fails closed. Of the live
-> checks below, (a) is answered by §3.1, (b) is open, (c) was out of scope.
+> **`P2-00b` has since supplied the missing contract evidence (§3.1), and `P1-CORR-02`
+> below implements it.** D4 still fails closed. Of the live checks below, (a) is answered
+> by §3.1, (b) is open, (c) was out of scope.
 
 **Separate from P2-00. Not to be implemented until this report is reviewed.**
 Scope: D1–D4 of §3. Establish, with a suitably scoped key in a disposable org,
@@ -584,9 +586,20 @@ expose function results (Q8); an org with a closed incident, notes and a
 workflow (the ❓ items of §3); the export contents, with a key that may export,
 in a disposable org (Q2).
 
-### P1-CORR-02 — implement the verified task-status contract (proposal — not started)
-**Separate from `P2-00b`, which changed no product code.** Re-enable
-`soar_update_task_status` on the contract of §3.1, and nothing wider:
+### P1-CORR-02 — implement the verified task-status contract
+> **Status, 2026-09-21:** implemented; see
+> [`design/08-GREENFIELD-AMENDMENTS.md §24`](design/08-GREENFIELD-AMENDMENTS.md).
+> `soar_update_task_status` sends the documented `GET /tasks/{task_id}`, deep-copied, with
+> `status` as the only change, to `PUT /tasks/{task_id}`, both with the two format
+> controls as headers and no query string, and then reads the task again. **It was
+> built and tested offline only**, against a synthetic model of §3.1; no request was
+> sent to an appliance for it, so §3.1 remains the whole of the live evidence. What §3.1
+> lists as limited or open is exactly as open as before: one custom task, one version,
+> one API-key configuration, and **no known protection against a concurrent edit**.
+
+The proposal as reviewed (kept for the record). **Separate from `P2-00b`, which changed
+no product code.** Re-enable `soar_update_task_status` on the contract of §3.1, and
+nothing wider:
 
 - read the task with the documented `GET /tasks/{task_id}`, immediately before the
   change, with `handle_format: ids` and `text_content_output_format: objects_convert`;

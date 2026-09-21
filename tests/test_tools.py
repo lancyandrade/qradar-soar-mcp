@@ -348,23 +348,25 @@ async def test_assign_and_close(rt: Runtime, fake: FakeSoar):
     assert out["error"]["code"] == "validation"
 
 
-async def test_update_task_status_is_refused_without_touching_soar(
-    rt: Runtime, fake: FakeSoar, tmp_path: Path
-):
-    """P1-CORR-01 D1: PUT /tasks/{id} is verified, its body is not, so nothing is sent."""
-    outs = [
-        await call(rt, "soar_update_task_status", incident_id=42, task_id=task_id, status=status)
-        for task_id, status in ((9001, "closed"), (9002, "open"), (1, "closed"))
-    ]
-    assert outs[0]["ok"] is False and outs[0]["error"]["code"] == "DENY_UNSUPPORTED"
-    assert "request body has not been verified" in outs[0]["error"]["message"]
-    assert all(out["error"] == outs[0]["error"] for out in outs)  # same for every target
-    assert fake.requests == []  # no GET, PUT or PATCH; not even a read
-    assert fake.tasks[9001]["status"] == "O" and fake.tasks[9002]["status"] == "C"
+async def test_update_task_status(rt: Runtime, fake: FakeSoar, tmp_path: Path, snapshot):
+    """P1-CORR-02: the verified GET -> PUT -> GET (the full suite is
+    test_task_status_update.py). The response is the task projection, never the raw DTO."""
+    data = await ok(rt, "soar_update_task_status", incident_id=42, task_id=9001, status="closed")
+    assert data == snapshot
+    assert [r.method for r in fake.requests] == ["GET", "PUT", "GET"]
+    assert fake.tasks[9001]["status"] == "C" and fake.tasks[9002]["status"] == "C"
+    listed = await ok(rt, "soar_list_tasks", incident_id=42)
+    assert [t["status_label"] for t in listed["tasks"]] == ["closed", "closed"]
+    data = await ok(rt, "soar_update_task_status", incident_id=42, task_id=9002, status="open")
+    assert data["changed"] == {"status": {"from": "C", "to": "O"}}
+    missing = await call(rt, "soar_update_task_status", incident_id=42, task_id=1, status="open")
+    assert missing["error"]["code"] == "not_found"
     records = audit_records(tmp_path)
-    assert [r["event"] for r in records] == ["DECISION_DENIED"] * 3  # never MUTATION_PENDING
-    assert records[0]["decision"] == "DENY_UNSUPPORTED" and records[0]["tier"] == 2
-    assert records[0]["tool"] == "soar_update_task_status"
+    assert [r["event"] for r in records] == ["MUTATION_PENDING", "MUTATION_COMMITTED"] * 2 + [
+        "MUTATION_PENDING",
+        "MUTATION_FAILED",
+    ]
+    assert records[0]["tool"] == "soar_update_task_status" and records[0]["tier"] == 2
     assert records[0]["target"] == {"incident_id": 42, "task_id": 9001}
 
 

@@ -135,6 +135,15 @@ def summarise_task(task: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+# What the audit log keeps of a task around a status change: identity and state, none of
+# the task's free text and nothing else of the full object the client sends back to SOAR.
+TASK_AUDIT_FIELDS: tuple[str, ...] = ("id", "inc_id", "status", "closed_date", "active", "frozen")
+
+
+def task_audit_image(task: Mapping[str, Any]) -> dict[str, Any]:
+    return {name: task.get(name) for name in TASK_AUDIT_FIELDS}
+
+
 def patch_changes(changes: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     """``{field: (old, new)}`` from the client → ``{field: {"from": old, "to": new}}``."""
     out: dict[str, dict[str, Any]] = {}

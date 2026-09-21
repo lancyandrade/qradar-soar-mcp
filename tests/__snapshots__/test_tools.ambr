@@ -859,3 +859,28 @@
     }),
   })
 # ---
+# name: test_update_task_status
+  dict({
+    'changed': dict({
+      'status': dict({
+        'from': 'O',
+        'to': 'C',
+      }),
+    }),
+    'incident_id': 42,
+    'task': dict({
+      'active': True,
+      'due_date': None,
+      'id': 9001,
+      'instructions': 'Call the user on a known-good number.',
+      'name': 'Confirm with user',
+      'owner_id': None,
+      'phase_id': 1001,
+      'required': True,
+      'status': 'C',
+      'status_label': 'closed',
+      'vers': None,
+    }),
+    'task_id': 9001,
+  })
+# ---
