@@ -39,6 +39,7 @@ from mcp_types import ToolAnnotations
 
 from qradar_soar_mcp.errors import SoarError
 from qradar_soar_mcp.logging import redact
+from qradar_soar_mcp.redaction import redact_strings
 from qradar_soar_mcp.security.approvals import APPROVAL_ARG, IN_BAND_DISCLAIMER
 from qradar_soar_mcp.security.audit import AuditError, new_request_id
 from qradar_soar_mcp.security.permissions import (
@@ -208,17 +209,7 @@ def _redacted(value: Any) -> Any:
     text that is no credential and can leave a document that no longer parses, and
     JSON escaping can hide a credential that holds a quote or a backslash.
     """
-    return _redact_strings(json.loads(json.dumps(value, default=str, ensure_ascii=False)))
-
-
-def _redact_strings(value: Any) -> Any:
-    if isinstance(value, str):
-        return redact(value)
-    if isinstance(value, list):
-        return [_redact_strings(item) for item in value]
-    if isinstance(value, dict):
-        return {redact(key): _redact_strings(item) for key, item in value.items()}
-    return value
+    return redact_strings(json.loads(json.dumps(value, default=str, ensure_ascii=False)), redact)
 
 
 def _audit(rt: Runtime, event: str, **fields: Any) -> None:

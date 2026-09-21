@@ -391,8 +391,8 @@ text, so an attacker cannot write into the approver's terminal.
 | Rate limits | `SOAR_MAX_TIER2_PER_HOUR` (25) and `SOAR_MAX_TIER3_PER_HOUR` (5); counters are rebuilt from the audit log so a restart does not reset them. |
 | Circuit breaker | 3 consecutive Tier ≥2 failures disable Tier ≥2 until restart. |
 | Kill switch | `touch $SOAR_KILL_SWITCH_FILE` stops all mutation immediately; reads continue. |
-| Audit log | Hash-chained append-only JSONL with pre/post images; denials logged too; `qradar-soar-audit verify`. |
-| Fail closed | Unwritable audit log ⇒ refuse to start; a mid-session write failure refuses the mutation before SOAR is called. |
+| Audit log | Hash-chained append-only JSONL with pre/post images; denials logged too; `qradar-soar-audit verify`. Each string and key of a record is redacted on its own, never the serialised JSON, and the hash is taken over the redacted record, which is exactly the line on disk. |
+| Fail closed | Unwritable audit log ⇒ refuse to start; a mid-session write failure refuses the mutation before SOAR is called. A record that cannot be redacted without losing a field (two keys equal after redaction) is not written either; when it is the record required before a mutation, the mutation is refused. |
 | Secret hygiene | `SecretStr`, a redacting log filter, sanitised errors, a startup self-test, `gitleaks` and a tree scanner in CI; a sentinel-leak test drives every tool through every failure class. |
 | HTTP transport | Refuses to start without `SOAR_HTTP_AUTH_TOKEN`; refuses `0.0.0.0` without `SOAR_HTTP_ACKNOWLEDGE_EXPOSURE`; Tier ≥3 is hard-disabled over HTTP regardless of flags. |
 
