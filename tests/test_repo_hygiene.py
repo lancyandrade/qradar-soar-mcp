@@ -91,10 +91,11 @@ def test_version_is_the_phase_one_milestone():
     assert qradar_soar_mcp.__version__ == pyproject["project"]["version"] == "0.2.0"
 
 
-@pytest.mark.parametrize("package", ["playbook", "catalog"])
+@pytest.mark.parametrize("package", ["playbook"])
 def test_future_phase_packages_hold_no_behaviour(package: str):
+    """``catalog/`` left this list with P2-01 (08 §25); ``playbook/`` is Phase 3."""
     files = sorted(p.name for p in (ROOT / "src" / "qradar_soar_mcp" / package).glob("*.py"))
-    assert files == ["__init__.py"], f"{package}/ must be empty in Phase 1: {files}"
+    assert files == ["__init__.py"], f"{package}/ must stay empty until its phase: {files}"
 
 
 @pytest.mark.parametrize("directory", ["tests", "docs", "examples", "config"])

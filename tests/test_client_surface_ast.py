@@ -1,4 +1,5 @@
-"""P1-04 / 08 §4: client/ may only call the Phase-1 known-good REST surface.
+"""P1-04 / 08 §4: client/ may only call the known-good REST surface: Phase 1, plus the
+read-only discovery calls of P2-01 (08 §25), which live in ``discovery.py`` and nowhere else.
 
 Enforced by AST inspection:
 
@@ -13,7 +14,10 @@ Enforced by AST inspection:
 * a single task is reached by exactly the two verified calls, ``GET`` and ``PUT
   /tasks/{id}``, from the task client only;
 * no client module defines or calls DELETE, HEAD or OPTIONS, and ``put`` is defined
-  once, in ``base.py``.
+  once, in ``base.py``;
+* the discovery calls are exactly the reads the verified record lists, all ``GET`` but
+  the criteria-only playbook query; only ``discovery.py`` names a Phase-2 path; and the
+  configuration export, import, execution and single-object Phase-2 reads appear nowhere.
 """
 
 from __future__ import annotations
@@ -44,6 +48,29 @@ ALLOWED_CALLS = {
     ("GET", "users"),
     ("GET", "types/incident/fields"),
 }
+# 08 §25 (P2-01): the read-only collection calls of docs/soar-api-verified.md Q1, Q4, Q5
+# and §2, as the catalog's collections backend uses them. discovery.py only.
+DISCOVERY_MODULE = "discovery.py"
+DISCOVERY_CALLS = {
+    ("GET", "/rest/const"),
+    ("GET", "functions"),
+    ("GET", "functions/{id}"),
+    ("GET", "types/__function/fields"),
+    ("GET", "actions"),
+    ("GET", "workflows"),
+    ("GET", "scripts"),
+    ("GET", "message_destinations"),
+    ("GET", "incident_types"),
+    ("GET", "phases"),
+    ("GET", "groups"),
+    ("GET", "types"),
+    ("GET", "types/incident/fields"),
+    ("GET", "types/task/fields"),
+    ("GET", "types/artifact/fields"),
+    ("POST", "playbooks/query_paged"),
+}
+PHASE_ONE_CALLS = frozenset(ALLOWED_CALLS)
+ALLOWED_CALLS |= DISCOVERY_CALLS
 ALLOWED_ORG_SUFFIXES = {path for _, path in ALLOWED_CALLS if not path.startswith("/rest/")}
 ALLOWED_ABSOLUTE = {path for _, path in ALLOWED_CALLS if path.startswith("/rest/")}
 # Contradicted on 51.0.9.0.20848 (docs/soar-api-verified.md §3, D1/D3/D4).
@@ -101,11 +128,15 @@ def _is_http_receiver(node: ast.AST, module: str) -> bool:
     )
 
 
-def _calls() -> tuple[set[tuple[str, str]], list[str]]:
+def _calls(
+    only: str | None = None, skip: str | None = None
+) -> tuple[set[tuple[str, str]], list[str]]:
     """Every (method, path) the client sends, and the call sites it could not resolve."""
     pairs: set[tuple[str, str]] = set()
     unresolved: list[str] = []
     for path, tree in _modules():
+        if (only is not None and path.name != only) or path.name == skip:
+            continue
         for fn in ast.walk(tree):
             if not isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
@@ -250,12 +281,99 @@ def test_no_forbidden_http_verbs_anywhere_in_client():
 
 
 def test_no_phase_two_paths_or_words():
+    """Outside ``discovery.py`` the Phase-1 rule is unchanged."""
     banned = re.compile(
         r"table_data|/functions|/playbooks|/scripts|/workflows|rest/const|configurations|/contents|/history"
     )
     for path in sorted(CLIENT_DIR.glob("*.py")):
+        if path.name == DISCOVERY_MODULE:
+            continue
         text = path.read_text(encoding="utf-8")
         for lineno, line in enumerate(text.splitlines(), 1):
             if line.strip().startswith("#") or '"""' in line:
                 continue
             assert not banned.search(line), f"{path.name}:{lineno}: {line.strip()}"
+
+
+# ------------------------------------------------------------ P2-01 discovery
+def test_the_discovery_module_makes_exactly_the_verified_reads():
+    pairs, unresolved = _calls(only=DISCOVERY_MODULE)
+    assert unresolved == []
+    assert pairs == DISCOVERY_CALLS
+    assert {m for m, _ in pairs} == {"GET", "POST"}
+    assert {path for m, path in pairs if m == "POST"} == {"playbooks/query_paged"}
+
+
+def test_the_phase_one_modules_gained_no_call():
+    pairs, _ = _calls(skip=DISCOVERY_MODULE)
+    assert pairs == PHASE_ONE_CALLS
+
+
+def test_discovery_is_read_only_and_names_no_unverified_or_privileged_call():
+    text = (CLIENT_DIR / DISCOVERY_MODULE).read_text(encoding="utf-8")
+    tree = ast.parse(text)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in {"patch", "patch_object", "put", "request"}, node.attr
+    strings = [
+        n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+    ]
+    docstring = ast.get_docstring(tree) or ""
+    for literal in strings:
+        if literal.strip() == docstring.strip() or "\n" in literal:
+            continue  # prose
+        for word in (
+            "configurations",
+            "exports",
+            "imports",
+            "execution",
+            "tasktree",
+            "table_data",
+            "/contents",
+            "/history",
+            "apikeys",
+            "permissions",
+            "session",
+        ):
+            assert word not in literal, f"discovery.py names {word!r}: {literal!r}"
+    # The GET playbook collection answers 500 on this version: listing is the POST only.
+    pairs, _ = _calls(only=DISCOVERY_MODULE)
+    assert {(m, path) for m, path in pairs if path.startswith("playbooks")} == {
+        ("POST", "playbooks/query_paged")
+    }
+
+
+def test_the_playbook_query_body_is_built_in_the_client_from_two_integers():
+    """The one POST is criteria-only by construction: no caller-supplied body or filter."""
+    tree = ast.parse((CLIENT_DIR / DISCOVERY_MODULE).read_text(encoding="utf-8"))
+    posts = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "post"
+    ]
+    assert len(posts) == 1
+    body = next(k.value for k in posts[0].keywords if k.arg == "json_body")
+    assert isinstance(body, ast.Dict)
+    assert [k.value for k in body.keys if isinstance(k, ast.Constant)] == [
+        "filters",
+        "start",
+        "length",
+    ]
+    filters = body.values[0]
+    assert isinstance(filters, ast.List) and filters.elts == []
+    method = next(
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.AsyncFunctionDef) and n.name == "playbooks_page"
+    )
+    assert [a.arg for a in method.args.kwonlyargs] == ["start", "length"]
+    assert [a.arg for a in method.args.args] == ["self"]
+
+
+def test_no_discovery_method_takes_a_path_a_method_or_a_body():
+    tree = ast.parse((CLIENT_DIR / DISCOVERY_MODULE).read_text(encoding="utf-8"))
+    cls = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef))
+    for fn in cls.body:
+        if isinstance(fn, ast.AsyncFunctionDef):
+            names = {a.arg for a in (*fn.args.args, *fn.args.kwonlyargs)} - {"self"}
+            assert names <= {"function_id", "type_name", "start", "length"}, (fn.name, names)

@@ -263,6 +263,10 @@ def test_verify_ssl_bool_or_path(tmp_path: Path):
         ("SOAR_MAX_TIER2_PER_HOUR", "-1", "max_tier2_per_hour", 25),
         ("SOAR_MAX_TIER3_PER_HOUR", "lots", "max_tier3_per_hour", 5),
         ("SOAR_APPROVAL_TTL_SECONDS", "1", "approval_ttl_seconds", 900),
+        ("SOAR_CATALOG_TTL_SECONDS", "-1", "catalog_ttl_seconds", 300),
+        ("SOAR_CATALOG_TTL_SECONDS", "soon", "catalog_ttl_seconds", 300),
+        ("SOAR_CATALOG_TTL_SECONDS", "1.5", "catalog_ttl_seconds", 300),
+        ("SOAR_CATALOG_TTL_SECONDS", "999999", "catalog_ttl_seconds", 86_400),
         ("SOAR_MCP_PORT", "70000", "mcp_port", 65535),
         ("SOAR_ORG_ID", "two", "org_id", None),
         ("SOAR_ORG_ID", "0", "org_id", None),
@@ -299,6 +303,59 @@ def test_approval_mode_and_log_level_garbage():
     assert s.approval_mode == "out_of_band" and s.log_level == "INFO"
     assert len(s.warnings) == 2
     assert Settings.load({"SOAR_LOG_LEVEL": "debug"}).log_level == "DEBUG"
+
+
+# ---------------------------------------------------------------- catalog
+
+
+def test_the_catalog_defaults_are_collections_and_300_seconds():
+    """P2-01 (08 §25): P2-00 reversed 05 §2.1, so ``collections`` is the default source."""
+    s = Settings.load({})
+    assert s.catalog_source == "collections" and s.catalog_ttl_seconds == 300
+    assert s.warnings == ()
+    assert Settings.model_fields["catalog_source"].default == "collections"
+    assert Settings.model_fields["catalog_ttl_seconds"].default == 300
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("collections", "collections"),
+        ("COLLECTIONS", "collections"),
+        (" collections ", "collections"),
+        ("export", "export"),
+        ("Export", "export"),
+    ],
+)
+def test_an_explicit_catalog_source_is_honoured_without_a_warning(raw: str, expected: str):
+    s = Settings.load({"SOAR_CATALOG_SOURCE": raw})
+    assert s.catalog_source == expected and s.warnings == ()
+
+
+@pytest.mark.parametrize("raw", ["", "exports", "both", "export,collections", "auto", "0"])
+def test_an_invalid_catalog_source_fails_safe_to_collections_never_to_export(raw: str):
+    s = Settings.load({"SOAR_CATALOG_SOURCE": raw})
+    assert s.catalog_source == "collections"
+    assert len(s.warnings) == 1 and "SOAR_CATALOG_SOURCE" in s.warnings[0]
+    assert "using collections" in s.warnings[0]
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("0", 0), ("1", 1), ("60", 60), ("86400", 86_400)])
+def test_a_valid_catalog_ttl_parses(raw: str, expected: int):
+    s = Settings.load({"SOAR_CATALOG_TTL_SECONDS": raw})
+    assert s.catalog_ttl_seconds == expected and s.warnings == ()
+
+
+def test_an_empty_catalog_ttl_is_the_default():
+    assert Settings.load({"SOAR_CATALOG_TTL_SECONDS": ""}).catalog_ttl_seconds == 300
+
+
+def test_the_catalog_settings_are_frozen_and_carry_no_secret():
+    s = Settings.load({"SOAR_CATALOG_SOURCE": "export"})
+    with pytest.raises(Exception, match="frozen"):
+        s.catalog_source = "collections"  # type: ignore[misc]
+    assert s.safe_dump()["catalog_source"] == "export"
+    assert not [name for name in CAPABILITY_FLAGS if "CATALOG" in name]
 
 
 # --------------------------------------------------------------- base URL

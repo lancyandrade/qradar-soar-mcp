@@ -644,6 +644,23 @@
       }),
       'tier': 0,
     }),
+    'soar_refresh_catalog': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_refresh_catalog',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+        }),
+        'title': 'soar_refresh_catalogArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
     'soar_search_incidents': dict({
       'annotations': dict({
         'destructive_hint': False,

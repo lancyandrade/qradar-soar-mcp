@@ -43,6 +43,14 @@
 > edit. `soar_invoke_action` still refuses every call. See
 > `08-GREENFIELD-AMENDMENTS.md §24`.
 
+> **Implementation status — P2-01, 2026-09-21.** The catalog is implemented, and the
+> recommendation of §2.1 below is **not** what was built: `collections` is the default
+> `SOAR_CATALOG_SOURCE`, because `P2-00` verified the read-only collection calls of §2
+> and could not obtain an export (the one attempt, with a read-only key, was answered
+> HTTP 403). `export` stays selectable and is unavailable until its contract is verified:
+> it refuses every load, sends nothing and never falls back. The §2 rows are superseded,
+> for `51.0.9.0.20848`, by the calls listed in `08-GREENFIELD-AMENDMENTS.md §25`.
+
 All paths are relative to `https://{host}/rest/orgs/{org_id}` unless noted.
 Auth: HTTP Basic with API key id/secret. Common params `handle_format=names`
 and `text_content_output_format=always_text` as already implemented.

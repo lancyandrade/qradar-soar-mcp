@@ -453,7 +453,8 @@ async def test_the_incident_object_carries_its_actions(fake: FakeSoar, raw_clien
     """Verified on 51.0.9.0.20848: incident, task and artifact objects carry ``actions`` (D3)."""
     inc = (await raw_client.get(f"{ORG}/incidents/42")).json()
     assert {a["name"] for a in inc["actions"]} >= {"Firewall — Block IP", "Send Analyst Digest"}
-    assert (await raw_client.get(f"{ORG}/actions")).status_code == 404  # org-level is Phase 2
+    # The org-level collection is the rule list (P2-01), not an incident's actions.
+    assert "entities" in (await raw_client.get(f"{ORG}/actions")).json()
 
 
 async def test_incident_actions_route_is_a_500_as_on_the_verified_appliance(
@@ -469,16 +470,110 @@ async def test_there_is_no_invocation_route(fake: FakeSoar, raw_client):
     assert r.status_code == 404 and r.json()["message"] == "fake_soar: no route"
 
 
-# -------------------------------------------------------- phase-2 boundary
+# ------------------------------------------- P2-01 discovery reads (08 §25)
+# The wrappers differ per collection, exactly as docs/soar-api-verified.md §2 records.
 
 
 @pytest.mark.parametrize(
     "path",
-    ["/types", "/functions", "/incidents/42/table_data/x", "/rest/const", "/playbooks", "/scripts"],
+    ["/functions", "/actions", "/scripts", "/workflows", "/message_destinations", "/phases"],
 )
-async def test_phase_two_endpoints_have_no_route(fake: FakeSoar, raw_client, path: str):
-    full = path if path.startswith("/rest/") else f"{ORG}{path}"
-    assert (await raw_client.get(full)).status_code == 404
+async def test_entities_collections(fake: FakeSoar, raw_client, path: str):
+    body = (await raw_client.get(f"{ORG}{path}")).json()
+    assert list(body) == ["entities"] and isinstance(body["entities"], list)
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/groups", "/types/__function/fields", "/types/task/fields", "/types/artifact/fields"],
+)
+async def test_bare_list_collections(fake: FakeSoar, raw_client, path: str):
+    body = (await raw_client.get(f"{ORG}{path}")).json()
+    assert isinstance(body, list) and all(isinstance(row, dict) for row in body)
+
+
+@pytest.mark.parametrize("path", ["/types", "/incident_types"])
+async def test_name_keyed_map_collections(fake: FakeSoar, raw_client, path: str):
+    body = (await raw_client.get(f"{ORG}{path}")).json()
+    assert isinstance(body, dict) and "entities" not in body
+    assert all(isinstance(row, dict) and "id" in row for row in body.values())
+
+
+async def test_data_tables_are_types_with_type_id_8(fake: FakeSoar, raw_client):
+    types = (await raw_client.get(f"{ORG}/types")).json()
+    tables = {name for name, row in types.items() if row["type_id"] == 8}
+    assert tables == {"table_1", "table_2"}
+    assert all(types[name]["parent_types"] for name in tables)
+    assert (await raw_client.get(f"{ORG}/datatables")).status_code == 404  # no such collection
+
+
+async def test_function_inputs_are_view_items_joined_to_function_fields(fake: FakeSoar, raw_client):
+    listing = (await raw_client.get(f"{ORG}/functions")).json()["entities"]
+    assert all(row["view_items"] == [] for row in listing)  # the list row carries none
+    single = (await raw_client.get(f"{ORG}/functions/{listing[0]['id']}")).json()
+    uuids = {f["uuid"] for f in (await raw_client.get(f"{ORG}/types/__function/fields")).json()}
+    assert single["view_items"] and {i["content"] for i in single["view_items"]} <= uuids
+    assert (await raw_client.get(f"{ORG}/functions/999999")).status_code == 404
+
+
+async def test_the_server_version_is_in_rest_const(fake: FakeSoar, raw_client):
+    body = (await raw_client.get("/rest/const")).json()
+    assert body["server_version"]["version"] == "51.0.9.0.20848"
+
+
+async def test_playbooks_are_listed_by_a_criteria_only_paged_post(fake: FakeSoar, raw_client):
+    body = {"filters": [], "start": 0, "length": 1}
+    r = await raw_client.post(f"{ORG}/playbooks/query_paged", params=QP, json=body)
+    page = r.json()
+    assert r.status_code == 200 and set(page) == {"data", "recordsTotal", "recordsFiltered"}
+    assert len(page["data"]) == 1 and page["recordsTotal"] == 2
+    # Verified: no GET collection (500), and a GET treats the segment as a handle (404).
+    assert (await raw_client.get(f"{ORG}/playbooks")).status_code == 500
+    assert (await raw_client.get(f"{ORG}/playbooks/query_paged")).status_code == 404
+    # The fake is stricter than the appliance: return_level and the exact body are required.
+    assert (await raw_client.post(f"{ORG}/playbooks/query_paged", json=body)).status_code == 400
+    for other in (
+        {"filters": [{"conditions": []}], "start": 0, "length": 1},
+        {"filters": [], "start": 0, "length": 1, "sorts": []},
+        {"start": 0, "length": 1},
+    ):
+        r = await raw_client.post(f"{ORG}/playbooks/query_paged", params=QP, json=other)
+        assert r.status_code == 400 and "criteria-only" in r.json()["message"]
+
+
+@pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
+@pytest.mark.parametrize("path", ["/functions", "/scripts", "/types", "/groups", "/functions/200"])
+async def test_the_discovery_collections_are_read_only(
+    fake: FakeSoar, raw_client, method: str, path: str
+):
+    r = await raw_client.request(method, f"{ORG}{path}", json={})
+    assert r.status_code == 405
+
+
+# -------------------------------------------------------- still not modelled
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/incidents/42/table_data/x"),
+        ("POST", "/configurations/exports"),
+        ("GET", "/configurations/exports/history"),
+        ("POST", "/configurations/imports"),
+        ("GET", "/playbooks/1000"),
+        ("GET", "/scripts/400"),
+        ("GET", "/actions/300"),
+        ("GET", "/workflows/1"),
+        ("POST", "/playbooks/execution/query_paged"),
+        ("GET", "/incidents/42/tasktree"),
+    ],
+)
+async def test_unverified_privileged_and_unused_calls_have_no_route(
+    fake: FakeSoar, raw_client, method: str, path: str
+):
+    """Nothing P2-01 does not use is modelled, the configuration export least of all."""
+    r = await raw_client.request(method, f"{ORG}{path}", json={})
+    assert r.status_code == 404 and r.json()["message"] == "fake_soar: no route"
 
 
 # ------------------------------------------------------- harness self-test

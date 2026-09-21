@@ -511,6 +511,14 @@ IP. See `P2-TLS` (§8).
 
 1. **Catalog (`P2-01`): make `collections` the default backend**; `export` is
    optional and needs a more privileged key (Q2). This reverses `05 §2.1`.
+   > **Status, 2026-09-21:** implemented; see
+   > [`design/08-GREENFIELD-AMENDMENTS.md §25`](design/08-GREENFIELD-AMENDMENTS.md).
+   > `collections` is the default and uses only calls of §2 that answered 200. `export`
+   > is selectable and unavailable: with no export document ever obtained there is no
+   > contract to parse, so it refuses every load, sends nothing and never falls back.
+   > The key's permission set, installed apps and the workflow object are reported as
+   > unknown, not as empty. **Built and tested offline only**; no request was sent to an
+   > appliance for it, so this record remains the whole of the live evidence.
 2. **Playbook discovery (`P2-04`)**: `POST /playbooks/query_paged` +
    `GET /playbooks/{id}`. The XML is in `content.xml`; no export is needed to
    read (Q1, Q3).

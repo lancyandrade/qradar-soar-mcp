@@ -19,6 +19,8 @@ from typing import Any
 import httpx
 
 from qradar_soar_mcp import __version__
+from qradar_soar_mcp.catalog.backends import EXPORT_UNAVAILABLE
+from qradar_soar_mcp.catalog.cache import CatalogService
 from qradar_soar_mcp.client.base import SoarClient
 from qradar_soar_mcp.config import ConfigError, Settings
 from qradar_soar_mcp.errors import SoarConfigError
@@ -30,6 +32,11 @@ from qradar_soar_mcp.security.limits import Limits
 from qradar_soar_mcp.security.transport import check_transport_config
 
 logger = logging.getLogger(__name__)
+
+NOT_CONFIGURED = (
+    "SOAR connection is not configured: set SOAR_BASE_URL, SOAR_ORG_ID, "
+    "SOAR_API_KEY_ID and SOAR_API_KEY_SECRET"
+)
 
 
 @dataclass(slots=True)
@@ -43,6 +50,7 @@ class Runtime:
     broker: ApprovalBroker | None
     audit: AuditLog | None
     warnings: list[str] = field(default_factory=list)
+    catalog: CatalogService | None = None  # present exactly when ``client`` is
 
     # ------------------------------------------------------------ build
     @classmethod
@@ -128,6 +136,9 @@ class Runtime:
         limits = Limits.from_audit_log(settings, clock=clock, wall=now)
 
         client: SoarClient | None = None
+        catalog: CatalogService | None = None
+        if settings.catalog_source == "export":
+            warnings.append(EXPORT_UNAVAILABLE + "; until then every catalog load fails")
         if settings.connection_ready:
             try:
                 client = SoarClient(settings, transport=http_transport)
@@ -138,6 +149,7 @@ class Runtime:
                     f"SOAR client could not be created ({type(exc).__name__})", effective
                 )
             warnings.extend(client.tls.warnings)
+            catalog = CatalogService.from_settings(settings, client, clock=clock)
         else:
             warnings.append(
                 "SOAR connection is not configured; every tool that reaches SOAR fails "
@@ -157,6 +169,7 @@ class Runtime:
             broker=broker,
             audit=audit,
             warnings=warnings,
+            catalog=catalog,
         )
 
     # ------------------------------------------------------------ helpers
@@ -166,11 +179,13 @@ class Runtime:
 
     def require_client(self) -> SoarClient:
         if self.client is None:
-            raise SoarConfigError(
-                "SOAR connection is not configured: set SOAR_BASE_URL, SOAR_ORG_ID, "
-                "SOAR_API_KEY_ID and SOAR_API_KEY_SECRET"
-            )
+            raise SoarConfigError(NOT_CONFIGURED)
         return self.client
+
+    def require_catalog(self) -> CatalogService:
+        if self.catalog is None:
+            raise SoarConfigError(NOT_CONFIGURED)
+        return self.catalog
 
     async def aclose(self) -> None:
         if self.client is not None:
@@ -191,6 +206,10 @@ class Runtime:
             out["tls"] = {
                 "verify": self.settings.tls_verify,
                 "trust": self.settings.tls_trust,
+            }
+            out["catalog"] = {
+                "source": self.settings.catalog_source,
+                "ttl_seconds": self.settings.catalog_ttl_seconds,
             }
             out["audit"] = {
                 "path": str(self.settings.audit_log_path),

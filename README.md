@@ -30,7 +30,10 @@ against a contract model of the SOAR REST API (`tests/fake_soar.py`); it has
 **Investigate (Tier 0, always on)** — search and read incidents, artifacts,
 tasks, notes, attachment metadata, users and custom-field definitions; get a
 whole incident in one call under a size budget; find incidents that share
-artifacts with this one.
+artifacts with this one. The server also keeps a cached, read-only catalog of the
+SOAR configuration (functions, scripts, rules, playbooks, fields, data tables, …)
+for the discovery and playbook tools of later releases; `soar_refresh_catalog`
+reloads it.
 
 **Annotate and modify (Tiers 1–2, off by default)** — add notes and artifacts,
 create incidents, update fields, assign, close. Each is a separate capability
@@ -96,6 +99,7 @@ failure.
 | `soar_describe_incident_fields` | 0 | — | field definitions incl. custom `properties.*` and close-required flags |
 | `soar_list_incident_actions` | 0 | — | manual actions the incident carries, with their policy classification |
 | `soar_check_approval` | 0 | — | state of an approval reference (broker files; no SOAR call) |
+| `soar_refresh_catalog` | 0 | — | reload the cached catalog of SOAR configuration now; returns source, fetch time, SOAR version and counts, never the objects |
 | `soar_add_comment` | 1 | `SOAR_ALLOW_COMMENTS` | one note |
 | `soar_add_artifact` | 1 | `SOAR_ALLOW_ARTIFACTS` | one artifact |
 | `soar_create_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | one incident |
@@ -379,7 +383,8 @@ All variables, with defaults. `.env.example` is the annotated copy.
 | `SOAR_SNAPSHOT_DIR` | `snapshots` | reserved for Phase 4 |
 | `SOAR_KILL_SWITCH_FILE` | `HALT` | exists ⇒ every Tier ≥1 call is denied |
 | `SOAR_LOG_LEVEL` | `INFO` | stderr logging |
-| `SOAR_CATALOG_SOURCE` / `SOAR_CATALOG_TTL_SECONDS` | `export` / `300` | reserved for Phase 2 |
+| `SOAR_CATALOG_SOURCE` | `collections` | where the catalog is read from. `collections`: the read-only collection endpoints, verified with a read-only key. `export`: selectable but **unavailable** (the configuration export is unverified: the one attempt was answered HTTP 403 and no export was obtained); every catalog load then fails with `catalog_unavailable`, nothing is sent, and there is no fallback. An unrecognised value warns and uses `collections` |
+| `SOAR_CATALOG_TTL_SECONDS` | `300` | how long a loaded catalog is reused; `0` reloads on every read; at most `86400`. `soar_refresh_catalog` ignores it |
 | `SOAR_MCP_TRANSPORT` | `stdio` | `stdio` \| `streamable-http` |
 | `SOAR_MCP_HOST` / `SOAR_MCP_PORT` | `127.0.0.1` / `8090` | HTTP bind |
 | `SOAR_HTTP_AUTH_TOKEN` | — | required for HTTP; sent as `Authorization: Bearer` |
@@ -429,16 +434,26 @@ this repository against a live appliance**; ⚠️/❓ open, listed in
 8. ✅ `GET /rest/session` may be forbidden to API keys; `--check` reports that
    and does not fail on it.
 9. ⚠️ Attachment contents (`…/attachments/{aid}/contents`) are not fetched;
-   metadata only. ❓ Artifact hits, incident history and every Phase-2 discovery
-   endpoint are not used.
+   metadata only. ❓ Artifact hits and incident history are not used.
+10. ✅ The catalog is built from read-only collection calls verified on QRadar SOAR
+    `51.0.9.0.20848` with a read-only key (`docs/soar-api-verified.md` Q1, Q4, Q5, §2):
+    `GET` on `/rest/const`, `functions`, `functions/{id}`, `types/__function/fields`,
+    `actions`, `scripts`, `workflows`, `message_destinations`, `incident_types`,
+    `phases`, `groups`, `types` and `types/{incident,task,artifact}/fields`, and the
+    criteria-only `POST /playbooks/query_paged` (a `GET` on the playbook collection
+    answers 500). Data tables are the types with `type_id == 8`; function inputs are
+    `view_items` joined to the `__function` fields. ❓ The workflow object, installed
+    apps and the API key's own permission set have no verified source and are reported
+    as unknown, never as empty. ❓ The configuration export is unverified and not used.
+    ❓ Other SOAR versions are unverified.
 
 ### Confidence in API claims
 
 The REST surface `client/` may touch is exactly the set of calls listed in
-`docs/design/08-GREENFIELD-AMENDMENTS.md §4`, enforced by an AST test. Nothing
-else is called. When the maintainer's lab access is available (Phase 2,
-ticket `P2-00`), every ✅ above is re-verified against a real appliance and
-`docs/soar-api-verified.md` records the sanitised evidence.
+`docs/design/08-GREENFIELD-AMENDMENTS.md §4` and, for the catalog, `§25`, enforced
+by an AST test. Nothing else is called. `P2-00` and `P2-00b` checked this surface against a lab appliance
+(QRadar SOAR `51.0.9.0.20848`); `docs/soar-api-verified.md` records the sanitised
+evidence and wins wherever it disagrees with a mark above.
 
 ---
 
@@ -465,14 +480,24 @@ ticket `P2-00`), every ✅ above is re-verified against a real appliance and
 - `soar_list_incident_actions` lists the incident's own actions, not those its
   tasks and artifacts carry.
 - Attachment contents are never read; there is no text extraction.
-- No playbook tools; the Tier-4 flags are accepted and unused.
+- The catalog is verified for QRadar SOAR `51.0.9.0.20848` only, and a load is all or
+  nothing: if any of its reads fails (a key that may not read scripts, say), there is
+  no catalog, rather than one with a silent gap. It holds what a read-only key was seen
+  to return: **not** the key's permission set (successful reads say nothing about what
+  a key may write), **not** installed apps, **no** workflow detail (SOAR returned no
+  workflow to the research key; rows of that unverified shape are counted, not parsed),
+  no script bodies, no playbook XML and no people (an owner or members field has no
+  values in the catalog). `SOAR_CATALOG_SOURCE=export` does not work.
+  One load costs one request per function on top of the collections.
+- No discovery or playbook tools yet beyond `soar_refresh_catalog`; the Tier-4 flags
+  are accepted and unused.
 
 ## Status
 
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Investigation + controlled actions + security architecture | **this release, v0.2.0** |
-| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | planned |
+| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); discovery tools planned |
 | 3 | Playbook IR, validation, offline simulation | planned |
 | 4 | Compilation, export, import (always disabled) | planned |
 | 5 | Controlled enablement | planned |
