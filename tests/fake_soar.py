@@ -12,9 +12,19 @@ required query parameters, ``return_level=normal`` on ``query_paged``, AND-withi
 / OR-across filters, incident PATCH optimistic concurrency with ``success:false``,
 custom fields under ``properties``, close semantics, tasks without a version, and
 the ``actions`` list the incident object carries. ``GET /incidents/{id}/actions``
-answers 500 as it did on the verified appliance. No task mutation is modelled (the
-verified ``PUT /tasks/{id}`` has an unverified body) and there is no invocation
-route. Nothing else has a route.
+answers 500 as it did on the verified appliance. There is no invocation route.
+Nothing else has a route.
+
+The task status change is modelled as P2-00b verified it (docs/soar-api-verified.md
+§3.1; 08 §24), and no further: ``GET`` and ``PUT /tasks/{id}`` with the two format
+controls as headers and no query string; the ``PUT`` body is the whole object that
+``GET`` returns with ``status`` as the only difference; the answer is a StatusDTO; and
+``closed_date`` is the server's (set on close, cleared on reopen). The fake is
+deliberately stricter than anything observed: a body that drops, adds or alters any
+other key, including ``closed_date``, is refused with a ``fake_soar:`` message, so a
+client that invents a reduced body or its own ``closed_date`` cannot pass. Only
+O -> C and C -> O exist. Conflicts, permissions, phase effects and every other task
+field are not modelled because they were not verified.
 
 All state comes from synthetic fixtures in ``tests/fixtures/soar``.
 """
@@ -39,6 +49,10 @@ API_KEY_SECRET = "SENTINEL-SECRET-DO-NOT-LEAK-7f3a"
 BASE_URL = "https://soar.example.internal"
 
 REQUIRED_PARAMS = {"handle_format": "names", "text_content_output_format": "always_text"}
+# The form the single-task GET and PUT were verified with: headers, and no query string.
+# Kept apart from the client's constant on purpose; a test asserts the two agree.
+TASK_FORMAT_HEADERS = {"handle_format": "ids", "text_content_output_format": "objects_convert"}
+TASK_CLOSED_AT = 1758030000000  # what this server stamps on close; no client can know it
 CLOSE_FIELDS = ("plan_status", "resolution_id", "resolution_summary")
 
 
@@ -85,6 +99,10 @@ class FakeSoar:
         }
         self.tasks: dict[int, dict[str, Any]] = {
             t["id"]: t for rows in cols["tasks"].values() for t in rows
+        }
+        # The same tasks as single objects in the ids / objects_convert representation.
+        self.task_objects: dict[int, dict[str, Any]] = {
+            int(k): v for k, v in load_fixture("task_objects").items()
         }
         self.attachments: dict[int, list[dict[str, Any]]] = {
             int(k): v for k, v in cols["attachments"].items()
@@ -204,9 +222,20 @@ class FakeSoar:
         if request.headers.get("Authorization") != expected:
             return self._error(401, "Unauthorized")
 
-        for key, value in REQUIRED_PARAMS.items():
-            if params.get(key) != value:
-                return self._error(400, f"fake_soar: missing required query param {key}={value}")
+        header_form = re.fullmatch(
+            rf"/rest/orgs/{self.org_id}/tasks/\d+", path
+        ) is not None and all(
+            request.headers.get(key) == value for key, value in TASK_FORMAT_HEADERS.items()
+        )
+        if header_form:
+            if params:
+                return self._error(400, "fake_soar: the header form was verified without a query")
+        else:
+            for key, value in REQUIRED_PARAMS.items():
+                if params.get(key) != value:
+                    return self._error(
+                        400, f"fake_soar: missing required query param {key}={value}"
+                    )
 
         if path == "/rest/session":
             if self.session_status != 200:
@@ -296,11 +325,15 @@ class FakeSoar:
             return self._error(405, "method not allowed")
 
         m = re.fullmatch(r"/tasks/(\d+)", rest)
-        if m and method == "GET":  # a verified read; no task mutation is modelled
-            task = self.tasks.get(int(m.group(1)))
+        if m and method == "GET":  # verified in both forms; the header form is the full object
+            task = (self.task_objects if header_form else self.tasks).get(int(m.group(1)))
             if task is None:
                 return self._error(404, "task not found")
             return self._json(200, task)
+        if m and method == "PUT":
+            if not header_form:
+                return self._error(400, "fake_soar: PUT /tasks/{id} was verified in header form")
+            return self._put_task(int(m.group(1)), body)
 
         if rest == "/users" and method == "GET":
             return self._json(200, self.users)
@@ -308,6 +341,24 @@ class FakeSoar:
             return self._json(200, self.fields)
 
         return self._error(404, "fake_soar: no route")
+
+    # ----------------------------------------------------------------- tasks
+    def _put_task(self, task_id: int, body: Any) -> httpx.Response:
+        stored = self.task_objects.get(task_id)
+        if stored is None:
+            return self._error(404, "task not found")
+        if not isinstance(body, dict) or body != {**stored, "status": body.get("status")}:
+            return self._error(
+                400, "fake_soar: the body must be the GET object with status as the only change"
+            )
+        status = body["status"]
+        if status not in ("O", "C") or status == stored["status"]:
+            return self._error(400, "fake_soar: only O -> C and C -> O are modelled")
+        stored["status"] = status
+        stored["closed_date"] = TASK_CLOSED_AT if status == "C" else None
+        if task_id in self.tasks:
+            self.tasks[task_id]["status"] = status
+        return self._json(200, {"success": True, "title": None, "message": None, "hints": []})
 
     # ------------------------------------------------------------- incidents
     def _create_incident(self, body: Any) -> httpx.Response:

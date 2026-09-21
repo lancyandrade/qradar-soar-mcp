@@ -34,7 +34,8 @@ artifacts with this one.
 
 **Annotate and modify (Tiers 1–2, off by default)** — add notes and artifacts,
 create incidents, update fields, assign, close. Each is a separate capability
-flag. **Changing a task's status is disabled in this release** (see
+flag. Opening or closing a task is verified for QRadar SOAR `51.0.9.0.20848` only
+and has no protection against a concurrent edit (see
 [Known limitations](#known-limitations)).
 
 **Respond (Tier 3, off by default, human-approved)** — invoke a manual action
@@ -101,7 +102,7 @@ failure.
 | `soar_update_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | fields on one incident (optimistic concurrency; closing fields refused) |
 | `soar_assign_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | owner of one incident |
 | `soar_close_incident` | 2 | `SOAR_ALLOW_INCIDENT_CLOSE` | close with resolution + summary + close-required custom fields |
-| `soar_update_task_status` | 2 | `SOAR_ALLOW_TASK_WRITES` | **disabled in this release**: refuses every call as `DENY_UNSUPPORTED` |
+| `soar_update_task_status` | 2 | `SOAR_ALLOW_TASK_WRITES` | open or close one task of one incident (`status` only; verified on QRadar SOAR 51.0.9, no concurrency protection) |
 | `soar_invoke_action` | per policy | `SOAR_ALLOW_ACTIONS` (+ `SOAR_ALLOW_DESTRUCTIVE_ACTIONS`) | **unavailable in this release**: refuses every call as `DENY_UNSUPPORTED` |
 
 Every response is `{"ok": true, "request_id": ..., "data": ...}` or
@@ -410,12 +411,15 @@ this repository against a live appliance**; ⚠️/❓ open, listed in
    `"A"` active / `"C"` closed.
 5. ✅ Closing sends `plan_status` + `resolution_id` + `resolution_summary`
    together and SOAR rejects it if a close-required custom field is empty.
-6. ⚠️ Task status changes are **not sent at all** yet. QRadar SOAR 51.0.9 documents
-   `PUT /tasks/{id}` for them (it has no `PATCH` there, and tasks carry no
-   version). The request body has now been verified on a lab appliance (the task
-   from the documented `GET /tasks/{id}`, with `status` as the only change; see
-   `docs/soar-api-verified.md` §3.1), but it is not implemented, so
-   `soar_update_task_status` still refuses every call.
+6. ✅ Task status changes follow the contract verified on QRadar SOAR
+   `51.0.9.0.20848` (`docs/soar-api-verified.md` §3.1), and only that: read the
+   task with `GET /tasks/{id}`, send the **whole** object back with
+   `PUT /tasks/{id}` and `status` as the only change, then read it again and fail
+   if the status is not there. There is no `PATCH` on a task, and no task version
+   was observed or required; `closed_date` is the server's and is never set by this server. ⚠️ Nothing
+   protects a task against a concurrent edit (none was ever observed): a
+   change someone else makes between the read and the write can be overwritten.
+   ❓ Other SOAR versions are unverified.
 7. ✅ Manual actions are read from the `actions` list the incident object
    carries (`GET /incidents/{id}`); `GET /incidents/{id}/actions` answers 500
    on 51.0.9 and is not used. ❓ The shape of the list's entries is unverified,
@@ -445,10 +449,15 @@ ticket `P2-00`), every ✅ above is re-verified against a real appliance and
   most recent `SOAR_MAX_RESULTS` incidents, not a server-side search.
 - No manual action can be invoked: `soar_invoke_action` refuses every call as
   `DENY_UNSUPPORTED` until SOAR's invocation contract is verified.
-- No task can be opened or closed: `soar_update_task_status` refuses every call
-  as `DENY_UNSUPPORTED` until the verified `PUT /tasks/{id}` contract is
-  implemented (ticket `P1-CORR-02`). Both refusals are audited as denials and
-  send nothing to SOAR.
+  The refusal is audited as a denial and sends nothing to SOAR.
+- `soar_update_task_status` changes a task's status and nothing else. Its SOAR
+  contract is verified on one version (`51.0.9.0.20848`), one custom task and one
+  API-key configuration. No task version was observed there, so a concurrent edit
+  is neither detected nor prevented; what closing the last required task of a phase
+  does was not tested. It refuses a task that is inactive, frozen, already in the
+  requested status, or not in the given incident. A write SOAR accepted but that
+  could not be read back is reported as `unverified_write`, never as a success. The API key needs SOAR's
+  task-edit capability; without it SOAR refuses and the refusal is returned.
 - `soar_list_incident_actions` lists the incident's own actions, not those its
   tasks and artifacts carry.
 - Attachment contents are never read; there is no text extraction.

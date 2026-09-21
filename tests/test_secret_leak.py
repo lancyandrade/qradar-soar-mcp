@@ -62,8 +62,12 @@ FAULTS: dict[str, dict[str, Any]] = {
 }
 TOOLS_WITHOUT_SOAR = {"soar_check_approval"}
 # Declared unsupported: refused before anything is sent, whatever SOAR would answer
-# (P1-CORR-01 D1 and D4; 08 §21).
-TOOLS_REFUSED_BEFORE_SOAR = {"soar_invoke_action", "soar_update_task_status"}
+# (P1-CORR-01 D4; 08 §21). soar_update_task_status is no longer one of them (P1-CORR-02):
+# it runs the fault matrix like every other tool. There every method is faulted, so its
+# first GET fails; the ``put_*`` cases fault the PUT alone so the write path leaks nothing.
+TOOLS_REFUSED_BEFORE_SOAR = {"soar_invoke_action"}
+TASK_TOOL = "soar_update_task_status"
+PUT_ONLY = "put_"
 
 
 def _tls_transport() -> httpx.MockTransport:
@@ -101,14 +105,20 @@ def _cases():
     for tool in sorted(TOOL_REGISTRY):
         for fault in FAULTS:
             yield pytest.param(tool, fault, id=f"{tool}-{fault}")
+    for fault in FAULTS:
+        if fault not in ("ok", "tls"):
+            yield pytest.param(TASK_TOOL, PUT_ONLY + fault, id=f"{TASK_TOOL}-{PUT_ONLY}{fault}")
 
 
 @pytest.mark.parametrize(("tool", "fault"), list(_cases()))
 async def test_no_secret_anywhere(
     tool: str, fault: str, fake: FakeSoar, tmp_path: Path, monkeypatch
 ):
-    if fault not in ("ok", "tls"):
-        for method in ("GET", "POST", "PATCH"):
+    if fault.startswith(PUT_ONLY):
+        fault = fault.removeprefix(PUT_ONLY)
+        fake.fault("PUT", r".*", **FAULTS[fault])
+    elif fault not in ("ok", "tls"):
+        for method in ("GET", "POST", "PATCH", "PUT"):
             fake.fault(method, r".*", **FAULTS[fault])
     env = base_env(tmp_path, SOAR_ACTION_POLICY_FILE=str(write_policy(tmp_path)), **ALL_ON)
 

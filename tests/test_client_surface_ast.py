@@ -4,14 +4,16 @@ Enforced by AST inspection:
 
 * every ``org_path(...)`` argument and every absolute ``/rest/...`` literal in the
   client package is on the allow-list;
-* every call of a verb helper (``get``, ``post``, ``patch``, ``patch_object``) is
-  an allowed *(method, path)* pair, so ``PATCH`` exists for ``incidents/{id}`` only
-  (08 §4 as amended by §21, P1-CORR-01);
+* every call of a verb helper (``get``, ``post``, ``patch``, ``patch_object``,
+  ``put``) is an allowed *(method, path)* pair, so ``PATCH`` exists for
+  ``incidents/{id}`` only and ``PUT`` for ``tasks/{id}`` only (08 §4 as amended by
+  §21 and §24, P1-CORR-01 and P1-CORR-02);
 * the three calls the verified record retired for QRadar SOAR 51.0.9.0.20848
-  appear nowhere, and neither does any request to a single task: the verified
-  ``PUT /tasks/{id}`` has an unverified body, so no task mutation of any shape
-  exists in production code;
-* no client module defines or calls PUT, DELETE, HEAD or OPTIONS.
+  appear nowhere;
+* a single task is reached by exactly the two verified calls, ``GET`` and ``PUT
+  /tasks/{id}``, from the task client only;
+* no client module defines or calls DELETE, HEAD or OPTIONS, and ``put`` is defined
+  once, in ``base.py``.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ import qradar_soar_mcp.client as client_pkg
 
 CLIENT_DIR = Path(client_pkg.__file__).parent
 
-# 08 §4 as amended by §21: (method, path) with every placeholder rendered as {id}.
+# 08 §4 as amended by §21 and §24: (method, path) with every placeholder rendered as {id}.
 ALLOWED_CALLS = {
     ("GET", "/rest/session"),
     ("POST", "incidents/query_paged"),
@@ -32,6 +34,8 @@ ALLOWED_CALLS = {
     ("POST", "incidents"),
     ("PATCH", "incidents/{id}"),
     ("GET", "incidents/{id}/tasks"),
+    ("GET", "tasks/{id}"),
+    ("PUT", "tasks/{id}"),
     ("GET", "incidents/{id}/artifacts"),
     ("POST", "incidents/{id}/artifacts"),
     ("GET", "incidents/{id}/comments"),
@@ -48,8 +52,14 @@ RETIRED_CALLS = {
     ("GET", "incidents/{id}/actions"),
     ("POST", "incidents/{id}/action_invocations"),
 }
-VERB_HELPERS = {"get": "GET", "post": "POST", "patch": "PATCH", "patch_object": "PATCH"}
-FORBIDDEN_VERBS = {"put", "delete", "head", "options"}
+VERB_HELPERS = {
+    "get": "GET",
+    "post": "POST",
+    "patch": "PATCH",
+    "patch_object": "PATCH",
+    "put": "PUT",
+}
+FORBIDDEN_VERBS = {"delete", "head", "options"}
 
 
 def _template(node: ast.AST) -> str | None:
@@ -196,12 +206,16 @@ def test_calls_retired_by_the_verified_record_are_gone():
                 assert not re.search(r"/actions\b", node.value), f"{path.name}: {node.value!r}"
 
 
-def test_no_task_mutation_of_any_shape_exists_in_the_client():
-    """P1-CORR-01 D1: PUT /tasks/{id} is verified, its body is not. Until it is, the client
-    sends nothing to a single task by any method, so no guessed payload can exist."""
+def test_a_single_task_is_reached_by_the_two_verified_calls_only():
+    """P1-CORR-02 (08 §24): GET and PUT /tasks/{id}, as P2-00b verified them, and PUT
+    exists for nothing else. No PATCH, no POST, no task-tree read."""
     pairs, _ = _calls()
-    assert {(m, path) for m, path in pairs if path.startswith("tasks")} == set()
-    assert {m for m, path in pairs if "tasks" in path} == {"GET"}
+    assert {(m, path) for m, path in pairs if path.startswith("tasks")} == {
+        ("GET", "tasks/{id}"),
+        ("PUT", "tasks/{id}"),
+    }
+    assert {path for m, path in pairs if m == "PUT"} == {"tasks/{id}"}
+    assert not any("tasktree" in path for _, path in pairs)
     import qradar_soar_mcp.client.tasks as tasks_module
 
     tree = ast.parse(Path(tasks_module.__file__).read_text(encoding="utf-8"))
@@ -210,7 +224,14 @@ def test_no_task_mutation_of_any_shape_exists_in_the_client():
         for n in ast.walk(tree)
         if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef) and not n.name.startswith("_")
     ]
-    assert methods == ["list"]
+    assert methods == ["list", "get", "set_status"]
+    # Only the task client calls put, and only base.py defines it.
+    for path, module in _modules():
+        for node in ast.walk(module):
+            if isinstance(node, ast.Attribute) and node.attr == "put":
+                assert path.name == "tasks.py", f"{path.name} calls .put"
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == "put":
+                assert path.name == "base.py", f"{path.name} defines put"
 
 
 def test_no_forbidden_http_verbs_anywhere_in_client():
@@ -221,7 +242,9 @@ def test_no_forbidden_http_verbs_anywhere_in_client():
             if isinstance(node, ast.Attribute):
                 assert node.attr.lower() not in FORBIDDEN_VERBS, f"{path.name} calls .{node.attr}"
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                assert node.value.upper() not in {"PUT", "DELETE"}, (
+                assert node.value.upper() != "DELETE", f"{path.name}: literal {node.value}"
+                # The PUT literal lives where request() checks the method and its one path.
+                assert node.value.upper() != "PUT" or path.name == "base.py", (
                     f"{path.name}: literal {node.value}"
                 )
 

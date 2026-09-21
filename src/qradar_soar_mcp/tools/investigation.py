@@ -7,9 +7,9 @@ client-side composition: recent candidates from ``query_paged``, one artifact
 read per candidate, ranked by overlapping ``(type, value)`` pairs. No
 server-side artifact search is invented (05 §1.2 names none).
 
-``soar_update_task_status`` stays registered but is refused (P1-CORR-01, 08 §21):
-QRadar SOAR 51.0.9 documents ``PUT /tasks/{task_id}`` and no ``PATCH``, and the
-``PUT`` request body is unverified, so no request shape is sent or guessed.
+``soar_update_task_status`` follows the contract verified on QRadar SOAR 51.0.9.0.20848
+(P1-CORR-02, 08 §24): the documented ``GET /tasks/{task_id}``, sent back whole with
+``PUT /tasks/{task_id}`` and ``status`` as the only change, then read again to verify.
 """
 
 from __future__ import annotations
@@ -18,27 +18,17 @@ import json
 from collections.abc import Mapping
 from typing import Any, Literal
 
-from qradar_soar_mcp.errors import SoarUnsupportedError
 from qradar_soar_mcp.security.tiers import Tier
 from qradar_soar_mcp.tools.projection import (
     flatten_comments,
+    patch_changes,
     summarise_artifact,
     summarise_incident,
     summarise_task,
+    task_audit_image,
 )
 from qradar_soar_mcp.tools.registry import ToolResult, soar_tool
 from qradar_soar_mcp.tools.runtime import Runtime
-
-TASK_UPDATE_UNVERIFIED = (
-    "Unsupported: task status changes are disabled in this release. QRadar SOAR 51.0.9 "
-    "documents PUT /tasks/{id} for them, but its request body has not been verified and "
-    "this server does not guess it. Nothing was sent to SOAR. Do not retry; change the "
-    "task in the SOAR UI."
-)
-TASK_UPDATE_DETAIL = (
-    "P1-CORR-01 D1: PUT /tasks/{task_id} method/path verified on 51.0.9.0.20848, request "
-    "body unverified; disabled pending P2-00b (docs/soar-api-verified.md §3)"
-)
 
 # soar_get_incident_full budget (documented in the README). Characters of the
 # JSON payload; at the usual ~4 characters per token this is ~15k tokens.
@@ -269,16 +259,26 @@ async def soar_add_artifact(
 
 
 @soar_tool(
-    name="soar_update_task_status",
-    tier=Tier.MODIFICATION,
-    capability="SOAR_ALLOW_TASK_WRITES",
-    unsupported=TASK_UPDATE_UNVERIFIED,
+    name="soar_update_task_status", tier=Tier.MODIFICATION, capability="SOAR_ALLOW_TASK_WRITES"
 )
 async def soar_update_task_status(
     rt: Runtime, incident_id: int, task_id: int, status: Literal["open", "closed"]
 ) -> ToolResult:
-    """DISABLED in this release: every call is refused with DENY_UNSUPPORTED without
-    contacting SOAR. SOAR documents PUT /tasks/{id} for this change, but its request body
-    has not been verified and this server does not guess it. Do not retry; a human changes
-    the task in the SOAR UI. Tier 2 (SOAR_ALLOW_TASK_WRITES) when it is enabled."""
-    raise SoarUnsupportedError(TASK_UPDATE_UNVERIFIED, detail=TASK_UPDATE_DETAIL)
+    """Open or close one task of one incident (``status`` is "open" or "closed"); nothing
+    else on the task is changed. The task must belong to ``incident_id``, be active, not
+    frozen, and not already in that status. The change is read back and reported as failed
+    if SOAR does not show it. No task version was observed on the verified SOAR release, so
+    a concurrent edit by someone else is not detected. The returned task names its phase and
+    owner by id. Tier 2."""
+    out = await rt.require_client().tasks.set_status(incident_id, task_id, status)
+    return ToolResult(
+        data={
+            "incident_id": incident_id,
+            "task_id": task_id,
+            "changed": patch_changes(out.changes),
+            "task": summarise_task(out.post_image),
+        },
+        target={"incident_id": incident_id, "task_id": task_id},
+        pre_image=task_audit_image(out.pre_image),
+        post_image=task_audit_image(out.post_image),
+    )

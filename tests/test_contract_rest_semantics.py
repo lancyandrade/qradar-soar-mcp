@@ -5,17 +5,25 @@ project's client (P1-04) must satisfy; they do not depend on it.
 
 Source of truth: docs/design/05-SOAR-API-SURFACE.md §1 and §1.1, except for tasks
 and manual actions, where docs/soar-api-verified.md (QRadar SOAR 51.0.9.0.20848)
-wins (P1-CORR-01; 08 §21).
+wins (P1-CORR-01 and P1-CORR-02; 08 §21, §24).
 """
 
 from __future__ import annotations
 
 import base64
+from collections.abc import AsyncIterator
 
 import httpx
 import pytest
 
-from tests.fake_soar import API_KEY_ID, BASE_URL, REQUIRED_PARAMS, FakeSoar
+from tests.fake_soar import (
+    API_KEY_ID,
+    BASE_URL,
+    REQUIRED_PARAMS,
+    TASK_CLOSED_AT,
+    TASK_FORMAT_HEADERS,
+    FakeSoar,
+)
 
 pytestmark = pytest.mark.contract
 
@@ -346,20 +354,68 @@ async def test_tasks_carry_no_version(fake: FakeSoar, raw_client):
         assert not {"vers", "version"} & set(task)
 
 
-@pytest.mark.parametrize(
-    ("method", "body"),
-    [
-        ("PATCH", _patch(2, status=("O", "C"))),  # the Phase-1 assumption (D1)
-        ("PUT", {"id": 9001, "status": "C"}),  # documented on 51.0.9; body unverified
-    ],
-    ids=["patch", "put"],
-)
-async def test_no_task_mutation_is_modelled(fake: FakeSoar, raw_client, method: str, body: dict):
-    """PATCH is not documented and the PUT body is not verified, so the contract has
-    neither: task status changes are disabled until P2-00b verifies the body (08 §21)."""
-    r = await raw_client.request(method, f"{ORG}/tasks/9001", json=body)
+async def test_task_patch_is_not_modelled(fake: FakeSoar, raw_client):
+    """D1: PATCH was the Phase-1 assumption; 51.0.9 documents no PATCH on a task."""
+    r = await raw_client.patch(f"{ORG}/tasks/9001", json=_patch(2, status=("O", "C")))
     assert r.status_code == 404 and r.json()["message"] == "fake_soar: no route"
     assert fake.tasks[9001]["status"] == "O"
+
+
+@pytest.fixture
+async def task_client() -> AsyncIterator[httpx.AsyncClient]:
+    """The form P2-00b verified: the two format controls as headers, no query string."""
+    async with httpx.AsyncClient(
+        base_url=BASE_URL, auth=(API_KEY_ID, fake_secret()), headers=TASK_FORMAT_HEADERS
+    ) as c:
+        yield c
+
+
+async def test_task_status_put_contract(fake: FakeSoar, raw_client, task_client):
+    """docs/soar-api-verified.md §3.1: the whole GET object back, status the only change;
+    a StatusDTO answer; closed_date set and cleared by the server."""
+    task = (await task_client.get(f"{ORG}/tasks/9001")).json()
+    assert len(task) == 41 and task["status"] == "O" and task["closed_date"] is None
+    assert task["task_layout"] == [] and not {"vers", "version"} & set(task)
+    assert isinstance(task["phase_id"], int)  # handle_format: ids
+
+    r = await task_client.put(f"{ORG}/tasks/9001", json={**task, "status": "C"})
+    assert r.status_code == 200
+    assert r.json() == {"success": True, "title": None, "message": None, "hints": []}
+    closed = (await task_client.get(f"{ORG}/tasks/9001")).json()
+    assert {k for k in task if task[k] != closed[k]} == {"status", "closed_date"}
+    assert closed["status"] == "C" and closed["closed_date"] == TASK_CLOSED_AT
+
+    r = await task_client.put(f"{ORG}/tasks/9001", json={**closed, "status": "O"})
+    assert r.status_code == 200
+    assert (await task_client.get(f"{ORG}/tasks/9001")).json() == task  # nothing differs
+    rows = (await raw_client.get(f"{ORG}/incidents/42/tasks")).json()
+    assert {t["id"]: t["status"] for t in rows} == {9001: "O", 9002: "C"}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"id": 9001, "status": "C"},
+        {"status": "C"},
+        {"version": 1, "changes": []},
+    ],
+    ids=["reduced", "status_only", "patch_dto"],
+)
+async def test_task_put_refuses_anything_but_the_whole_object(
+    fake: FakeSoar, task_client, body: dict
+):
+    """Stricter than anything observed on the appliance, on purpose: an invented body
+    must not be able to pass offline."""
+    r = await task_client.put(f"{ORG}/tasks/9001", json=body)
+    assert r.status_code == 400 and r.json()["message"].startswith("fake_soar:")
+    assert fake.task_objects[9001]["status"] == "O"
+
+
+async def test_task_put_is_modelled_in_the_verified_form_only(fake: FakeSoar, raw_client):
+    task = dict(fake.task_objects[9001])
+    r = await raw_client.put(f"{ORG}/tasks/9001", json={**task, "status": "C"})  # query form
+    assert r.status_code == 400 and r.json()["message"].startswith("fake_soar:")
+    assert fake.task_objects[9001]["status"] == "O"
 
 
 # -------------------------------------------------------------- attachments

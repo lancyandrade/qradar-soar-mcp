@@ -4,7 +4,8 @@ Everything the client package sends to SOAR goes through :meth:`SoarClient.reque
 which owns:
 
 * HTTP Basic auth with the API key id/secret;
-* ``handle_format=names`` and ``text_content_output_format=always_text`` on every call;
+* ``handle_format=names`` and ``text_content_output_format=always_text`` on every call
+  except the two single-task calls, which carry ``TASK_FORMAT_HEADERS`` instead (08 §24);
 * TLS trust as resolved by :func:`qradar_soar_mcp.tls.build_trust` before any request
   (Python's default trust, or ``SOAR_CA_BUNDLE``; never a silent downgrade), and the
   timeout;
@@ -13,7 +14,9 @@ which owns:
   the ``except`` block so no ``httpx`` exception is ever chained;
 * scrubbing of the credential (secret and ``Basic`` value) from any server-echoed text.
 
-Only GET, POST and PATCH exist. There is no PUT and no DELETE (05 U7; 08 §4).
+Only GET, POST and PATCH exist as general verbs. PUT exists for one verified call,
+``PUT /tasks/{task_id}`` (08 §24), and ``request`` refuses it for any other path. There
+is no DELETE (05 U7; 08 §4).
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import TracebackType
@@ -60,6 +64,13 @@ DEFAULT_PARAMS: dict[str, str] = {
     "text_content_output_format": "always_text",
 }
 QUERY_PAGED_PARAMS: dict[str, str] = {"return_level": "normal"}
+# The form the single-task GET and PUT were verified in on QRadar SOAR 51.0.9.0.20848
+# (docs/soar-api-verified.md §3.1; 08 §24): the two format controls as headers, with
+# these values, and no query string.
+TASK_FORMAT_HEADERS: dict[str, str] = {
+    "handle_format": "ids",
+    "text_content_output_format": "objects_convert",
+}
 # Internal cap, not a flag (08 §14): a SOAR response larger than this is an error.
 MAX_RESPONSE_BYTES = 5_000_000
 
@@ -142,24 +153,46 @@ class SoarClient:
         *,
         params: Mapping[str, Any] | None = None,
         json_body: JSON | None = None,
+        format_headers: Mapping[str, str] | None = None,
     ) -> JSON:
         """Perform a request and return the parsed JSON body (``None`` if empty).
+
+        ``format_headers`` sends the two output-format controls as request headers
+        instead, and then no default query parameter is added: the form the task
+        update was verified with (08 §24). Only ``TASK_FORMAT_HEADERS`` is accepted.
+        PUT is transport support for that one update, not a general verb: it is
+        refused for any path but this org's ``tasks/{task_id}`` and in any other form.
 
         Raises:
             SoarError: for any HTTP status >= 400, any transport failure, an
                 undecodable body, or a body larger than the cap.
         """
         method = method.upper()
-        if method not in {"GET", "POST", "PATCH"}:
+        if method not in {"GET", "POST", "PATCH", "PUT"}:
             raise SoarValidationError(f"HTTP method {method} is not part of the Phase-1 contract")
         if "?" in path:
             raise SoarValidationError("pass query parameters via params=, not in the path")
-        merged: dict[str, Any] = {**DEFAULT_PARAMS, **(params or {})}
+        if method == "PUT" and not (
+            re.fullmatch(rf"/rest/orgs/{self.org_id}/tasks/[0-9]+", path)
+            and format_headers is not None
+            and not params
+        ):
+            raise SoarValidationError(
+                "PUT is part of the contract for /tasks/{task_id} in its verified form only"
+            )
+        if format_headers is None:
+            merged: dict[str, Any] = {**DEFAULT_PARAMS, **(params or {})}
+        elif dict(format_headers) != TASK_FORMAT_HEADERS:
+            raise SoarValidationError("format_headers carries exactly the two format controls")
+        else:
+            merged = dict(params or {})
         failure: SoarError | None = None
         status = 0
         raw = b""
         try:
-            async with self._http.stream(method, path, params=merged, json=json_body) as response:
+            async with self._http.stream(
+                method, path, params=merged, json=json_body, headers=format_headers
+            ) as response:
                 status = response.status_code
                 declared = response.headers.get("Content-Length")
                 if (
@@ -216,8 +249,14 @@ class SoarClient:
         logger.debug("soar %s %s -> HTTP %s", method, path, status)
         return body
 
-    async def get(self, path: str, *, params: Mapping[str, Any] | None = None) -> JSON:
-        return await self.request("GET", path, params=params)
+    async def get(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        format_headers: Mapping[str, str] | None = None,
+    ) -> JSON:
+        return await self.request("GET", path, params=params, format_headers=format_headers)
 
     async def post(
         self, path: str, *, json_body: JSON | None = None, params: Mapping[str, Any] | None = None
@@ -226,6 +265,10 @@ class SoarClient:
 
     async def patch(self, path: str, *, json_body: JSON) -> JSON:
         return await self.request("PATCH", path, json_body=json_body)
+
+    async def put(self, path: str, *, json_body: JSON, format_headers: Mapping[str, str]) -> JSON:
+        """``PUT /tasks/{task_id}`` only (``request`` refuses any other path)."""
+        return await self.request("PUT", path, json_body=json_body, format_headers=format_headers)
 
     # ---------------------------------------------------------------- patch
     async def patch_object(

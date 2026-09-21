@@ -128,6 +128,17 @@ class SoarPatchRejectedError(SoarConflictError):
         return out
 
 
+class SoarUnverifiedWriteError(SoarError):
+    """SOAR accepted a write, but reading the object back did not confirm it (08 §24).
+
+    The object may or may not have changed. Not a conflict: nothing here detects a
+    concurrent edit. The caller reads the object again before deciding anything.
+    """
+
+    code = "unverified_write"
+    failure_class = "Unverified write"
+
+
 class SoarValidationError(SoarError):
     """SOAR rejected the request (400/422), or the client refused to send it."""
 
