@@ -24,12 +24,15 @@ from tests.test_catalog_backends import EXPECTED_READS
 from tests.tool_harness import audit_records, base_env, build_runtime
 
 TOOL = "soar_refresh_catalog"
-PHASE_TWO_TOOLS_NOT_IN_THIS_TICKET = {
+# P2-02 (08 §26) added these five beside it; tests/test_discovery_tools.py covers them.
+P2_02_TOOLS = [
     "soar_list_functions",
     "soar_get_function",
     "soar_list_scripts",
     "soar_get_script",
     "soar_list_message_destinations",
+]
+PHASE_TWO_TOOLS_NOT_YET_IMPLEMENTED = {
     "soar_list_incident_types",
     "soar_list_phases",
     "soar_list_fields",
@@ -58,11 +61,11 @@ def test_it_is_a_tier_0_read_with_no_capability_and_no_mutation():
     assert list(inspect.signature(spec.func).parameters) == ["rt"]  # nothing to pass in
 
 
-def test_it_is_the_only_tool_this_ticket_adds():
-    assert not (set(TOOL_REGISTRY) & PHASE_TWO_TOOLS_NOT_IN_THIS_TICKET)
+def test_the_discovery_module_holds_the_catalog_tool_and_the_five_of_p2_02_only():
+    assert not (set(TOOL_REGISTRY) & PHASE_TWO_TOOLS_NOT_YET_IMPLEMENTED)
     tree = ast.parse(Path(discovery_tools.__file__).read_text(encoding="utf-8"))
     functions = [n.name for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef)]
-    assert functions == [TOOL]
+    assert functions == [TOOL, *P2_02_TOOLS]
 
 
 def test_there_is_no_capability_flag_for_catalog_reads():
@@ -187,8 +190,19 @@ def test_the_tool_body_reaches_soar_only_through_the_runtime():
         node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module
     }
     assert not [m for m in imported if m.startswith("qradar_soar_mcp.client")]
-    assert not [m for m in imported if m.startswith("qradar_soar_mcp.catalog")]
-    assert "httpx" not in source and "require_client" not in source
+    # The catalog's data types only: the service that loads one comes from the runtime.
+    assert [m for m in imported if m.startswith("qradar_soar_mcp.catalog")] == [
+        "qradar_soar_mcp.catalog.models"
+    ]
+    assert "httpx" not in source
+    # P2-02: one tool reads SOAR itself, for the script body the catalog does not hold.
+    reaches_client = [
+        fn.name
+        for fn in ast.walk(tree)
+        if isinstance(fn, ast.AsyncFunctionDef | ast.FunctionDef)
+        and any(isinstance(n, ast.Attribute) and n.attr == "require_client" for n in ast.walk(fn))
+    ]
+    assert reaches_client == ["soar_get_script"]
 
 
 def test_nothing_but_the_runtime_builds_a_catalog_service():

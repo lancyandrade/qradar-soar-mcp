@@ -85,7 +85,8 @@ def _forbidden(fake: FakeSoar) -> list[tuple[str, str]]:
 
 
 def test_the_catalog_keeps_both_tools_with_their_security_contract():
-    assert len(TOOL_REGISTRY) == 21  # the 20 of Phase 1 and soar_refresh_catalog (P2-01)
+    # The 20 of Phase 1, soar_refresh_catalog (P2-01) and the five reads of P2-02.
+    assert len(TOOL_REGISTRY) == 26
     task, invoke = TOOL_REGISTRY[TASK_TOOL], TOOL_REGISTRY["soar_invoke_action"]
     assert task.tier is Tier.MODIFICATION and task.capability == "SOAR_ALLOW_TASK_WRITES"
     assert invoke.tier is Tier.CONTROL and invoke.capability == "SOAR_ALLOW_ACTIONS"

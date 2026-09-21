@@ -707,3 +707,32 @@ async def test_responses_are_redacted(reg, fake: FakeSoar, tmp_path: Path):
     out = await run_pipeline(reg["soar_t_read"], rt, {"incident_id": 42, "verbose": False})
     assert SENTINEL not in json.dumps(out) and "[REDACTED]" in out["data"]["name"]
     await rt.aclose()
+
+
+def test_output_redaction_works_on_each_string_not_on_the_serialised_document(monkeypatch):
+    """Redacting the JSON text let a pattern run past the end of a value: it removed text
+    that was no credential, and a value ending in ``authorization:`` left a document that
+    no longer parsed, so the call crashed. Content an attacker controls could do that."""
+    from qradar_soar_mcp import logging as soar_logging
+    from qradar_soar_mcp.tools.registry import _redacted
+
+    quoted = 'pw"with\\quote-and-backslash'
+    monkeypatch.setattr(soar_logging._FILTER, "_secrets", (SENTINEL, quoted))
+    value = {
+        "ends_with_the_keyword": "see the header authorization:",
+        "keyword_then_more_lines": "authorization = cfg.value\nnext_line = 2",
+        "nested": [{"note": f"key {SENTINEL}"}, ("a", 1, None, True, 2.5)],
+        f"key {SENTINEL}": "v",
+        "escaped_secret": f"x {quoted} y",
+        "count": 12345,
+    }
+    out = _redacted(value)
+    assert out["ends_with_the_keyword"] == "see the header authorization:"  # and no crash
+    # One value is redacted as the text it is: the line after it is not eaten.
+    assert out["keyword_then_more_lines"] == "authorization = [REDACTED]\nnext_line = 2"
+    assert out["nested"] == [{"note": "key [REDACTED]"}, ["a", 1, None, True, 2.5]]
+    assert out["key [REDACTED]"] == "v" and out["count"] == 12345
+    assert out["escaped_secret"] == "x [REDACTED] y"  # JSON escaping does not hide it
+    assert SENTINEL not in json.dumps(out) and quoted not in json.dumps(out)
+    assert set(out) - {"key [REDACTED]"} == set(value) - {f"key {SENTINEL}"}
+    assert _redacted(out) == out  # and it is stable

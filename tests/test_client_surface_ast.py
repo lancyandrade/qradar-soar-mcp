@@ -17,7 +17,10 @@ Enforced by AST inspection:
   once, in ``base.py``;
 * the discovery calls are exactly the reads the verified record lists, all ``GET`` but
   the criteria-only playbook query; only ``discovery.py`` names a Phase-2 path; and the
-  configuration export, import, execution and single-object Phase-2 reads appear nowhere.
+  configuration export, import, execution and the unused single-object Phase-2 reads
+  appear nowhere;
+* P2-02 (08 §26) adds exactly one call, ``GET scripts/{id}``, for the script body. The
+  prohibition on writing a script is ``test_no_script_writes.py``.
 """
 
 from __future__ import annotations
@@ -59,6 +62,7 @@ DISCOVERY_CALLS = {
     ("GET", "actions"),
     ("GET", "workflows"),
     ("GET", "scripts"),
+    ("GET", "scripts/{id}"),  # P2-02 (08 §26): the body, on demand; never in the catalog
     ("GET", "message_destinations"),
     ("GET", "incident_types"),
     ("GET", "phases"),
@@ -376,4 +380,7 @@ def test_no_discovery_method_takes_a_path_a_method_or_a_body():
     for fn in cls.body:
         if isinstance(fn, ast.AsyncFunctionDef):
             names = {a.arg for a in (*fn.args.args, *fn.args.kwonlyargs)} - {"self"}
-            assert names <= {"function_id", "type_name", "start", "length"}, (fn.name, names)
+            assert names <= {"function_id", "script_id", "type_name", "start", "length"}, (
+                fn.name,
+                names,
+            )

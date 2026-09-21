@@ -1,4 +1,5 @@
-"""Read-only configuration discovery for the catalog (P2-01; 08 §25).
+"""Read-only configuration discovery for the catalog (P2-01; 08 §25) and the one
+on-demand detail read of P2-02 (08 §26).
 
 Every call here was verified on QRadar SOAR 51.0.9.0.20848 with a read-only API key
 (``docs/soar-api-verified.md`` §1 Q1, Q4, Q5 and §2), and each method checks the one
@@ -13,20 +14,52 @@ lists playbooks (a GET on the collection answers 500): its body is built here, f
 integers, in the criteria-only form that was verified (``filters`` empty, ``start``,
 ``length``; sent live from start 0 with lengths 1 and 10). No caller supplies a filter, a
 path or a method. The configuration export is not among these calls.
+
+:meth:`DiscoveryClient.script_source` is the only read here the catalog does not make:
+``GET /scripts/{script_id}``, whose ``script_text`` is the script body (verified shape:
+``tests/fixtures/soar/verified/script.json``). It takes an integer and nothing else, and
+there is no counterpart that creates, changes or removes a script: a script is never
+written by this server (``tests/test_no_script_writes.py``).
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from qradar_soar_mcp.client.base import QUERY_PAGED_PARAMS, SoarClient
 from qradar_soar_mcp.errors import SoarMalformedResponseError, SoarValidationError
+from qradar_soar_mcp.logging import redact
 
 # Field definitions are read for exactly these types (the ledger of the verified record).
 FIELD_TYPES: tuple[str, ...] = ("incident", "task", "artifact")
 MAX_PLAYBOOK_PAGE = 100
 
 Row = dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class ScriptSource:
+    """What ``GET /scripts/{script_id}`` is read for: which script answered, and a *safe
+    representation* of its body.
+
+    ``text`` is ``script_text`` after the credential filter (this server's credential, and
+    anything the redactor takes for one, replaced by its marker). It is the script's exact
+    source only when ``redacted`` is false. The filter is a heuristic over arbitrary code,
+    so it can also replace text that merely looks like a credential; either way the change
+    is reported, never silent. The text SOAR sent is not kept: of it, this object holds
+    only its length, ``source_chars``.
+
+    ``text`` is code someone stored in SOAR: data to show, never anything to run. The
+    identity fields are there so a caller can tell that the script it asked for is still
+    the script the catalog described."""
+
+    id: int
+    programmatic_name: str
+    uuid: str
+    text: str = field(repr=False)  # never in a log line or a traceback
+    source_chars: int  # characters (code points) of ``script_text`` as SOAR returned it
+    redacted: bool  # the filter changed something: ``text`` is not the exact source
 
 
 def _rows(items: Any, where: str) -> list[Row]:
@@ -80,6 +113,40 @@ class DiscoveryClient:
     async def scripts(self) -> list[Row]:
         """List rows: no script body."""
         return _entities(await self._c.get(self._c.org_path("scripts")), "GET /scripts")
+
+    async def script_source(self, script_id: int) -> ScriptSource:
+        """The body of one script (P2-02; 08 §26). Read-only, and only ever by id.
+
+        The credential, and anything shaped like one, is replaced in the text here,
+        before anything can cut it: a secret cut in half is no longer recognisable. That is
+        a safety transformation, and it is reported as one (``redacted``, with the length
+        of what SOAR sent in ``source_chars``); cutting to size is the caller's, and
+        separate. The unfiltered text does not leave this method.
+        """
+        if not isinstance(script_id, int) or isinstance(script_id, bool) or script_id < 1:
+            raise SoarValidationError("a script id is a positive integer", not_sent=True)
+        body = await self._c.get(self._c.org_path(f"scripts/{int(script_id)}"))
+        where = "GET /scripts/{id}"
+        if not isinstance(body, dict):
+            raise SoarMalformedResponseError(f"{where} did not return an object")
+        found = body.get("id")
+        if not isinstance(found, int) or isinstance(found, bool) or found != script_id:
+            raise SoarMalformedResponseError(f"{where} did not return the script asked for")
+        name, uuid, text = body.get("programmatic_name"), body.get("uuid"), body.get("script_text")
+        if not isinstance(name, str) or not isinstance(uuid, str):
+            raise SoarMalformedResponseError(f"{where} did not return the script's identity")
+        if not isinstance(text, str):
+            # Key names only. Nothing SOAR returned is put into the message.
+            raise SoarMalformedResponseError(f"{where} did not return 'script_text' as text")
+        clean = redact(self._c.scrub(text) or "")
+        return ScriptSource(
+            id=found,
+            programmatic_name=redact(self._c.scrub(name) or ""),
+            uuid=uuid,
+            text=clean,
+            source_chars=len(text),
+            redacted=clean != text,
+        )
 
     async def workflows(self) -> list[Row]:
         return _entities(await self._c.get(self._c.org_path("workflows")), "GET /workflows")

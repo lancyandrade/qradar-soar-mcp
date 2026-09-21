@@ -71,6 +71,11 @@ TOOLS_REFUSED_BEFORE_SOAR = {"soar_invoke_action"}
 TASK_TOOL = "soar_update_task_status"
 PUT_ONLY = "put_"
 PUT_DONE = "putdone_"
+# P2-02 (08 §26): soar_get_script reads the catalog and then one script. With every method
+# faulted it fails at the catalog; the ``detail_*`` cases fault the script read alone, so
+# the on-demand path that carries script source leaks nothing either.
+SCRIPT_TOOL = "soar_get_script"
+DETAIL_ONLY = "detail_"
 # PUT outcomes that do not rule the write out: read back, and reported as unverified.
 # Every HTTP error status is one of them; only "refused" (no connection) is not.
 AMBIGUOUS_PUT_FAULTS = {
@@ -126,6 +131,11 @@ def _cases():
             yield pytest.param(TASK_TOOL, PUT_ONLY + fault, id=f"{TASK_TOOL}-{PUT_ONLY}{fault}")
     for fault in sorted(AMBIGUOUS_PUT_FAULTS):
         yield pytest.param(TASK_TOOL, PUT_DONE + fault, id=f"{TASK_TOOL}-{PUT_DONE}{fault}")
+    for fault in FAULTS:
+        if fault not in ("ok", "tls"):
+            yield pytest.param(
+                SCRIPT_TOOL, DETAIL_ONLY + fault, id=f"{SCRIPT_TOOL}-{DETAIL_ONLY}{fault}"
+            )
 
 
 @pytest.mark.parametrize(("tool", "fault"), list(_cases()))
@@ -134,7 +144,13 @@ async def test_no_secret_anywhere(
 ):
     put_only = fault.startswith(PUT_ONLY)
     put_done = fault.startswith(PUT_DONE)
-    if put_only or put_done:
+    detail_only = fault.startswith(DETAIL_ONLY)
+    if detail_only:
+        fault = fault.removeprefix(DETAIL_ONLY)
+        fake.fault("GET", r"/scripts/\d+$", **FAULTS[fault])
+        # The body itself echoes the credential too, should the fault let it through.
+        fake.discovery["script:400"]["script_text"] = f"key = '{SENTINEL}'"
+    elif put_only or put_done:
         fault = fault.removeprefix(PUT_DONE if put_done else PUT_ONLY)
         fake.fault("PUT", r".*", processed=put_done, **FAULTS[fault])
     elif fault not in ("ok", "tls"):
@@ -153,6 +169,9 @@ async def test_no_secret_anywhere(
         )
         assert rt.usable and rt.client is not None
         rt.client.max_response_bytes = 100_000
+        if detail_only:  # the catalog loads untouched; only the script read is faulted
+            assert (await run_pipeline(TOOL_REGISTRY["soar_list_scripts"], rt, {}))["ok"]
+            rt.client.max_response_bytes = 10_000
         out = await run_pipeline(TOOL_REGISTRY[tool], rt, dict(MINIMAL_ARGS[tool]))
         await rt.aclose()
     finally:

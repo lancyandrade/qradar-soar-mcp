@@ -20,8 +20,14 @@ from qradar_soar_mcp.tools.projection import (
     ARTIFACT_VALUE_LIMIT,
     COMMENT_LIMIT,
     DESCRIPTION_LIMIT,
+    DISCOVERY_LIST_BUDGET_CHARS,
+    DISCOVERY_PAGE_MAX,
     FIELD_LIMIT,
+    FUNCTION_VALUES_MAX,
     INCIDENT_FIELDS,
+    INPUT_VALUES_MAX,
+    LIST_DESCRIPTION_LIMIT,
+    SCRIPT_BODY_LIMIT,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -116,6 +122,38 @@ def test_readme_projection_and_budgets_match_the_code():
     assert f"note text at {COMMENT_LIMIT:,}" in section
     assert f"artifact values at {ARTIFACT_VALUE_LIMIT:,}" in section
     assert f"custom fields at {FIELD_LIMIT:,}" in section
+
+
+def test_readme_discovery_budgets_match_the_code():
+    """P2-02 (08 §26): the documented script cap and list bounds are the constants."""
+    section = re.sub(
+        r"\s+", " ", _section(README, "### What SOAR configuration looks like to the model")
+    )
+    assert f"cut at **{SCRIPT_BODY_LIMIT:,} characters**" in section
+    assert f"at most {DISCOVERY_PAGE_MAX} rows per call" in section
+    assert f"at most {DISCOVERY_LIST_BUDGET_CHARS:,} characters of rows" in section
+    assert f"trimmed at {LIST_DESCRIPTION_LIMIT} characters" in section
+    assert f"({INPUT_VALUES_MAX} per input, {FUNCTION_VALUES_MAX} per function" in section
+    assert "untrusted data" in section and "never executed" in section
+    tools = _section(README, "## Tools")
+    assert f"cut at {SCRIPT_BODY_LIMIT:,} characters" in tools
+    amendments = (ROOT / "docs/design/08-GREENFIELD-AMENDMENTS.md").read_text(encoding="utf-8")
+    assert f"`SCRIPT_BODY_LIMIT` = {SCRIPT_BODY_LIMIT:,} characters" in amendments
+    assert f"{SCRIPT_BODY_LIMIT:,} characters" in TOOL_REGISTRY["soar_get_script"].description
+    # The body contract (review of PR #8): every field and every text_is value is documented,
+    # and nowhere is the body called the original: redaction may have changed it.
+    from qradar_soar_mcp.tools.projection import SCRIPT_TEXT_IS, script_body
+
+    body = script_body("x", source_chars=1, redacted=False)
+    described = re.sub(r"\s+", " ", TOOL_REGISTRY["soar_get_script"].description)
+    for name in (*body, *SCRIPT_TEXT_IS.values()):
+        if name != "text":
+            assert f"`{name}`" in section or f"`body.{name}`" in section, name
+            assert f"`{name}`" in amendments, name
+    for name in ("redacted", "truncated", "text_is", "source_chars", "safe_chars"):
+        assert name in described, name
+    assert "safety-filtered representation" in section and "safety-filtered" in described
+    assert "original_chars" not in README + described  # 08 names it once, as history
 
 
 def test_readme_defaults_match_settings():

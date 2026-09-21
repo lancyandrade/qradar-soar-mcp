@@ -33,7 +33,9 @@ bare list for groups and field definitions; a name-keyed map for ``types`` and
 ``incident_types``; ``data`` with totals for the playbook query, which is a POST with a
 criteria-only body (any other body is refused with a ``fake_soar:`` message, stricter than
 anything observed), while ``GET /playbooks`` answers 500 as the appliance did. Only GET
-exists on the other collections. There is no configuration export route.
+exists on the other collections. There is no configuration export route. The single
+script of P2-02 (``GET /scripts/{id}``, 08 §26) is the list row plus ``script_text``; like
+the collections it answers 405 to every other method, so nothing can write a script.
 
 All state comes from synthetic fixtures in ``tests/fixtures/soar``, and the discovery
 payloads from ``tests/discovery_data.py``.
@@ -408,6 +410,8 @@ class FakeSoar:
         m = re.fullmatch(r"/functions/(\d+)", rest)
         if m:
             key = f"function:{m.group(1)}"
+        elif m := re.fullmatch(r"/scripts/(\d+)", rest):
+            key = f"script:{m.group(1)}"  # P2-02: the body, as ``script_text``
         elif rest == "/types/__function/fields":
             key = "function_fields"
         elif re.fullmatch(r"/types/(task|artifact)/fields", rest):
