@@ -1,0 +1,41 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "documented": true,
+    "method": "PUT",
+    "parameters": {
+      "User-Agent": "header",
+      "accept": "header",
+      "accept-language": "header",
+      "handle_format": "header",
+      "org_id": "path",
+      "task_id": "path",
+      "text_content_output_format": "header",
+      "threat_hit_prop_format": "header",
+      "x-co3contexttoken": "header"
+    },
+    "path": "/orgs/{org_id}/tasks/{task_id}",
+    "request_body_type": "TaskDTO",
+    "response_body_type": "StatusDTO",
+    "response_codes": [
+      200,
+      400,
+      401,
+      403,
+      404,
+      409,
+      500,
+      503
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "from the appliance's own API reference; the request itself was not sent",
+  "_question": "docs",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-00b",
+  "shape": null
+}

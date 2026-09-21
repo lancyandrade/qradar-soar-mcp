@@ -1,0 +1,100 @@
+{
+  "_facts": {
+    "handle_forms": {
+      "close": {
+        "at_id": "null",
+        "category_id": "null",
+        "inc_owner_id": "int",
+        "owner_id": "null",
+        "phase_id": "int"
+      },
+      "reopen": {
+        "at_id": "null",
+        "category_id": "null",
+        "inc_owner_id": "int",
+        "owner_id": "null",
+        "phase_id": "int"
+      }
+    },
+    "instructions_form": {
+      "close": "null",
+      "reopen": "null"
+    },
+    "key_count": {
+      "close": 41,
+      "reopen": 41
+    },
+    "keys_only_in": {
+      "close": [],
+      "reopen": []
+    },
+    "keys_whose_json_type_differs": {
+      "closed_date": {
+        "close": "null",
+        "reopen": "int"
+      }
+    },
+    "live_only_keys_present": {
+      "close": {
+        "auto_deactivate": true,
+        "form": true,
+        "task_layout": true,
+        "user_notes": true
+      },
+      "reopen": {
+        "auto_deactivate": true,
+        "form": true,
+        "task_layout": true,
+        "user_notes": true
+      }
+    },
+    "pair": [
+      "close",
+      "reopen"
+    ],
+    "problems": [],
+    "request": {
+      "headers_named_by_the_owner": {
+        "handle_format": "ids",
+        "text_content_output_format": "objects_convert"
+      },
+      "method": "PUT",
+      "path_template": "/rest/orgs/{org_id}/tasks/{task_id}",
+      "query": {}
+    },
+    "same_in_both": {
+      "full_object": true,
+      "handle_forms": true,
+      "instructions_form": true,
+      "live_only_keys_present": true,
+      "version_like_keys": true
+    },
+    "same_key_set": true,
+    "state": {
+      "close": {
+        "active": true,
+        "closed_date_is_null": true,
+        "required": true,
+        "status_value": "C"
+      },
+      "reopen": {
+        "active": true,
+        "closed_date_is_null": false,
+        "required": true,
+        "status_value": "O"
+      }
+    },
+    "state_facts_that_differ": [
+      "closed_date_is_null",
+      "status_value"
+    ],
+    "valid_pair": true,
+    "version_like_keys": {
+      "close": [],
+      "reopen": []
+    }
+  },
+  "_fixture": "observed-ui-request-pair",
+  "_source": "an offline comparison of two observed-ui-request-shape fixtures",
+  "_ticket": "P2-00b"
+}

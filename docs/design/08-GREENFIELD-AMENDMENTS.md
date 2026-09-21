@@ -6,11 +6,12 @@ conflicts with `00-` to `07-`, this document wins *for that point only*. It
 does not license any other redesign; anything not listed here is governed by
 `00-` to `07-` unchanged.
 
-`00-` to `07-` are the baseline and are not edited, with four recorded
+`00-` to `07-` are the baseline and are not edited, with five recorded
 exceptions: before first publication the private lab topology was replaced by
 generic placeholders (§17), P2-00 added a status pointer to `05` (§20),
-P1-CORR-01 added an implementation-status note to `05` (§21), and P2-TLS added
-the TLS trust model to `02` as §7.1 (§22).
+P1-CORR-01 added an implementation-status note to `05` (§21), P2-TLS added
+the TLS trust model to `02` as §7.1 (§22), and P2-00b added a research-status
+note to `05` (§23).
 
 ---
 
@@ -377,7 +378,9 @@ pipeline order. `client/` still has no `PUT` and no `DELETE`.
 Still open, and not guessed: the `PUT /tasks/{task_id}` request body, and what,
 if anything, protects a task against a concurrent edit; the entry shape of the
 carried `actions` lists; the invocation contract; `return_level` (not in this
-ticket). See `docs/open-questions.md`.
+ticket). See `docs/open-questions.md`. *(The request body has since been verified
+by `P2-00b`: §23. Everything this section disables stays disabled until the
+implementation ticket named there.)*
 
 This ticket's only edit to the baseline is one implementation-status note in
 `05`, under the P2-00 note.
@@ -436,3 +439,29 @@ Rules, all enforced before any request is sent (`config.py`, `tls.py`):
 its own it changes nothing, and `02 §4.1` already uses it the same way for
 `in_band` / `disabled` approval. The MCP HTTP transport rules (`01 §2.1`, P1-11)
 are untouched.
+
+## 23. P2-00b — the task-status contract, verified (research only)
+
+Recorded on 2026-09-21. `P2-00b` is research: it changed no product code, no tool
+contract and no security control. It supplies the evidence §21 (D1) was waiting for; the
+record is `docs/soar-api-verified.md §3.1`.
+
+| | |
+|---|---|
+| Verified on `51.0.9.0.20848` | `PUT /tasks/{task_id}` with an API key and a **full task object** closes and reopens a task. The object comes from the documented `GET /tasks/{task_id}`, read immediately before, deep-copied, with **`status` as the only deliberate change**; `handle_format: ids` and `text_content_output_format: objects_convert` on both requests. The answer is 200 with a `StatusDTO`-compatible body and `success: true`. |
+| Not needed | A version field (none was observed or required in this experiment), a client-generated `closed_date` (the server sets it on close and clears it on reopen), any `task_layout` normalisation (the documented `GET` returns an empty list and it is accepted unchanged), and the task tree. |
+| The task tree | `GET /incidents/{id}/tasktree` is what the web UI reads, and the first experiment used it. It is **not in the appliance's reference or its Swagger description**: UI-internal and undocumented. It stays out of §4 and out of `client/`; the rule "no invented APIs" covers it. |
+| Limits | One custom task, one version, one API-key configuration; no conflict (`409`) was ever seen; closing the last required task of a phase was not tested; an early discrepancy in the task's `perms` map was never explained. |
+
+**What this changes here.** Nothing yet. §4 still has no single-task call, `client/` still
+has no `PUT`, and `soar_update_task_status` still refuses with `DENY_UNSUPPORTED` exactly
+as §21 describes. Implementing the verified contract is the separate ticket
+**`P1-CORR-02`** (`docs/soar-api-verified.md §8`, `docs/open-questions.md` D7). That
+ticket will amend §4 with the two documented calls, `GET /tasks/{id}` and
+`PUT /tasks/{id}`, and must keep the single chokepoint and the order of flag,
+configuration, tier, transport, approval, rate limit and audit unchanged; it must not
+assume an administrator key, and the research credential used by `P2-00b` says nothing
+about what a deployment should grant.
+
+This ticket's only edit to the baseline is one research-status note in `05`, under the
+P1-CORR-01 note (the fifth exception).

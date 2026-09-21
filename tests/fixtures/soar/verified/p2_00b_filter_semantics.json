@@ -1,0 +1,28 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "active_plus_closed_equals_total": true,
+    "all_queries_answered": true,
+    "and_within_one_filter_is_intersection": true,
+    "both_conditions_match_something": false,
+    "or_across_filters_is_union": true,
+    "verdict": "not distinguishable"
+  },
+  "_fixture": "verified-shape",
+  "_note": "plan_status A / C; one row per query",
+  "_question": "OQ14",
+  "_request": {
+    "method": "POST",
+    "path": "/rest/orgs/{org_id}/incidents/query_paged",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": null
+}

@@ -1,0 +1,23 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "rows": "0"
+  },
+  "_fixture": "verified-shape",
+  "_note": "",
+  "_question": "05§2",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/workflows",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": null
+}

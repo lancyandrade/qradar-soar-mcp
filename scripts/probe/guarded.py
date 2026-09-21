@@ -15,6 +15,7 @@ Nothing is written to disk by this wrapper.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -23,7 +24,18 @@ from probe_env import load_env
 from sanitise import violations
 
 HERE = Path(__file__).resolve().parent
-ALLOWED = frozenset({"tls_check.py", "probe.py", "probe_env.py", "sanitise.py", "selftest.py"})
+ALLOWED = frozenset(
+    {
+        "tls_check.py",
+        "probe.py",
+        "probe_00b.py",
+        "probe_env.py",
+        "sanitise.py",
+        "selftest.py",
+        "shape_request.py",  # offline: reads a request payload from stdin, which is inherited
+        "task_experiment.py",  # P2-00b: the one controlled experiment (dry run unless --execute)
+    }
+)
 
 
 def main(argv: list[str]) -> int:
@@ -34,6 +46,10 @@ def main(argv: list[str]) -> int:
         print("usage: guarded.py {" + ",".join(sorted(ALLOWED)) + "} [args...]")
         return 2
     literals = load_env(required=False).literals()
+    # The child writes UTF-8 whatever the console code page is, so what is verified here
+    # is what it wrote; and this process never raises while printing the verified text.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     proc = subprocess.run(  # noqa: S603 - fixed interpreter, script name from a closed set
         [sys.executable, str(HERE / script), *argv[1:]],
         capture_output=True,
@@ -41,6 +57,7 @@ def main(argv: list[str]) -> int:
         encoding="utf-8",
         errors="replace",
         cwd=HERE.parents[1],
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
         check=False,
     )
     output = proc.stdout + (("\n[stderr]\n" + proc.stderr) if proc.stderr.strip() else "")

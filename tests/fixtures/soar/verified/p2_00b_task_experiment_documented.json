@@ -1,0 +1,267 @@
+{
+  "_facts": {
+    "after_close": {
+      "closed_date_is_null": false,
+      "field_names_that_differ_from_the_baseline": [
+        "closed_date",
+        "status"
+      ],
+      "found_exactly_once": true,
+      "invariants_unchanged": true,
+      "key_count": 41,
+      "not_found_because": null,
+      "phase_read": true,
+      "phase_unchanged": true,
+      "required_flags": "all true",
+      "same_key_set_as_the_baseline": true,
+      "status_value": "C",
+      "task_layout_class": "empty list"
+    },
+    "baseline": {
+      "narrowed_to_exactly_one_designated_task": true,
+      "phase_captured_in_memory": true,
+      "required_flags": {
+        "flags": [
+          "read",
+          "write",
+          "close"
+        ],
+        "statement": "all true",
+        "values": {
+          "close": true,
+          "read": true,
+          "write": true
+        }
+      },
+      "source": "/rest/orgs/{org_id}/tasks/{task_id}",
+      "task": {
+        "active": true,
+        "carried_actions": "0",
+        "closed_date_is_null": true,
+        "custom": true,
+        "frozen": false,
+        "has_inc_id": true,
+        "in_training_incident": false,
+        "key_count": 41,
+        "object_perms": {
+          "annotate": "at least one true",
+          "edit_assign_create_delete": "at least one true",
+          "perms_map_present": true,
+          "read": "all true"
+        },
+        "required": true,
+        "required_flags": "all true",
+        "status_is_single_letter": true,
+        "status_value": "O",
+        "task_layout_class": "empty list",
+        "version_like_keys": []
+      }
+    },
+    "close_candidate": {
+      "built": true,
+      "changed_keys": [
+        "status"
+      ],
+      "stops": []
+    },
+    "close_put": {
+      "content_type": "application/json",
+      "http_status": 200,
+      "response_is_a_json_object": true,
+      "response_keys": [
+        "hints",
+        "message",
+        "success",
+        "title"
+      ],
+      "response_shape": {
+        "hints": [],
+        "message": "null",
+        "success": "bool",
+        "title": "null"
+      },
+      "status_dto_compatible": true,
+      "success": true,
+      "transport_error": null
+    },
+    "close_verified": true,
+    "executed": true,
+    "final": {
+      "closed_date_is_null": true,
+      "field_names_that_differ_from_the_baseline": [],
+      "field_names_that_differ_from_the_closed_task": [
+        "closed_date",
+        "status"
+      ],
+      "found_exactly_once": true,
+      "invariants_unchanged": true,
+      "key_count": 41,
+      "not_found_because": null,
+      "phase_read": true,
+      "phase_unchanged": true,
+      "required_flags": "all true",
+      "same_key_set_as_the_baseline": true,
+      "status_value": "O",
+      "task_layout_class": "empty list"
+    },
+    "go": true,
+    "no_go_reasons": [],
+    "outcome": "COMPLETE: closed, verified, reopened, verified",
+    "proposed_put": {
+      "format_headers": {
+        "handle_format": "ids",
+        "text_content_output_format": "objects_convert"
+      },
+      "method": "PUT",
+      "path_template": "/rest/orgs/{org_id}/tasks/{task_id}",
+      "query": {}
+    },
+    "reopen_candidate": {
+      "built": true,
+      "changed_keys": [
+        "status"
+      ],
+      "stops": []
+    },
+    "reopen_put": {
+      "content_type": "application/json",
+      "http_status": 200,
+      "response_is_a_json_object": true,
+      "response_keys": [
+        "hints",
+        "message",
+        "success",
+        "title"
+      ],
+      "response_shape": {
+        "hints": [],
+        "message": "null",
+        "success": "bool",
+        "title": "null"
+      },
+      "status_dto_compatible": true,
+      "success": true,
+      "transport_error": null
+    },
+    "reopen_verified": true,
+    "request_count": {
+      "ceiling": {
+        "get": 7,
+        "put": 2,
+        "total": 9
+      },
+      "get": 7,
+      "put": 2,
+      "total": 9
+    },
+    "requests": [
+      {
+        "error": null,
+        "format_headers": [
+          "handle_format=ids",
+          "text_content_output_format=objects_convert"
+        ],
+        "http_status": 200,
+        "method": "GET",
+        "n": 1,
+        "path_template": "/rest/orgs/{org_id}/tasks/{task_id}"
+      },
+      {
+        "error": null,
+        "format_headers": [
+          "handle_format=ids",
+          "text_content_output_format=objects_convert"
+        ],
+        "http_status": 200,
+        "method": "GET",
+        "n": 2,
+        "path_template": "/rest/orgs/{org_id}/incidents/{incident_id}"
+      },
+      {
+        "error": null,
+        "format_headers": [
+          "handle_format=ids",
+          "text_content_output_format=objects_convert"
+        ],
+        "http_status": 200,
+        "method": "PUT",
+        "n": 3,
+        "path_template": "/rest/orgs/{org_id}/tasks/{task_id}"
+      },
+      {
+        "error": null,
+        "format_headers": [
+          "handle_format=ids",
+          "text_content_output_format=objects_convert"
+        ],
+        "http_status": 200,
+        "method": "GET",
+        "n": 4,
+        "path_template": "/rest/orgs/{org_id}/tasks/{task_id}"
+      },
+      {
+        "error": null,
+        "format_headers": [
+          "handle_format=ids",
+          "text_content_output_format=objects_convert"
+        ],
+        "http_status": 200,
+        "method": "GET",
+        "n": 5,
+        "path_template": "/rest/orgs/{org_id}/incidents/{incident_id}"
+      },
+      {
+        "error": null,
+        "format_headers": [
+          "handle_format=ids",
+          "text_content_output_format=objects_convert"
+        ],
+        "http_status": 200,
+        "method": "GET",
+        "n": 6,
+        "path_template": "/rest/orgs/{org_id}/tasks/{task_id}"
+      },
+      {
+        "error": null,
+        "format_headers": [
+          "handle_format=ids",
+          "text_content_output_format=objects_convert"
+        ],
+        "http_status": 200,
+        "method": "PUT",
+        "n": 7,
+        "path_template": "/rest/orgs/{org_id}/tasks/{task_id}"
+      },
+      {
+        "error": null,
+        "format_headers": [
+          "handle_format=ids",
+          "text_content_output_format=objects_convert"
+        ],
+        "http_status": 200,
+        "method": "GET",
+        "n": 8,
+        "path_template": "/rest/orgs/{org_id}/tasks/{task_id}"
+      },
+      {
+        "error": null,
+        "format_headers": [
+          "handle_format=ids",
+          "text_content_output_format=objects_convert"
+        ],
+        "http_status": 200,
+        "method": "GET",
+        "n": 9,
+        "path_template": "/rest/orgs/{org_id}/incidents/{incident_id}"
+      }
+    ],
+    "rollback": {
+      "allowed": true,
+      "stops": []
+    },
+    "source": "documented"
+  },
+  "_fixture": "controlled-experiment",
+  "_note": "one controlled task-status experiment on an owner-designated disposable task of a disposable lab appliance; statuses, names, types and booleans only",
+  "_ticket": "P2-00b"
+}

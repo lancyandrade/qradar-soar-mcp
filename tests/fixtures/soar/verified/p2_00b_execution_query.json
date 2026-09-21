@@ -1,0 +1,36 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "any_execution_row": false,
+    "body_sent": "the approved body, exactly: no filters, start 0, length 1",
+    "records_total": "0",
+    "result_like_keys": [],
+    "row_keys": [],
+    "wrapper_keys": [
+      "data",
+      "recordsFiltered",
+      "recordsTotal"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "owner-approved once for P2-00b; criteria-only body; nothing is executed",
+  "_question": "Q8",
+  "_request": {
+    "method": "POST",
+    "path": "/rest/orgs/{org_id}/playbooks/execution/query_paged",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": {
+    "data": [],
+    "recordsFiltered": "int",
+    "recordsTotal": "int"
+  }
+}

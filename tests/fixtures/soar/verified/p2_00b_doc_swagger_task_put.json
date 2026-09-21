@@ -1,0 +1,304 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "definitions": "100+",
+    "definitions_named_like_a_task": [
+      "AutomaticCancelationTaskBehaviourType",
+      "AutomaticTaskDTO",
+      "OrgStatisticsDTOOfListOfTaskCountDTO",
+      "PrincipalIncidentTasksDTO",
+      "StatisticsTaskDTO",
+      "SystemTaskDTO",
+      "SystemTaskOverrideDTO",
+      "TaskCatDTO",
+      "TaskCategoryDTO",
+      "TaskChangeDTO",
+      "TaskCountDTO",
+      "TaskDTO",
+      "TaskOrderEntryDTO",
+      "TaskPermsDTO",
+      "TaskRegsDTO",
+      "TaskStatusDTO"
+    ],
+    "live_only_task_keys_in_request_definition": {
+      "auto_deactivate": false,
+      "form": false,
+      "task_layout": false,
+      "user_notes": false
+    },
+    "operations_whose_body_is_a_task_type": [
+      "POST /orgs/{org_id}/automatic_tasks -> AutomaticTaskDTO",
+      "POST /orgs/{org_id}/incidents/{inc_id}/tasks -> TaskDTO",
+      "PUT /orgs/{org_id}/automatic_tasks/{id} -> AutomaticTaskDTO",
+      "PUT /orgs/{org_id}/tasks -> TaskDTO",
+      "PUT /orgs/{org_id}/tasks/{task_id} -> TaskDTO"
+    ],
+    "paths": "100+",
+    "paths_matching": {
+      "operations": [
+        "POST /orgs/{org_id}/email/messages/action_invocations"
+      ],
+      "pattern": "action_invocations|invoke"
+    },
+    "request_body_definition": {
+      "composed_of": [],
+      "found": true,
+      "has_example": true,
+      "properties": {
+        "actions": {
+          "read_only": false,
+          "ref": "ActionInfoDTO",
+          "type": "array"
+        },
+        "active": {
+          "read_only": false,
+          "ref": null,
+          "type": "boolean"
+        },
+        "at_id": {
+          "read_only": false,
+          "ref": "ObjectHandle",
+          "type": null
+        },
+        "attachments_count": {
+          "read_only": false,
+          "ref": null,
+          "type": "integer"
+        },
+        "cat_name": {
+          "read_only": false,
+          "ref": null,
+          "type": "string"
+        },
+        "category_id": {
+          "read_only": false,
+          "ref": "ObjectHandle",
+          "type": null
+        },
+        "closed_date": {
+          "read_only": false,
+          "ref": null,
+          "type": "integer"
+        },
+        "creator_principal": {
+          "read_only": false,
+          "ref": "PrincipalReferenceDTO",
+          "type": null
+        },
+        "custom": {
+          "read_only": false,
+          "ref": null,
+          "type": "boolean"
+        },
+        "description": {
+          "read_only": false,
+          "ref": null,
+          "type": "string"
+        },
+        "due_date": {
+          "read_only": false,
+          "ref": null,
+          "type": "integer"
+        },
+        "frozen": {
+          "read_only": false,
+          "ref": null,
+          "type": "boolean"
+        },
+        "id": {
+          "read_only": false,
+          "ref": null,
+          "type": "integer"
+        },
+        "inc_id": {
+          "read_only": false,
+          "ref": null,
+          "type": "integer"
+        },
+        "inc_name": {
+          "read_only": false,
+          "ref": null,
+          "type": "string"
+        },
+        "inc_owner_id": {
+          "read_only": false,
+          "ref": "ObjectHandle",
+          "type": null
+        },
+        "inc_training": {
+          "read_only": false,
+          "ref": null,
+          "type": "boolean"
+        },
+        "init_date": {
+          "read_only": false,
+          "ref": null,
+          "type": "integer"
+        },
+        "instr_text": {
+          "read_only": false,
+          "ref": null,
+          "type": "string"
+        },
+        "instructions": {
+          "read_only": false,
+          "ref": "TextContentDTO",
+          "type": null
+        },
+        "manual_predefined": {
+          "read_only": false,
+          "ref": null,
+          "type": "boolean"
+        },
+        "members": {
+          "read_only": false,
+          "ref": null,
+          "type": "array"
+        },
+        "name": {
+          "read_only": false,
+          "ref": null,
+          "type": "string"
+        },
+        "notes": {
+          "read_only": false,
+          "ref": "CommentDTO",
+          "type": "array"
+        },
+        "notes_count": {
+          "read_only": false,
+          "ref": null,
+          "type": "integer"
+        },
+        "owner_fname": {
+          "read_only": false,
+          "ref": null,
+          "type": "string"
+        },
+        "owner_id": {
+          "read_only": false,
+          "ref": "ObjectHandle",
+          "type": null
+        },
+        "owner_lname": {
+          "read_only": false,
+          "ref": null,
+          "type": "string"
+        },
+        "perms": {
+          "read_only": false,
+          "ref": "TaskPermsDTO",
+          "type": null
+        },
+        "phase_id": {
+          "read_only": false,
+          "ref": "ObjectHandle",
+          "type": null
+        },
+        "playbooks": {
+          "read_only": false,
+          "ref": "PlaybookActionInfoDTO",
+          "type": "array"
+        },
+        "private": {
+          "read_only": false,
+          "ref": null,
+          "type": "object"
+        },
+        "regs": {
+          "read_only": false,
+          "ref": null,
+          "type": "object"
+        },
+        "required": {
+          "read_only": false,
+          "ref": null,
+          "type": "boolean"
+        },
+        "src_name": {
+          "read_only": false,
+          "ref": null,
+          "type": "string"
+        },
+        "status": {
+          "read_only": false,
+          "ref": null,
+          "type": "string"
+        },
+        "timeframe_name": {
+          "read_only": false,
+          "ref": null,
+          "type": "string"
+        }
+      },
+      "read_only_properties": [],
+      "required": [
+        "active",
+        "custom",
+        "frozen",
+        "inc_training",
+        "manual_predefined",
+        "required"
+      ]
+    },
+    "spec_version": "2.0",
+    "task_get_response_has_a_schema": false,
+    "task_get_response_ref": null,
+    "task_put": {
+      "body_parameter_required": false,
+      "consumes": [
+        "application/json"
+      ],
+      "documented": true,
+      "parameters": {
+        "User-Agent": "header",
+        "accept": "header",
+        "accept-language": "header",
+        "body": "body",
+        "handle_format": "header",
+        "org_id": "path",
+        "task_id": "path",
+        "text_content_output_format": "header",
+        "threat_hit_prop_format": "header",
+        "x-co3contexttoken": "header"
+      },
+      "request_example_present": false,
+      "request_schema": {
+        "read_only": false,
+        "ref": "TaskDTO",
+        "type": null
+      },
+      "responses": {
+        "200": {},
+        "400": {},
+        "401": {},
+        "403": {},
+        "404": {},
+        "409": {},
+        "500": {},
+        "503": {}
+      }
+    },
+    "task_put_request_ref": "TaskDTO",
+    "top_level_keys": [
+      "basePath",
+      "definitions",
+      "info",
+      "paths",
+      "security",
+      "securityDefinitions",
+      "swagger",
+      "tags"
+    ]
+  },
+  "_fixture": "verified-shape",
+  "_note": "schema facts from the description published next to the reference; no prose",
+  "_question": "docs",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-00b",
+  "shape": null
+}

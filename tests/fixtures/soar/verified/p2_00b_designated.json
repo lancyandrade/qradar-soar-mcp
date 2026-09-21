@@ -1,0 +1,39 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "exposes": {
+      "artifacts": "0",
+      "attachment": true,
+      "attachments_http_status": 200,
+      "carried_actions_on_an_artifact": false,
+      "carried_actions_on_incident": "0",
+      "carried_actions_on_task": "0",
+      "comments_http_status": 200,
+      "note": true,
+      "task_shape": true
+    },
+    "incident": {
+      "object_perms": {
+        "annotate": "at least one true",
+        "edit_assign_create_delete": "all false",
+        "perms_map_present": true,
+        "read": "all true"
+      },
+      "plan_status": "A",
+      "training_incident": false
+    },
+    "incident_http_status": 200,
+    "task_belongs_to_the_designated_incident": true,
+    "task_http_status": 200
+  },
+  "_fixture": "verified-shape",
+  "_note": "owner-designated objects; GET only",
+  "_question": "1B",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-00b",
+  "shape": null
+}

@@ -1,0 +1,73 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "a_reply_is_also_listed_at_top_level": false,
+    "any_reply_nested_under_children": false,
+    "every_reply_has_an_integer_parent_id": false,
+    "has_children_key": true,
+    "has_parent_id_key": true,
+    "max_depth": 1,
+    "reply_parent_id_equals_the_parent_note_id": false,
+    "rows": "1-9",
+    "text_type": [
+      "str"
+    ],
+    "top_level_notes": "1-9",
+    "top_level_parent_id_is_null": true
+  },
+  "_fixture": "verified-shape",
+  "_note": "notes of the owner-designated incident; shape only",
+  "_question": "OQ10",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/incidents/{incident_id}/comments",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": [
+    {
+      "actions": [],
+      "children": [],
+      "comment_perms": "null",
+      "create_date": "int",
+      "id": "int",
+      "inc_id": "int",
+      "inc_name": "str",
+      "inc_owner": "str",
+      "is_deleted": "bool",
+      "mentioned_users": [],
+      "modify_date": "int",
+      "modify_principal": {
+        "display_name": "str",
+        "id": "int",
+        "name": "str",
+        "type": "str"
+      },
+      "modify_user": {
+        "first_name": "str",
+        "id": "str",
+        "last_name": "str"
+      },
+      "parent_id": "null",
+      "playbooks": [],
+      "task_at_id": "null",
+      "task_custom": "null",
+      "task_id": "null",
+      "task_members": "null",
+      "task_name": "null",
+      "text": "str",
+      "type": "str",
+      "user_fname": "str",
+      "user_id": "str",
+      "user_lname": "str",
+      "user_name": "str"
+    }
+  ]
+}

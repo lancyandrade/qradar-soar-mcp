@@ -1,0 +1,22 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "data_type": "LogicType",
+    "enum_values": [
+      "all",
+      "any",
+      "advanced"
+    ],
+    "properties": {}
+  },
+  "_fixture": "verified-shape",
+  "_note": "property names, JSON types and flags from the appliance's API reference",
+  "_question": "docs",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-00b",
+  "shape": null
+}

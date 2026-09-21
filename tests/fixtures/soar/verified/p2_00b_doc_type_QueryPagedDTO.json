@@ -1,0 +1,55 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "data_type": "QueryPagedDTO",
+    "enum_values": [],
+    "properties": {
+      "filters": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "array of QueryFilterDTO"
+      },
+      "length": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "number"
+      },
+      "logic_type": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "string"
+      },
+      "recordsTotal": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "number"
+      },
+      "sorts": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "array of QuerySortDTO"
+      },
+      "start": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "number"
+      }
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "property names, JSON types and flags from the appliance's API reference",
+  "_question": "docs",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-00b",
+  "shape": null
+}

@@ -4,7 +4,7 @@ Policy, enforced structurally in ``ReadOnlyClient.check`` BEFORE any byte leaves
 the machine (owner decision for P2-00):
 
 * ``GET`` under ``/rest/`` and ``/docs/`` is allowed, and may not carry a body.
-* ``POST`` is allowed for exactly three org-scoped paths, each semantically
+* ``POST`` is allowed for exactly four org-scoped paths, each semantically
   read-only, each with a body that is validated key by key:
 
   - ``/incidents/query_paged`` and ``/playbooks/query_paged``: the body may hold
@@ -14,6 +14,9 @@ the machine (owner decision for P2-00):
     ``type``. ``length`` is capped. Anything else - any key that could create,
     modify, close, assign, invoke, import, enable or disable - is refused.
   - ``/configurations/exports``: only the three boolean section switches.
+  - ``/playbooks/execution/query_paged`` (owner decision for P2-00b): one exact body,
+    ``{"filters": [], "start": 0, "length": 1}``, and at most once per client. The
+    other execution paths (``.../activities``, ``.../cancel``, ``.../status``) stay refused.
 
 * Every ``PUT``, ``PATCH`` and ``DELETE`` is refused, on every path.
 * Every other ``POST`` is refused, including any *other* path whose name contains
@@ -39,6 +42,9 @@ DEFAULT_PARAMS = {"handle_format": "names", "text_content_output_format": "alway
 DEFAULT_MAX_BYTES = 8_000_000
 EXPORT_SUFFIX = "/configurations/exports"
 QUERY_SUFFIXES = ("/incidents/query_paged", "/playbooks/query_paged")
+# P2-00b: approved by the owner with this exact body, exactly once.
+EXECUTION_QUERY_SUFFIX = "/playbooks/execution/query_paged"
+EXECUTION_QUERY_BODY = {"filters": [], "start": 0, "length": 1}
 QUERY_BODY_KEYS = frozenset({"filters", "sorts", "start", "length"})
 FILTER_KEYS = frozenset({"conditions"})
 CONDITION_KEYS = frozenset({"field_name", "method", "value"})
@@ -54,6 +60,25 @@ POST_QUERY_PARAMS = frozenset(
     {"return_level", "handle_format", "text_content_output_format", "include_records_total"}
 )
 MAX_QUERY_LENGTH = 50
+# The two output-format controls may travel as HTTP headers instead of query parameters, as
+# the web UI sends them (P2-00b). Names and values are closed sets from the appliance's
+# reference; no other request header can be set through this client.
+FORMAT_HEADER_VALUES: dict[str, frozenset[str]] = {
+    "handle_format": frozenset({"default", "ids", "names", "objects"}),
+    "text_content_output_format": frozenset(
+        {"default", "objects_convert", "objects_no_convert", "objects_convert_html",
+         "objects_convert_text", "always_text"}
+    ),
+}  # fmt: skip
+
+
+def validate_format_headers(headers: Mapping[str, str] | None) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for name, value in (headers or {}).items():
+        if value not in FORMAT_HEADER_VALUES.get(name, frozenset()):
+            raise ProbePolicyError("only the two documented format headers, with documented values")
+        out[name] = value
+    return out
 
 
 class ProbePolicyError(RuntimeError):
@@ -73,6 +98,9 @@ class Result:
     error: str | None = None
     truncated: bool = False
     has_content_disposition: bool = False
+    has_content_length: bool = False
+    chunked: bool = False
+    format_headers: tuple[str, ...] = ()
     body: bytes = field(default=b"", repr=False)
     json: Any = field(default=None, repr=False)
 
@@ -85,6 +113,7 @@ class Result:
             "method": self.method,
             "path": self.template,
             "query_keys": list(self.query_keys),
+            "format_headers": list(self.format_headers),
             "status": self.status,
             "content_type": self.content_type,
             "allow": self.allow,
@@ -164,6 +193,8 @@ class ReadOnlyClient:
         self._org_prefix = f"/rest/orgs/{env.org_id}"
         self._export_path = self._org_prefix + EXPORT_SUFFIX
         self._query_paths = frozenset(self._org_prefix + suffix for suffix in QUERY_SUFFIXES)
+        self._execution_query_path = self._org_prefix + EXECUTION_QUERY_SUFFIX
+        self._execution_query_spent = False
         self._extensions = {"sni_hostname": sni_hostname} if sni_hostname else {}
         self.requests_sent = 0
         self.refused: list[str] = []
@@ -214,7 +245,7 @@ class ReadOnlyClient:
                 raise ProbePolicyError("GET is limited to /rest/ and /docs/")
             return
         if verb != "POST":
-            raise ProbePolicyError("only GET and three read-only POSTs are permitted")
+            raise ProbePolicyError("only GET and the approved read-only POSTs are permitted")
         target = path.rstrip("/")
         if set(query) - POST_QUERY_PARAMS:
             raise ProbePolicyError("unexpected query parameter on a POST")
@@ -222,6 +253,12 @@ class ReadOnlyClient:
             _validate_export_body(body)
         elif target in self._query_paths:
             _validate_query_body(body)
+        elif target == self._execution_query_path:
+            _validate_query_body(body)  # rejects a bool posing as a number before the comparison
+            if body != EXECUTION_QUERY_BODY:
+                raise ProbePolicyError("the execution query is approved with one exact body")
+            if self._execution_query_spent:
+                raise ProbePolicyError("the execution query is approved exactly once")
         else:
             raise ProbePolicyError("this POST path is not on the read-only allow-list")
 
@@ -237,15 +274,29 @@ class ReadOnlyClient:
         headers_only: bool = False,
         max_bytes: int = DEFAULT_MAX_BYTES,
         default_params: bool = True,
+        format_headers: Mapping[str, str] | None = None,
     ) -> Result:
         query = {**(DEFAULT_PARAMS if default_params else {}), **(params or {})}
+        try:
+            controls = validate_format_headers(format_headers)
+        except ProbePolicyError as exc:
+            self.refused.append(f"{method.upper()} {template}")
+            raise ProbePolicyError(f"{method.upper()} {template}: {exc}") from None
         self.check(method, path, template, json_body, query)
+        if path.rstrip("/") == self._execution_query_path:
+            self._execution_query_spent = True  # spent on the attempt, whatever the outcome
         result = Result(method.upper(), template, tuple(sorted(query)))
+        result.format_headers = tuple(f"{k}={v}" for k, v in sorted(controls.items()))
         started = time.perf_counter()
         try:
             self.requests_sent += 1
             with self._client.stream(
-                method.upper(), path, params=query, json=json_body, extensions=self._extensions
+                method.upper(),
+                path,
+                params=query,
+                json=json_body,
+                headers=controls or None,
+                extensions=self._extensions,
             ) as response:
                 result.status = response.status_code
                 ctype = response.headers.get("content-type", "")
@@ -253,6 +304,9 @@ class ReadOnlyClient:
                 result.allow = response.headers.get("allow")
                 result.has_content_disposition = "content-disposition" in response.headers
                 declared = response.headers.get("content-length")
+                result.has_content_length = declared is not None
+                encoding = response.headers.get("transfer-encoding", "")
+                result.chunked = "chunked" in encoding.lower()
                 if headers_only:
                     result.size_bucket = size_bucket(int(declared)) if declared else "unknown"
                 else:

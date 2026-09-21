@@ -1,0 +1,115 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "candidate_source": {
+      "endpoint": "/rest/orgs/{org_id}/incidents/{incident_id}/tasktree",
+      "format_controls_sent_as": "headers",
+      "handle_format": "ids",
+      "http_status": 200,
+      "narrowed_to_exactly_one_designated_task": true,
+      "text_content_output_format": "objects_convert"
+    },
+    "close_candidate": {
+      "built": false,
+      "changed_keys": [],
+      "stops": [
+        "the task status is not O"
+      ]
+    },
+    "fresh_task": {
+      "active": true,
+      "carried_actions": "0",
+      "closed_date_is_null": false,
+      "custom": true,
+      "frozen": false,
+      "has_inc_id": true,
+      "in_training_incident": false,
+      "key_count": 41,
+      "object_perms": {
+        "annotate": "at least one true",
+        "edit_assign_create_delete": "all false",
+        "perms_map_present": true,
+        "read": "all true"
+      },
+      "required": true,
+      "status_is_single_letter": true,
+      "status_value": "C",
+      "version_like_keys": []
+    },
+    "go": false,
+    "incident": {
+      "http_status": 200,
+      "phase_id_captured_in_memory": true
+    },
+    "no_go_reasons": [
+      "the task status is not O",
+      "the task reports that this credential may not both write to it and close it (documented TaskPermsDTO flags); a refusal would verify nothing and is not tested"
+    ],
+    "permission_evidence": {
+      "documented": "TaskPermsDTO (inherited from ObjectPermsDTO): write = the caller is allowed to write to the object; close = the caller is allowed to close the object",
+      "documented_status_change_flags": {
+        "flags": [
+          "read",
+          "write",
+          "close"
+        ],
+        "statement": "not all true"
+      },
+      "live_object_level_statements": {
+        "annotate": "at least one true",
+        "edit_assign_create_delete": "all false",
+        "perms_map_present": true,
+        "read": "all true"
+      },
+      "uncertain": false
+    },
+    "planned_requests": {
+      "get": 7,
+      "put": 2,
+      "total": 9
+    },
+    "proposed_put": {
+      "body": "the close candidate",
+      "format_headers": {
+        "handle_format": "ids",
+        "text_content_output_format": "objects_convert"
+      },
+      "method": "PUT",
+      "path_template": "/rest/orgs/{org_id}/tasks/{task_id}",
+      "query": {}
+    },
+    "representation": {
+      "against_the_observed_put": {
+        "close": {
+          "keys_whose_json_type_differs": {
+            "closed_date": {
+              "fresh": "int",
+              "observed": "null"
+            }
+          },
+          "same_key_set": true
+        },
+        "reopen": {
+          "keys_whose_json_type_differs": {},
+          "same_key_set": true
+        }
+      },
+      "task_layout_class": {
+        "direct_task_get": "empty list",
+        "fresh_read": "null",
+        "observed_close_put": "null",
+        "observed_reopen_put": "null"
+      }
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "pre-mutation report; nothing was changed",
+  "_question": "1B",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-00b",
+  "shape": null
+}

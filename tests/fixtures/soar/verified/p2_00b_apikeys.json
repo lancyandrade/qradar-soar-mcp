@@ -1,0 +1,26 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "server_error": {
+      "error_code": "generic",
+      "message_masked": "Forbidden"
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "a denial is the expected answer for a read-only key",
+  "_question": "Q6",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/apikeys",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 403,
+  "_ticket": "P2-00b",
+  "shape": null
+}

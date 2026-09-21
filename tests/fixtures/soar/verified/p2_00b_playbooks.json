@@ -1,0 +1,28 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "enabled_automatic_playbooks_on_tasks": "0",
+    "every_playbook_seen": true,
+    "page_ceiling": 10,
+    "page_length": 10,
+    "playbooks_on_tasks": "0"
+  },
+  "_fixture": "verified-shape",
+  "_note": "risk input for the task experiment: what a task change could trigger",
+  "_question": "D1",
+  "_request": {
+    "method": "POST",
+    "path": "/rest/orgs/{org_id}/playbooks/query_paged",
+    "query_keys": [
+      "handle_format",
+      "return_level",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": null
+}

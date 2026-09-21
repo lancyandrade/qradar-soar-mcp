@@ -1,0 +1,29 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "text/plain",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "body_was_not_read": true,
+    "content_length_present": true,
+    "content_type": "text/plain",
+    "content_type_family": "text",
+    "declared_size": "<1KB",
+    "has_content_disposition": true,
+    "transfer_encoding_chunked": false
+  },
+  "_fixture": "verified-shape",
+  "_note": "status and headers only; the stream is closed without reading the body",
+  "_question": "Q7",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/incidents/{incident_id}/attachments/{attachment_id}/contents",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-00b",
+  "shape": null
+}
