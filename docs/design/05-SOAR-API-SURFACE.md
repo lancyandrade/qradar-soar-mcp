@@ -55,7 +55,8 @@
 > `soar_get_function`, `soar_list_scripts`, `soar_get_script` and
 > `soar_list_message_destinations` are implemented as Tier-0 reads over that catalog. The
 > only call they add is the verified `GET /scripts/{id}`, for the script body
-> (`script_text`), read on demand, capped and never stored; nothing can write a script.
+> (`script_text`), read on demand, returned as a credential-filtered and capped
+> representation, and never stored; nothing can write a script.
 > See `08-GREENFIELD-AMENDMENTS.md §26`.
 
 All paths are relative to `https://{host}/rest/orgs/{org_id}` unless noted.

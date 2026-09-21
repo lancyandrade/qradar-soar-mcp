@@ -40,7 +40,16 @@ Row = dict[str, Any]
 
 @dataclass(frozen=True, slots=True)
 class ScriptSource:
-    """What ``GET /scripts/{script_id}`` is read for: which script answered, and its body.
+    """What ``GET /scripts/{script_id}`` is read for: which script answered, and a *safe
+    representation* of its body.
+
+    ``text`` is ``script_text`` after the credential filter (this server's credential, and
+    anything the redactor takes for one, replaced by its marker). It is the script's exact
+    source only when ``redacted`` is false. The filter is a heuristic over arbitrary code,
+    so it can also replace text that merely looks like a credential; either way the change
+    is reported, never silent. The text SOAR sent is not kept: of it, this object holds
+    only its length, ``source_chars``.
+
     ``text`` is code someone stored in SOAR: data to show, never anything to run. The
     identity fields are there so a caller can tell that the script it asked for is still
     the script the catalog described."""
@@ -49,7 +58,8 @@ class ScriptSource:
     programmatic_name: str
     uuid: str
     text: str = field(repr=False)  # never in a log line or a traceback
-    redacted: bool = False  # the text differs from SOAR's: something credential-like left it
+    source_chars: int  # characters (code points) of ``script_text`` as SOAR returned it
+    redacted: bool  # the filter changed something: ``text`` is not the exact source
 
 
 def _rows(items: Any, where: str) -> list[Row]:
@@ -107,8 +117,11 @@ class DiscoveryClient:
     async def script_source(self, script_id: int) -> ScriptSource:
         """The body of one script (P2-02; 08 §26). Read-only, and only ever by id.
 
-        The credential, and anything shaped like one, is removed from the text here,
-        before anything can cut it: a secret cut in half is no longer recognisable.
+        The credential, and anything shaped like one, is replaced in the text here,
+        before anything can cut it: a secret cut in half is no longer recognisable. That is
+        a safety transformation, and it is reported as one (``redacted``, with the length
+        of what SOAR sent in ``source_chars``); cutting to size is the caller's, and
+        separate. The unfiltered text does not leave this method.
         """
         if not isinstance(script_id, int) or isinstance(script_id, bool) or script_id < 1:
             raise SoarValidationError("a script id is a positive integer", not_sent=True)
@@ -131,6 +144,7 @@ class DiscoveryClient:
             programmatic_name=redact(self._c.scrub(name) or ""),
             uuid=uuid,
             text=clean,
+            source_chars=len(text),
             redacted=clean != text,
         )
 

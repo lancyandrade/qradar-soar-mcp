@@ -657,11 +657,14 @@ async def test_get_script_resolves_in_the_catalog_then_reads_the_verified_detail
     text = fake.discovery["script:400"]["script_text"]
     assert data["body"] == {
         "text": text,
-        "truncated": False,
-        "returned_chars": len(text),
-        "original_chars": len(text),
-        "limit_chars": SCRIPT_BODY_LIMIT,
+        "text_is": "exact_source",
         "redacted": False,
+        "truncated": False,
+        "source_chars": len(text),
+        "safe_chars": len(text),
+        "returned_chars": len(text),
+        "limit_chars": SCRIPT_BODY_LIMIT,
+        "redaction_marker": "[REDACTED]",
     }
     assert await ok(rt, "soar_get_script", script_id=400) == data
 
@@ -682,7 +685,8 @@ async def test_only_script_text_is_taken_from_the_detail(rt: Runtime, fake: Fake
 async def test_an_empty_body_is_a_complete_body(rt: Runtime, fake: FakeSoar):
     fake.discovery["script:400"]["script_text"] = ""
     body = (await ok(rt, "soar_get_script", script_id=400))["body"]
-    assert body["text"] == "" and body["truncated"] is False and body["original_chars"] == 0
+    assert body["text"] == "" and body["truncated"] is False and body["text_is"] == "exact_source"
+    assert body["source_chars"] == body["safe_chars"] == body["returned_chars"] == 0
 
 
 async def test_a_body_at_the_cap_is_complete_and_one_over_is_marked(rt: Runtime, fake: FakeSoar):
@@ -696,11 +700,14 @@ async def test_a_body_at_the_cap_is_complete_and_one_over_is_marked(rt: Runtime,
     first = (await ok(rt, "soar_get_script", script_id=400))["body"]
     assert first == {
         "text": text[:SCRIPT_BODY_LIMIT],
-        "truncated": True,
-        "returned_chars": SCRIPT_BODY_LIMIT,
-        "original_chars": len(text),
-        "limit_chars": SCRIPT_BODY_LIMIT,
+        "text_is": "exact_source_prefix",
         "redacted": False,
+        "truncated": True,
+        "source_chars": len(text),
+        "safe_chars": len(text),
+        "returned_chars": SCRIPT_BODY_LIMIT,
+        "limit_chars": SCRIPT_BODY_LIMIT,
+        "redaction_marker": "[REDACTED]",
     }
     assert "truncated" not in first["text"]  # the marker is beside the code, not in it
     assert (await ok(rt, "soar_get_script", script_id=400))["body"] == first  # deterministic
@@ -712,21 +719,67 @@ async def test_the_cut_is_on_a_character_boundary(rt: Runtime, fake: FakeSoar):
     out = await call(rt, "soar_get_script", script_id=400)
     body = out["data"]["body"]
     assert body["truncated"] is True and len(body["text"]) == SCRIPT_BODY_LIMIT
-    assert body["text"] == text[:SCRIPT_BODY_LIMIT] and body["original_chars"] == 30_000
+    assert body["text"] == text[:SCRIPT_BODY_LIMIT]
+    assert body["source_chars"] == body["safe_chars"] == 30_000 and body["redacted"] is False
     body["text"].encode("utf-8")  # no lone surrogate
     assert json.loads(json.dumps(out))["data"]["body"]["text"] == body["text"]
 
 
-def test_script_body_reports_both_lengths():
-    assert script_body("abcdef", redacted=False, limit=4) == {
+def test_script_body_reports_each_transformation_by_itself():
+    """The projection alone: redaction (done before it) and truncation (done by it) are
+    independent, and every combination has its own name."""
+    assert script_body("abcdef", source_chars=6, redacted=False, limit=4) == {
         "text": "abcd",
-        "truncated": True,
-        "returned_chars": 4,
-        "original_chars": 6,
-        "limit_chars": 4,
+        "text_is": "exact_source_prefix",
         "redacted": False,
+        "truncated": True,
+        "source_chars": 6,
+        "safe_chars": 6,
+        "returned_chars": 4,
+        "limit_chars": 4,
+        "redaction_marker": "[REDACTED]",
     }
-    assert script_body("abcd", redacted=True, limit=4)["truncated"] is False
+    whole = script_body("abcd", source_chars=4, redacted=False, limit=4)
+    assert (whole["text_is"], whole["truncated"]) == ("exact_source", False)
+    # Redacted and under the cap: not truncated, whatever redaction did to the length.
+    changed = script_body("k = [REDACTED]", source_chars=40, redacted=True, limit=20)
+    assert (changed["text_is"], changed["redacted"], changed["truncated"]) == (
+        "redacted_source",
+        True,
+        False,
+    )
+    assert (changed["source_chars"], changed["safe_chars"], changed["returned_chars"]) == (
+        40,
+        14,
+        14,
+    )
+    # Redacted and still over the cap: both, and the cut is measured on the safe text.
+    both = script_body("k = [REDACTED]" + "x" * 30, source_chars=70, redacted=True, limit=20)
+    assert (both["text_is"], both["redacted"], both["truncated"]) == (
+        "redacted_source_prefix",
+        True,
+        True,
+    )
+    assert (both["source_chars"], both["safe_chars"], both["returned_chars"]) == (70, 44, 20)
+    # The source was longer than the cap, the safe text is not: that is not truncation.
+    shrunk = script_body("k = [REDACTED]", source_chars=500, redacted=True, limit=20)
+    assert shrunk["truncated"] is False and shrunk["text"] == "k = [REDACTED]"
+    for body in (whole, changed, both, shrunk):
+        assert body["returned_chars"] == len(body["text"]) <= body["limit_chars"]
+        assert body["truncated"] is (body["returned_chars"] < body["safe_chars"])
+        assert (body["text_is"] == "exact_source") is not (body["redacted"] or body["truncated"])
+
+
+@pytest.mark.parametrize("limit", range(16, 32))
+def test_a_redaction_marker_is_never_cut_in_two(limit: int):
+    from qradar_soar_mcp.logging import redact
+
+    text = "authorization = [REDACTED]\nx = 1\n"  # the marker is characters 16 to 25
+    body = script_body(text, source_chars=40, redacted=True, limit=limit)
+    assert body["text"] == (text[:16] if 16 < limit < 26 else text[:limit])
+    assert body["returned_chars"] == len(body["text"]) <= limit and body["truncated"] is True
+    # What the pipeline's output redactor will do to it afterwards: nothing.
+    assert redact(body["text"]) == body["text"]
 
 
 INJECTION = (
@@ -880,25 +933,223 @@ async def test_an_oversized_detail_is_refused_not_cut(rt: Runtime, fake: FakeSoa
 
 
 def test_script_source_does_not_appear_in_a_repr():
-    source = ScriptSource(id=1, programmatic_name="p", uuid="u", text="SECRET-BODY")
+    source = ScriptSource(
+        id=1, programmatic_name="p", uuid="u", text="SECRET-BODY", source_chars=11, redacted=False
+    )
     assert "SECRET-BODY" not in repr(source) and "SECRET-BODY" not in str(source)
 
 
-async def test_credentials_in_script_source_are_redacted_before_the_cut(
+# ---- redaction (a safety transformation) and truncation (a size one) are independent
+MARKER = "[REDACTED]"
+PLANTED = f"api_secret = '{SENTINEL}'\n"  # the configured credential, echoed into a script
+
+
+def body_invariants(body: dict[str, Any]) -> None:
+    """What holds for every body, whatever happened to the source."""
+    assert set(body) == {
+        "text",
+        "text_is",
+        "redacted",
+        "truncated",
+        "source_chars",
+        "safe_chars",
+        "returned_chars",
+        "limit_chars",
+        "redaction_marker",
+    }
+    assert body["returned_chars"] == len(body["text"]) <= body["limit_chars"] == SCRIPT_BODY_LIMIT
+    assert body["truncated"] is (body["returned_chars"] < body["safe_chars"])
+    assert body["redaction_marker"] == MARKER
+    if not body["redacted"]:
+        assert body["source_chars"] == body["safe_chars"]
+    assert (
+        body["text_is"]
+        == {
+            (False, False): "exact_source",
+            (False, True): "exact_source_prefix",
+            (True, False): "redacted_source",
+            (True, True): "redacted_source_prefix",
+        }[(body["redacted"], body["truncated"])]
+    )
+    # Only an untouched body is ever called the exact source.
+    assert (body["text_is"] == "exact_source") is not (body["redacted"] or body["truncated"])
+
+
+async def test_unchanged_source_is_reported_as_exact(rt: Runtime, fake: FakeSoar):
+    text = "import re\n\ndef main(incident):\n    token_count = len(incident.name)\n"
+    fake.discovery["script:400"]["script_text"] = text
+    body = (await ok(rt, "soar_get_script", script_id=400))["body"]
+    body_invariants(body)
+    assert body["text"] == text and body["text_is"] == "exact_source"
+    assert body["redacted"] is False and body["truncated"] is False
+    assert body["source_chars"] == body["safe_chars"] == body["returned_chars"] == len(text)
+    assert MARKER not in body["text"]
+
+
+async def test_redacted_source_is_never_presented_as_exact(
+    rt: Runtime, fake: FakeSoar, tmp_path: Path
+):
+    raw = f"import re\n{PLANTED}x = 1\n"
+    fake.discovery["script:400"]["script_text"] = raw
+    out = await call(rt, "soar_get_script", script_id=400)
+    assert out["ok"] is True
+    body = out["data"]["body"]
+    body_invariants(body)
+    safe = f"import re\napi_secret = '{MARKER}'\nx = 1\n"
+    assert body["text"] == safe
+    assert body["redacted"] is True and body["truncated"] is False
+    assert body["text_is"] == "redacted_source"  # and not exact_source
+    assert body["source_chars"] == len(raw)  # what SOAR sent
+    assert body["safe_chars"] == len(safe) == len(raw) - len(SENTINEL) + len(MARKER)
+    assert body["returned_chars"] == len(body["text"]) == len(safe)
+    assert SENTINEL not in json.dumps(out)
+    note = out["data"]["note"]
+    assert "safety-filtered representation" in note and "exact source only when" in note
+    assert audit_records(tmp_path) == []
+
+
+async def test_redaction_and_truncation_are_reported_independently(rt: Runtime, fake: FakeSoar):
+    filler = "k = 1\n" * 5_000  # 30,000 characters: over the cap with or without the secret
+    raw = PLANTED + filler
+    fake.discovery["script:400"]["script_text"] = raw
+    out = await call(rt, "soar_get_script", script_id=400)
+    body = out["data"]["body"]
+    body_invariants(body)
+    safe = raw.replace(SENTINEL, MARKER)
+    assert body["redacted"] is True and body["truncated"] is True
+    assert body["text_is"] == "redacted_source_prefix"
+    assert body["source_chars"] == len(raw) and body["safe_chars"] == len(safe)
+    # The cap is measured on the safe representation, not on what SOAR sent.
+    assert body["text"] == safe[:SCRIPT_BODY_LIMIT] and body["returned_chars"] == SCRIPT_BODY_LIMIT
+    assert SENTINEL not in json.dumps(out)
+
+
+async def test_redaction_alone_does_not_count_as_truncation(rt: Runtime, fake: FakeSoar):
+    """A source over the cap whose safe representation fits: redacted, not truncated."""
+    padding = "#" * (SCRIPT_BODY_LIMIT - 300)
+    raw = padding + "\n" + "".join(f"s{n} = '{SENTINEL}'\n" for n in range(10))
+    assert len(raw) > SCRIPT_BODY_LIMIT
+    fake.discovery["script:400"]["script_text"] = raw
+    body = (await ok(rt, "soar_get_script", script_id=400))["body"]
+    body_invariants(body)
+    assert body["source_chars"] == len(raw) > SCRIPT_BODY_LIMIT >= body["safe_chars"]
+    assert body["redacted"] is True and body["truncated"] is False
+    assert body["text_is"] == "redacted_source" and body["text"].count(MARKER) == 10
+
+
+@pytest.mark.parametrize("offset", range(-len(SENTINEL) - 2, 3))
+async def test_no_part_of_a_secret_survives_the_cut(offset: int, rt: Runtime, fake: FakeSoar):
+    """Redaction comes first: wherever the secret lies across the cap, none of it is left.
+    Cutting first would leave a fragment that no redactor recognises."""
+    lead = "x" * (SCRIPT_BODY_LIMIT + offset)
+    fake.discovery["script:400"]["script_text"] = f"{lead}{SENTINEL}\n" + "y" * 500
+    out = await call(rt, "soar_get_script", script_id=400)
+    body = out["data"]["body"]
+    body_invariants(body)
+    assert body["redacted"] is True and body["truncated"] is True
+    assert SENTINEL not in json.dumps(out)
+    for size in range(4, len(SENTINEL) + 1):
+        assert SENTINEL[:size] not in body["text"] and SENTINEL[-size:] not in body["text"]
+    # Nor half a marker: the cut moves back to where the marker starts.
+    tail = body["text"][len(lead) :] if offset < 0 else ""
+    assert tail in ("", MARKER) or tail.startswith(MARKER)
+
+
+async def test_credential_shaped_text_that_is_harmless_is_still_reported_as_redaction(
     rt: Runtime, fake: FakeSoar
 ):
-    lead = "k = 1\n" * 3_332  # 19,992 characters: the secret straddles the 20,000 cap
-    assert len(lead) < SCRIPT_BODY_LIMIT < len(lead) + len(SENTINEL)
-    fake.discovery["script:400"]["script_text"] = (
-        f"headers = 'Authorization: Basic AAAAAAAAAAAAAAAAAAAAAAAA'\n{lead}{SENTINEL}\n"
+    """The redactor is a heuristic. ``authorization = <expression>`` is ordinary code, and
+    it matches the redactor's pattern. The tool does not pretend otherwise: the text it
+    returns is marked as redacted, with truthful lengths, and the redactor is not weakened."""
+    raw = (
+        "def headers(cfg):\n"
+        "    authorization = cfg.value\n"
+        "    scheme = 'Basic realm_placeholder'\n"
+        "    return {'x': authorization, 'y': scheme}\n"
     )
+    fake.discovery["script:400"]["script_text"] = raw
     out = await call(rt, "soar_get_script", script_id=400)
-    rendered = json.dumps(out)
-    assert out["ok"] is True and out["data"]["body"]["redacted"] is True
-    assert "[REDACTED]" in out["data"]["body"]["text"]
-    assert "AAAAAAAAAAAA" not in rendered  # a synthetic, zero-entropy stand-in
-    for size in range(6, len(SENTINEL) + 1):
-        assert SENTINEL[:size] not in rendered  # not even the part before the cut
+    body = out["data"]["body"]
+    body_invariants(body)
+    assert body["text"] != raw  # harmless code was changed ...
+    assert "cfg.value" not in body["text"] and "realm_placeholder" not in body["text"]
+    assert body["text"].count(MARKER) == 2
+    assert body["redacted"] is True and body["text_is"] == "redacted_source"  # ... and it says so
+    assert body["truncated"] is False
+    assert body["source_chars"] == len(raw) and body["safe_chars"] == len(body["text"])
+    assert body["source_chars"] != body["safe_chars"]
+    # The lines the pattern did not match are untouched, and so is the line after a match.
+    assert body["text"].startswith("def headers(cfg):\n    authorization = [REDACTED]\n")
+    assert body["text"].endswith("    return {'x': authorization, 'y': scheme}\n")
+
+
+@pytest.mark.parametrize(
+    "ending", ["# see the header authorization:", "authorization =", "auth = 'Basic "]
+)
+async def test_source_that_ends_in_a_credential_keyword_is_returned_not_crashed_on(
+    ending: str, rt: Runtime, fake: FakeSoar
+):
+    """The pipeline's output redactor once ran on the serialised answer, where such an
+    ending let its pattern run on into the JSON and the call crashed."""
+    raw = f"x = 1\n{ending}"
+    fake.discovery["script:400"]["script_text"] = raw
+    body = (await ok(rt, "soar_get_script", script_id=400))["body"]
+    body_invariants(body)
+    assert body["text"] == raw and body["text_is"] == "exact_source"
+
+
+async def test_the_unredacted_source_is_not_kept_anywhere(rt: Runtime, fake: FakeSoar):
+    fake.discovery["script:400"]["script_text"] = f"import re\n{PLANTED}"
+    assert rt.client is not None
+    source = await rt.client.discovery.script_source(400)
+    assert source.redacted is True and source.source_chars == len(f"import re\n{PLANTED}")
+    assert SENTINEL not in source.text and MARKER in source.text
+    held = [getattr(source, name) for name in source.__dataclass_fields__]
+    assert SENTINEL not in repr(held) and SENTINEL not in repr(source)
+    assert sorted(source.__dataclass_fields__) == [
+        "id",
+        "programmatic_name",
+        "redacted",
+        "source_chars",
+        "text",
+        "uuid",
+    ]
+    # And the catalog, which is what the server caches, never holds a body at all.
+    await ok(rt, "soar_get_script", script_id=400)
+    cached = rt.require_catalog().cached()
+    assert cached is not None
+    assert "import re" not in cached.to_json() and "script_text" not in cached.to_json()
+
+
+async def test_redacted_source_leaks_nothing_to_logs_errors_or_audit(
+    fake: FakeSoar, tmp_path: Path, monkeypatch
+):
+    planted = "PLANTED-TOKEN-DO-NOT-LEAK-5e1f"
+    fake.discovery["script:400"]["script_text"] = (
+        f"h = 'Authorization: Basic {planted}'\nk = '{SENTINEL}'\n"
+    )
+    stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stderr)
+    handler = configure_logging("DEBUG", secrets=[SENTINEL])
+    probe = LeakProbe()
+    logging.getLogger().addHandler(probe)
+    try:
+        rt = Runtime.build(base_env(tmp_path, SOAR_LOG_LEVEL="DEBUG"), transport="stdio")
+        shown = await call(rt, "soar_get_script", script_id=400)
+        fake.discovery["script:400"]["uuid"] = "uuid-other"  # and on a failure path
+        refused = await call(rt, "soar_get_script", script_id=400)
+        await rt.aclose()
+    finally:
+        logging.getLogger().removeHandler(probe)
+        logging.getLogger().removeHandler(handler)
+    assert shown["ok"] is True and shown["data"]["body"]["redacted"] is True
+    body_invariants(shown["data"]["body"])
+    assert refused["ok"] is False and refused["error"]["code"] == "conflict"
+    everything = "\n".join(
+        [json.dumps(shown), json.dumps(refused), *probe.texts, stderr.getvalue()]
+    )
+    assert planted not in everything and SENTINEL not in everything
+    assert audit_records(tmp_path) == []
 
 
 async def test_script_source_reaches_no_log_and_no_audit_record(

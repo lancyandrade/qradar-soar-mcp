@@ -140,6 +140,20 @@ def test_readme_discovery_budgets_match_the_code():
     amendments = (ROOT / "docs/design/08-GREENFIELD-AMENDMENTS.md").read_text(encoding="utf-8")
     assert f"`SCRIPT_BODY_LIMIT` = {SCRIPT_BODY_LIMIT:,} characters" in amendments
     assert f"{SCRIPT_BODY_LIMIT:,} characters" in TOOL_REGISTRY["soar_get_script"].description
+    # The body contract (review of PR #8): every field and every text_is value is documented,
+    # and nowhere is the body called the original: redaction may have changed it.
+    from qradar_soar_mcp.tools.projection import SCRIPT_TEXT_IS, script_body
+
+    body = script_body("x", source_chars=1, redacted=False)
+    described = re.sub(r"\s+", " ", TOOL_REGISTRY["soar_get_script"].description)
+    for name in (*body, *SCRIPT_TEXT_IS.values()):
+        if name != "text":
+            assert f"`{name}`" in section or f"`body.{name}`" in section, name
+            assert f"`{name}`" in amendments, name
+    for name in ("redacted", "truncated", "text_is", "source_chars", "safe_chars"):
+        assert name in described, name
+    assert "safety-filtered representation" in section and "safety-filtered" in described
+    assert "original_chars" not in README + described  # 08 names it once, as history
 
 
 def test_readme_defaults_match_settings():

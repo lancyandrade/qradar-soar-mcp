@@ -754,7 +754,8 @@ the P1-CORR-02 note (the seventh exception).
 Ticket `P2-02` of `06`, implemented on 2026-09-21, offline, from the evidence `P2-00`
 committed and on the catalog of §25. **No request was sent to an appliance for it.** It
 adds five rows to §3 and one call to §4, no capability flag, and changes nothing in
-`security/`, in `tools/registry.py`, in `client/base.py` or in `catalog/`.
+`security/`, in `client/base.py` or in `catalog/`; in `tools/registry.py` it changes
+only how the output redactor walks an answer (§26.3).
 
 ### 26.1 The five tools
 
@@ -834,17 +835,60 @@ name is tried.
   `conflict`: the script changed since the catalog was loaded, and the caller is told to
   refresh. A transport or HTTP failure is the ordinary client error; nothing is retried
   elsewhere.
-- **Cap.** `SCRIPT_BODY_LIMIT` = 20,000 characters (Python code points), a constant in
-  `tools/projection.py` beside the other text budgets; no existing budget had this
-  meaning, and it is not an environment setting. The credential, and anything
-  credential-shaped, is removed from the text **before** the cut, so a secret cannot
-  survive as a fragment. The answer is `body: {text, truncated, returned_chars,
-  original_chars, limit_chars, redacted}`: the first 20,000 characters, whether that is
-  all of it, both lengths (of the text as redacted), and whether redaction changed it. No
-  marker is written into the code, the cut is at a fixed offset, and a response larger
-  than the client's byte cap is `response_too_large`, not cut.
+- **What is returned is a safe representation, not necessarily the source.** Two
+  transformations can apply, they are independent, and each is reported by itself
+  (corrected in review of PR #8; the first version reported the length after redaction
+  as `original_chars` and gave redaction a bare boolean):
+  1. *Redaction, a safety transformation*, in `DiscoveryClient.script_source`: this
+     server's credential (`SoarClient.scrub`) and whatever the redactor takes for a
+     credential (`logging.redact`: the configured secrets, `Basic <token>`,
+     `authorization[:=] <value>`) are replaced by `[REDACTED]`. It is a heuristic over
+     arbitrary code and can replace harmless text (`authorization = cfg.value`); it is not
+     weakened for that, and it is not claimed to find every secret a script holds.
+     `ScriptSource` keeps the safe text, `redacted` (the safe text differs from what SOAR
+     sent) and `source_chars` (the length of what SOAR sent). The unredacted text does not
+     leave that method: it is not kept, cached, logged or returned, and no hash of it is
+     taken.
+  2. *Truncation, a size transformation*, in `tools/projection.script_body`: the first
+     `SCRIPT_BODY_LIMIT` = 20,000 characters (Python code points) of the safe text. The
+     cap is a constant in `tools/projection.py` beside the other text budgets; no existing
+     budget had this meaning, and it is not an environment setting.
+
+  Redaction comes first, because a secret cut in half no longer matches any redactor.
+  The answer is `body`:
+
+  | Field | Meaning |
+  |---|---|
+  | `text` | the safe representation, cut to the cap |
+  | `text_is` | `exact_source` (neither transformation: only then is `text` the script character for character), `exact_source_prefix` (truncated only), `redacted_source`, `redacted_source_prefix` |
+  | `redacted` | redaction changed the text. Not: "a secret was found" (it may have been a false positive), and not truncation |
+  | `truncated` | the 20,000-character cap cut the safe text (`returned_chars < safe_chars`). Never set by redaction, even when redaction made the text shorter than the source |
+  | `source_chars` | characters of `script_text` as SOAR returned it |
+  | `safe_chars` | characters after redaction; equal to `source_chars` when `redacted` is false |
+  | `returned_chars` | `len(text)` |
+  | `limit_chars` | the cap |
+  | `redaction_marker` | the text that stands in for whatever was redacted |
+
+  `source_chars - safe_chars` tells a caller how much length redaction changed and
+  nothing about what was there. No marker is written into the code for truncation, the cut
+  is at a fixed offset, a redaction marker is never cut in two (a cut that would fall
+  inside one moves back to its start, so `returned_chars` can be up to nine under the
+  cap), and a response larger than the client's byte cap is `response_too_large`, not cut.
+- **The output redactor of the pipeline** (`tools/registry._redacted`, step 12) used to
+  redact the *serialised* answer as one string. There a pattern can run past the end of a
+  value into the JSON around it: after `authorization = x` it consumed the escaped
+  newline and the first token of the next line, which changed `body.text` after its
+  lengths had been counted, and a value that *ended* in `authorization:` left a document
+  that no longer parsed, so the call crashed (for any tool, on text an attacker may
+  control). It now redacts every string of the answer, keys included, as the text it is.
+  That is at least as strong (JSON escaping can no longer hide a credential that holds a
+  quote or a backslash) and it is what makes `returned_chars == len(text)` hold. This is
+  the one change this ticket makes to `tools/registry.py`. `security/audit.py` redacts a
+  serialised record the same way; there a broken document is caught and the mutation
+  refused (fail closed), and it is left unchanged here.
 - **Untrusted.** Script source is configuration an administrator or an installed app
-  wrote. It is returned as one string, with a note that says so, and the server
+  wrote. Its safe representation is returned as one string, with a note that says so
+  and says that it is the exact source only when `text_is` is `exact_source`, and the server
   instructions say the same. It is never executed, imported, compiled or evaluated, and it
   is not logged and not audited (a Tier-0 read writes no audit record; `ScriptSource`
   keeps the text out of its `repr`).

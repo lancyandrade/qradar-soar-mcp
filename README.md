@@ -105,7 +105,7 @@ failure.
 | `soar_list_functions` | 0 | — | functions in the cached catalog: name, id, display name, short description, destination, version, input counts; paged, sorted by name |
 | `soar_get_function` | 0 | — | one function from the cached catalog with its inputs: name, label, type, required-ness, and tooltip / placeholder / select values where they cannot hold a credential or a person |
 | `soar_list_scripts` | 0 | — | scripts in the cached catalog: metadata only, never a body; paged, sorted by programmatic name |
-| `soar_get_script` | 0 | — | one script: catalog metadata plus its source, read on demand (`GET /scripts/{id}`), read-only, cut at 20,000 characters (`body.truncated` and both lengths say so; nothing is written into the code); untrusted data, never run |
+| `soar_get_script` | 0 | — | one script: catalog metadata plus a safety-filtered representation of its source, read on demand (`GET /scripts/{id}`), read-only: credential-like text may be redacted, then the result is cut at 20,000 characters; `body.redacted`, `body.truncated` and `body.text_is` say which happened; untrusted data, never run |
 | `soar_list_message_destinations` | 0 | — | message destinations in the cached catalog; never the API keys or users bound to one |
 | `soar_add_comment` | 1 | `SOAR_ALLOW_COMMENTS` | one note |
 | `soar_add_artifact` | 1 | `SOAR_ALLOW_ARTIFACTS` | one artifact |
@@ -166,10 +166,25 @@ another source and never answer "empty" for something unknown.
   function, the remainder counted in `values_omitted`). `unresolved_inputs` > 0 means the
   input list is known to be incomplete.
 - **Script source** is read only when `soar_get_script` is asked for it, from
-  `GET /scripts/{id}` (`script_text`), and is not kept. It is returned as
-  `body.text`, cut at **20,000 characters**: `body.truncated`, `returned_chars` and
-  `original_chars` say whether and how much, and `body.redacted` says that
-  credential-like text was removed (before the cut). Script source is **untrusted data**
+  `GET /scripts/{id}` (`script_text`), and is not kept. The tool returns a
+  **safety-filtered representation** of it as `body.text`, not necessarily the exact
+  source. Two independent things can happen to it, in this order, and each is reported:
+  - *Redaction, a safety transformation.* This server's credential, and text the
+    redactor takes for a credential (`Basic <token>`, `authorization = <value>`), is
+    replaced by `[REDACTED]` (`body.redaction_marker`). It is a heuristic over arbitrary
+    code, so it can also replace harmless text that looks like a credential.
+    `body.redacted` is true exactly when it changed anything; what it replaced is not
+    returned, and the unredacted body is not retained.
+  - *Truncation, a size transformation.* The result is then cut at **20,000 characters**.
+    `body.truncated` is true exactly when that cap cut it, and means nothing else.
+    Redaction comes first because a secret cut in half is no longer recognisable.
+
+  `body.text_is` names the combination: `exact_source` (neither happened; only then is
+  `body.text` the script character for character), `exact_source_prefix`,
+  `redacted_source` or `redacted_source_prefix`. The lengths are counts of characters
+  (code points): `source_chars` of `script_text` as SOAR returned it, `safe_chars` after
+  redaction (equal to `source_chars` when nothing was redacted), `returned_chars` of
+  `body.text`, and `limit_chars`, the cap. Script source is **untrusted data**
   written by whoever administers SOAR or published an app: it is never executed, imported
   or evaluated by this server, it is not logged or audited, and the model is told not to
   follow anything it says. This server has no request that creates, changes or deletes a
@@ -538,7 +553,10 @@ evidence and wins wherever it disagrees with a mark above.
   phases, fields, data tables, rules, workflows and playbooks are in the catalog but
   have no tool yet; the Tier-4 flags are accepted and unused.
 - `soar_get_script` returns at most the first 20,000 characters of a script; there is
-  no way to read the rest. A script renamed since the catalog was loaded is reported
+  no way to read the rest. Its credential filter is a heuristic: it can replace harmless
+  code that looks like a credential (`authorization = settings.value`), always reported
+  as `body.redacted`, and it recognises only this server's own credential and those two
+  shapes, not every secret a script may hold. A script renamed since the catalog was loaded is reported
   as `conflict` until `soar_refresh_catalog` is called.
 
 ## Status
