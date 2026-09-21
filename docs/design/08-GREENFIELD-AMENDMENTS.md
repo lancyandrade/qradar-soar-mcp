@@ -885,7 +885,7 @@ name is tried.
   quote or a backslash) and it is what makes `returned_chars == len(text)` hold. This is
   the one change this ticket makes to `tools/registry.py`. `security/audit.py` redacts a
   serialised record the same way; there a broken document is caught and the mutation
-  refused (fail closed), and it is left unchanged here.
+  refused (fail closed), and it is left unchanged here. (Corrected since: §27.)
 - **Untrusted.** Script source is configuration an administrator or an installed app
   wrote. Its safe representation is returned as one string, with a note that says so
   and says that it is the exact source only when `text_is` is `exact_source`, and the server
@@ -922,3 +922,122 @@ path at run time, which would be the first Phase-2 word in `client/base.py`.
 
 This ticket's only edit to the baseline is one implementation-status note in `05`, under
 the P2-01 note (the eighth exception).
+
+## 27. Audit records are redacted structurally (correction after P2-02)
+
+**Implementation status: done.** A corrective ticket between P2-02 and P2-03. It changes
+how an audit record is redacted and nothing else: no audit event, record field, hash-chain
+format, pipeline step, approval rule or SOAR call is touched, no baseline document is
+edited, and no request was sent to an appliance.
+
+### 27.1 The defect
+
+`AuditLog.append` redacted the *serialised* record as one string and parsed the result
+again, the construct §26.3 removed from the pipeline's output redactor and recorded as
+still present here. On serialised JSON a redaction pattern is not confined to the value it
+starts in:
+
+- a value that *ended* in `authorization:` or `authorization =` let the pattern consume
+  the closing quote of its JSON string. The document no longer parsed, `append` raised
+  `AuditError`, and the record was not written. For a required `MUTATION_PENDING` record
+  that refuses the mutation (fail closed); for the best-effort records it meant that a
+  mutation SOAR had already committed got no `MUTATION_COMMITTED` record, because of text
+  in a post-image that whoever wrote the comment or field controls;
+- after `authorization = x` the pattern consumed the escaped newline and the first token
+  of the next line: the record parsed, and said something the source did not;
+- a configured secret that holds a quote or a backslash is escaped in serialised JSON, so
+  it never matched and was written to the log unredacted;
+- two keys that became equal once redacted were merged by the parser, which keeps the
+  last: one audit field was lost without a trace.
+
+Failing closed was the right behaviour for a record that cannot be written and stays. The
+correction is that records which *can* be represented are no longer refused or altered.
+
+### 27.2 What it does now
+
+One primitive, `qradar_soar_mcp/redaction.py`, `redact_strings(value, redact, *,
+unique_keys=False)`: it walks a JSON-native value and passes every string through the
+redactor, dictionary keys included, each as the text it is. Lists and dictionaries keep
+their shape, numbers, booleans and `null` are returned as they are, and a new value is
+built. A redactor that returns something other than a string is a `TypeError`, so a
+faulty redactor cannot produce a record that does not serialise. What counts as a
+credential is unchanged: that is `logging.redact`, which this module does not import.
+
+It is shared, not copied. `tools/registry._redacted` (step 12) calls it after its JSON
+normalisation, with the behaviour PR #8 gave it; `security/audit.py` calls it with
+`unique_keys=True` on the record `_clip()` has already bounded and made JSON-native (no
+second normalisation is added). The module sits at the top of the package beside
+`logging.py`, imports nothing from the project, and is imported by `tools/` and
+`security/`; `security/` still imports nothing from `tools/`.
+
+The order in `append` is what it was:
+
+1. build the record, `_clip()` its free-form fields;
+2. redact it structurally;
+3. compute `hash` over the redacted record without `hash`;
+4. serialise the redacted record with its `hash`;
+5. append the line, flush, `fsync`;
+6. only then advance the in-memory `seq` and chain tail.
+
+So the hash covers exactly the redacted record that is on disk, nothing unredacted is
+hashed or written, and `_digest()`, the canonical JSON form and `verify()` are unchanged.
+
+### 27.3 Keys, and keys that collide
+
+A key is redacted like a value: `{"token <secret>": 1}` is recorded as
+`{"token [REDACTED]": 1}`. If two keys of one mapping are equal after redaction, the
+record cannot hold both values under the names it would have to give them. Writing one
+would lose evidence silently, and renaming one would put a key in the audit log that
+never existed. `redact_strings(..., unique_keys=True)` raises `KeyCollisionError` and
+`append` turns it into `AuditError`: no record, nothing written, `seq` and the chain tail
+not advanced, and the pipeline treats it as any other audit failure (a required
+`MUTATION_PENDING` refuses the mutation with `DENY_AUDIT` before SOAR is called). The
+message names neither key.
+
+No secret is needed for a collision: the keys `authorization: a` and `authorization: b`
+are both `authorization: [REDACTED]`. So whoever controls the key names of an audited
+image can still have that one record refused. For the required `MUTATION_PENDING` record
+that stops the mutation. For the best-effort records it does not, by the design of the
+pipeline (`_audit` logs the failure and goes on): a committed mutation can then lack its
+`MUTATION_COMMITTED` record, with its `MUTATION_PENDING` record in the log and the
+failure in the server log. That is the remainder of the first point of §27.1, narrowed
+from "any string value" to "two keys of one mapping"; removing it means either a
+representation for such keys or a different rule for best-effort records, and both are
+the owner's decision.
+
+Tool output keeps the behaviour of PR #8, where the later key wins; that is output to a
+model, not evidence, and it is left to the owner whether it should become an error as
+well.
+
+### 27.4 Failures stay closed
+
+Step 2 to 4 run in one guarded block. Anything raised there, by the redactor, by hashing
+or by serialising, becomes `AuditError` carrying the exception's *type* only and no
+chained cause, because the message of such an exception can quote the text it failed on.
+This also covers a case that used to escape as a bare `UnicodeEncodeError`, which no
+caller of `append` handles: a string with a lone surrogate, which parses from JSON and
+has no UTF-8 form. It is refused as an audit failure; no escaping scheme was invented for
+it.
+
+### 27.5 Compatibility
+
+The record schema is unchanged, so there is no schema version and nothing to migrate.
+Existing logs verify as before and are continued in place. For a record the former code
+handled correctly, the new code writes the same bytes (pinned by a test that rebuilds the
+former construct). Only records the former code refused, altered or under-redacted come
+out differently, and only from now on: a secret of the third kind in §27.1 that is
+already in an old log stays there, since rewriting history would break the chain.
+
+Not changed, and recorded for the owner:
+
+- `_clip()` cuts a string at 2,000 characters *before* the record is redacted. A
+  configured secret that straddles the cut is no longer whole, no redactor matches it,
+  and the part before the cut is written. Redaction before the cut is the rule §26.3
+  applies to script bodies; applying it here means reordering `_clip()` and redaction,
+  which this ticket was told not to do.
+- `_clip()` maps keys through `str()`, so two keys that differ only by type (`1` and
+  `"1"`) still merge there.
+- Only strings are redacted. A credential held as a number is not matched; the former
+  construct matched it inside the serialised text.
+- A failed `fsync` leaves a line on disk that the in-memory chain does not count. The
+  next record reuses its `seq`, and `verify` then reports the log as broken.

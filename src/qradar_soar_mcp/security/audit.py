@@ -5,6 +5,10 @@ One record per security decision and per mutation attempt. ``prev_hash`` →
 edits are detectable by :func:`verify`. Pre-images come from the fetch
 ``apply_patch`` already performs; post-images from the response.
 
+A record is redacted string by string, keys included, before it is hashed, so the hash
+covers exactly the line on disk; a record that cannot be redacted without losing a field
+is not written (:class:`AuditError`, 08 §27).
+
 ``SOAR_AUDIT_REQUIRED=true`` makes an unwritable log a startup failure; a
 mid-session write failure raises :class:`AuditError`, and the chokepoint
 fails the mutation closed. Audit content is never returned in tool output.
@@ -22,6 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from qradar_soar_mcp.redaction import KeyCollisionError, redact_strings
 from qradar_soar_mcp.security.limits import iter_jsonl
 
 GENESIS = "sha256:" + "0" * 64
@@ -216,13 +221,24 @@ class AuditLog:
             "request_id": request_id,
             "reason": _clip(reason),
         }
-        # Redact before hashing so the hash covers exactly what is on disk.
+        # Redact before hashing so the hash covers exactly what is on disk. Each string of
+        # the record, keys included, is redacted as the text it is (08 §27): whatever a
+        # string holds, the record keeps its structure. Nothing is written, and the chain
+        # does not advance, unless the whole record could be redacted, hashed and serialised.
         try:
-            redacted: dict[str, Any] = json.loads(self._redact(_canonical(record)))
-        except ValueError as exc:
-            raise AuditError(f"audit record is not serialisable: {type(exc).__name__}") from None
-        redacted["hash"] = _digest(redacted)
-        line = _canonical(redacted)
+            redacted: dict[str, Any] = redact_strings(record, self._redact, unique_keys=True)
+            redacted["hash"] = _digest(redacted)
+            line = _canonical(redacted)
+        except KeyCollisionError:
+            # Two fields under one key: one of them would be lost, so there is no record.
+            raise AuditError(
+                "audit record cannot be written: two keys are equal after redaction"
+            ) from None
+        except Exception as exc:
+            # The type only: the message of the exception may quote the text it failed on.
+            raise AuditError(
+                f"audit record cannot be redacted and serialised: {type(exc).__name__}"
+            ) from None
         try:
             with self.path.open("a", encoding="utf-8") as fh:
                 fh.write(line + "\n")
