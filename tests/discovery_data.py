@@ -116,6 +116,17 @@ def build_payloads(minimal: bool = False) -> dict[str, Any]:
                 name, doc["shape"]["entities"][0], prefix, doc["_enums"], start, minimal
             )
         }
+    # P2-02: the single script, which is the list row plus ``script_text`` (the body).
+    script_doc = verified("script")
+    assert script_doc["shape"]["script_text"] == "str"
+    assert set(script_doc["shape"]) - set(verified("scripts")["shape"]["entities"][0]) == {
+        "script_text"
+    }
+    for row in out["scripts"]["entities"]:
+        detail = fill(script_doc["shape"], "script", row["id"], minimal)
+        detail.update(row)
+        detail["script_text"] = f"# synthetic body of {row['name']}\nresult = {row['id']}\n"
+        out[f"script:{row['id']}"] = detail
     assert verified("workflows")["shape"] == {"entities": []}  # the org had none
     out["workflows"] = {"entities": []}
 

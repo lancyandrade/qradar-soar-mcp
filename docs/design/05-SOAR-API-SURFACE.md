@@ -51,6 +51,13 @@
 > it refuses every load, sends nothing and never falls back. The §2 rows are superseded,
 > for `51.0.9.0.20848`, by the calls listed in `08-GREENFIELD-AMENDMENTS.md §25`.
 
+> **Implementation status — P2-02, 2026-09-21.** `soar_list_functions`,
+> `soar_get_function`, `soar_list_scripts`, `soar_get_script` and
+> `soar_list_message_destinations` are implemented as Tier-0 reads over that catalog. The
+> only call they add is the verified `GET /scripts/{id}`, for the script body
+> (`script_text`), read on demand, capped and never stored; nothing can write a script.
+> See `08-GREENFIELD-AMENDMENTS.md §26`.
+
 All paths are relative to `https://{host}/rest/orgs/{org_id}` unless noted.
 Auth: HTTP Basic with API key id/secret. Common params `handle_format=names`
 and `text_content_output_format=always_text` as already implemented.

@@ -516,6 +516,17 @@ async def test_function_inputs_are_view_items_joined_to_function_fields(fake: Fa
     assert (await raw_client.get(f"{ORG}/functions/999999")).status_code == 404
 
 
+async def test_a_script_body_is_script_text_of_the_single_script_only(fake: FakeSoar, raw_client):
+    """P2-02 (08 §26): the verified shapes of ``scripts.json`` and ``script.json``."""
+    listing = (await raw_client.get(f"{ORG}/scripts")).json()["entities"]
+    assert all("script_text" not in row for row in listing)  # the list row carries no body
+    single = (await raw_client.get(f"{ORG}/scripts/{listing[0]['id']}")).json()
+    assert isinstance(single["script_text"], str) and single["script_text"]
+    assert set(single) - set(listing[0]) == {"script_text"}
+    assert {k: single[k] for k in listing[0]} == listing[0]
+    assert (await raw_client.get(f"{ORG}/scripts/999999")).status_code == 404
+
+
 async def test_the_server_version_is_in_rest_const(fake: FakeSoar, raw_client):
     body = (await raw_client.get("/rest/const")).json()
     assert body["server_version"]["version"] == "51.0.9.0.20848"
@@ -542,7 +553,9 @@ async def test_playbooks_are_listed_by_a_criteria_only_paged_post(fake: FakeSoar
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
-@pytest.mark.parametrize("path", ["/functions", "/scripts", "/types", "/groups", "/functions/200"])
+@pytest.mark.parametrize(
+    "path", ["/functions", "/scripts", "/scripts/400", "/types", "/groups", "/functions/200"]
+)
 async def test_the_discovery_collections_are_read_only(
     fake: FakeSoar, raw_client, method: str, path: str
 ):
@@ -561,7 +574,6 @@ async def test_the_discovery_collections_are_read_only(
         ("GET", "/configurations/exports/history"),
         ("POST", "/configurations/imports"),
         ("GET", "/playbooks/1000"),
-        ("GET", "/scripts/400"),
         ("GET", "/actions/300"),
         ("GET", "/workflows/1"),
         ("POST", "/playbooks/execution/query_paged"),

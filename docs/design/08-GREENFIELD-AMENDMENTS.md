@@ -6,13 +6,14 @@ conflicts with `00-` to `07-`, this document wins *for that point only*. It
 does not license any other redesign; anything not listed here is governed by
 `00-` to `07-` unchanged.
 
-`00-` to `07-` are the baseline and are not edited, with seven recorded
+`00-` to `07-` are the baseline and are not edited, with eight recorded
 exceptions: before first publication the private lab topology was replaced by
 generic placeholders (§17), P2-00 added a status pointer to `05` (§20),
 P1-CORR-01 added an implementation-status note to `05` (§21), P2-TLS added
 the TLS trust model to `02` as §7.1 (§22), P2-00b added a research-status
 note to `05` (§23), P1-CORR-02 added an implementation-status note to
-`05` (§24), and P2-01 added an implementation-status note to `05` (§25).
+`05` (§24), P2-01 added an implementation-status note to `05` (§25), and P2-02
+added an implementation-status note to `05` (§26).
 
 ---
 
@@ -112,7 +113,8 @@ behaviour".
 | `soar_update_task_status` | 2 | `SOAR_ALLOW_TASK_WRITES` | `GET` + `PUT` + `GET /tasks/{id}` (§24) |
 | `soar_invoke_action` | per policy (1–5) | `SOAR_ALLOW_ACTIONS` (+ `SOAR_ALLOW_DESTRUCTIVE_ACTIONS` when the rule is destructive) | none: every call is refused as `DENY_UNSUPPORTED`; the invocation contract is unverified (§21) |
 
-`P2-01` adds one Tier-0 tool to this contract, `soar_refresh_catalog` (§25.5).
+`P2-01` adds one Tier-0 tool to this contract, `soar_refresh_catalog` (§25.5), and
+`P2-02` adds five more Tier-0 tools, the discovery reads of §26.1.
 
 **Explicitly not in Phase 1:** `soar_ping`, `soar_security_status`, data-table
 reads, `/functions`, org-level `/actions`, any playbook tool, any generic REST
@@ -145,8 +147,9 @@ unless absolute; every request carries `handle_format=names` and
 | GET | `users` | |
 | GET | `types/incident/fields` | field definitions incl. `prefix: properties` for custom fields |
 
-`P2-01` adds the read-only discovery calls of §25.3, in `client/discovery.py` only; the
-paragraph below still describes the Phase-1 modules.
+`P2-01` adds the read-only discovery calls of §25.3, and `P2-02` one more read,
+`GET scripts/{id}` (§26.3), all in `client/discovery.py` only; the paragraph below still
+describes the Phase-1 modules.
 
 Precedence over any prior implementation: a task's status is changed with the
 verified `PUT /tasks/{id}`, never `PATCH`, and only as §24 describes; `query_paged` sends
@@ -745,3 +748,133 @@ sanitiser and the repository scanner over it.
 
 This ticket's only edit to the baseline is one implementation-status note in `05`, under
 the P1-CORR-02 note (the seventh exception).
+
+## 26. P2-02 — discovery tools: functions, scripts, message destinations
+
+Ticket `P2-02` of `06`, implemented on 2026-09-21, offline, from the evidence `P2-00`
+committed and on the catalog of §25. **No request was sent to an appliance for it.** It
+adds five rows to §3 and one call to §4, no capability flag, and changes nothing in
+`security/`, in `tools/registry.py`, in `client/base.py` or in `catalog/`.
+
+### 26.1 The five tools
+
+| Tool | Tier | Capability flag | Answers from | REST of its own |
+|---|---|---|---|---|
+| `soar_list_functions` | 0 | — | `Catalog.functions` | none |
+| `soar_get_function` | 0 | — | `Catalog.functions` | none |
+| `soar_list_scripts` | 0 | — | `Catalog.scripts` | none |
+| `soar_get_script` | 0 | — | `Catalog.scripts`, then the body on demand | `GET /scripts/{script_id}` (§26.3), only with `include_body` (the default) |
+| `soar_list_message_destinations` | 0 | — | `Catalog.message_destinations` | none |
+
+All are declared with `@soar_tool` and executed only by `run_pipeline`: no capability, no
+mutation, no approval, no mutation audit record.
+
+**Catalog first.** Each tool asks the catalog service for the catalog with `get()`, never
+`refresh()`: a catalog younger than `SOAR_CATALOG_TTL_SECONDS` is reused and costs SOAR
+nothing, an older or missing one is loaded through the configured backend, and
+`soar_refresh_catalog` stays the only forced reload. No tool reads a collection itself,
+and none reaches past the cache. A catalog that cannot be built is the tool's error,
+unchanged: `catalog_unavailable` with `SOAR_CATALOG_SOURCE=export`, and whatever a failed
+collections load raised otherwise. Nothing falls back to another source, and a section
+whose state is not `loaded` is answered with `catalog_unavailable`, never with an empty
+list (the collections backend always loads these three sections; the rule is there for a
+backend that may not).
+
+**Lookup.** A function is found by its catalog key `name`, a script by
+`programmatic_name`, or either by its SOAR `id`; exactly one of the two must be given. A
+key is matched exactly (case, spaces and all) and nothing is matched approximately, so a
+near miss selects nothing. Two catalog entries that share an id select neither
+(`malformed_response`). A not-found message names what was asked for, passed through the
+redactor, and no configuration value.
+
+**Lists.** Sorted by catalog key. `name_contains` is a case-insensitive substring of the
+key or of the display name / name, and is not a pattern language; `start` and `length`
+page the result. A page holds at most `min(SOAR_MAX_RESULTS, 100)` rows and at most
+40,000 characters of rows: rows that do not fit wait for the next page (`more`,
+`next_start`), and none is cut in the middle. A list row trims a description at 200
+characters and a display name at 120, with the visible marker of §7.
+
+### 26.2 What is shown
+
+Only what the specs of §25.2 hold, so none of what they exclude (principals, the API keys
+and users bound to a message destination, output examples, templates, free-text defaults,
+raw SOAR objects) can appear.
+
+- `soar_get_function` gives, for every resolved input, `name`, `label`, `input_type` and
+  `required` (SOAR's own value; null means not required): what `04 §2` L4 needs. For an
+  input that is neither credential- nor principal-typed it adds `tooltip`, `placeholder`
+  and the select `values` (at most 100 per input and 200 per function, the rest counted in
+  `values_omitted`). A `password`-typed input shows its name, label, type and
+  required-ness and nothing else; a `select_owner` or `multiselect_members` input shows no
+  values. The projection applies both rules itself and does not rely on the models having
+  applied them. `unresolved_inputs` is the catalog's count, `inputs_complete` is false
+  when it is not 0, and no definition is made up for an unresolved input.
+- `soar_list_message_destinations` shows exactly the fields of `MDSpec`.
+- `soar_list_scripts` shows the fields of `ScriptSpec` without the uuid, and never a body.
+
+### 26.3 The script body
+
+`P2-00` verified `GET /scripts/{script_id}` (200 with the read-only key; ledger and
+`tests/fixtures/soar/verified/script.json`): the single script is the list row plus one
+key, **`script_text`, a string**. That is the only property read as the body; no other
+name is tried.
+
+| Method | Path | Wrapper | Used for |
+|---|---|---|---|
+| GET | `scripts/{id}` | object | `script_text`, plus `id`, `programmatic_name` and `uuid` to confirm which script answered |
+
+- The catalog still holds no script body (§25.2 unchanged). The body is an on-demand
+  detail read: `soar_get_script` resolves the script in the catalog first, and the id in
+  the path is the catalog's integer. Caller text never reaches a path; a script the
+  catalog does not know is `not_found` and nothing is sent.
+- `DiscoveryClient.script_source(script_id)` takes a positive integer and nothing else. An
+  answer that is not an object, carries another `id`, lacks its identity, or whose
+  `script_text` is missing or not a string is `malformed_response` (key names only in the
+  message). An answer whose `programmatic_name` or `uuid` is not the catalog's is
+  `conflict`: the script changed since the catalog was loaded, and the caller is told to
+  refresh. A transport or HTTP failure is the ordinary client error; nothing is retried
+  elsewhere.
+- **Cap.** `SCRIPT_BODY_LIMIT` = 20,000 characters (Python code points), a constant in
+  `tools/projection.py` beside the other text budgets; no existing budget had this
+  meaning, and it is not an environment setting. The credential, and anything
+  credential-shaped, is removed from the text **before** the cut, so a secret cannot
+  survive as a fragment. The answer is `body: {text, truncated, returned_chars,
+  original_chars, limit_chars, redacted}`: the first 20,000 characters, whether that is
+  all of it, both lengths (of the text as redacted), and whether redaction changed it. No
+  marker is written into the code, the cut is at a fixed offset, and a response larger
+  than the client's byte cap is `response_too_large`, not cut.
+- **Untrusted.** Script source is configuration an administrator or an installed app
+  wrote. It is returned as one string, with a note that says so, and the server
+  instructions say the same. It is never executed, imported, compiled or evaluated, and it
+  is not logged and not audited (a Tier-0 read writes no audit record; `ScriptSource`
+  keeps the text out of its `repr`).
+
+### 26.4 No script write path
+
+`06 P2-02` asks that no write path for scripts exist anywhere, "grep test".
+`tests/test_no_script_writes.py` is that test, on the syntax tree of every product
+module: a request helper other than `get` whose arguments name a script path (literal,
+f-string, `org_path(...)`, local name, concatenation or `format`) fails it, as does a
+script path outside `client/discovery.py` or outside a `get(...)` there, an
+`org_path(...)` whose collection is not a literal (a helper that takes its collection
+from a caller could be pointed at scripts without naming them), a function or
+class named like a script write, a tool about scripts beyond the two reads, and `exec`,
+`eval`, `compile`, a dynamic import or a subprocess in the modules the source passes
+through. The detector is run against each of those mutations, so a clean result means
+none exists. This is in addition to what already held: `SOAR_ALLOW_SCRIPT_WRITES=true`
+refuses to start, `request()` sends no `DELETE` and `PUT` only to a task, and the AST
+surface test pins `client/` to the calls of §4, §25.3 and this section.
+
+### 26.5 Evidence and what stays open
+
+Offline only. The offline fake serves the single script as the recorded shape, with a
+synthetic body, and answers 405 to every other method on it. Not established by any
+evidence, and therefore not claimed: the largest body SOAR will return, the values
+`language` takes, and the script of a playbook (`playbook_handle` was null in
+every recorded row). Left to the owner: the 20,000-character cap and whether a way to
+read beyond it (an offset) is wanted; whether the conservative `conflict` on a renamed
+script should stay; and whether `request()` should also refuse a non-`GET` on a script
+path at run time, which would be the first Phase-2 word in `client/base.py`.
+
+This ticket's only edit to the baseline is one implementation-status note in `05`, under
+the P2-01 note (the eighth exception).

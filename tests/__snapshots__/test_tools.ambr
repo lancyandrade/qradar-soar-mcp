@@ -388,6 +388,47 @@
       }),
       'tier': 0,
     }),
+    'soar_get_function': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_get_function',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'function_id': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Function Id',
+          }),
+          'name': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Name',
+          }),
+        }),
+        'title': 'soar_get_functionArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
     'soar_get_incident': dict({
       'annotations': dict({
         'destructive_hint': False,
@@ -462,6 +503,52 @@
           'incident_id',
         ]),
         'title': 'soar_get_incident_fullArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_get_script': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_get_script',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'include_body': dict({
+            'default': True,
+            'title': 'Include Body',
+            'type': 'boolean',
+          }),
+          'programmatic_name': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Programmatic Name',
+          }),
+          'script_id': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Script Id',
+          }),
+        }),
+        'title': 'soar_get_scriptArguments',
         'type': 'object',
       }),
       'tier': 0,
@@ -579,6 +666,52 @@
       }),
       'tier': 0,
     }),
+    'soar_list_functions': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_functions',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'length': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Length',
+          }),
+          'name_contains': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Name Contains',
+          }),
+          'start': dict({
+            'default': 0,
+            'title': 'Start',
+            'type': 'integer',
+          }),
+        }),
+        'title': 'soar_list_functionsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
     'soar_list_incident_actions': dict({
       'annotations': dict({
         'destructive_hint': False,
@@ -599,6 +732,98 @@
           'incident_id',
         ]),
         'title': 'soar_list_incident_actionsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_list_message_destinations': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_message_destinations',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'length': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Length',
+          }),
+          'name_contains': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Name Contains',
+          }),
+          'start': dict({
+            'default': 0,
+            'title': 'Start',
+            'type': 'integer',
+          }),
+        }),
+        'title': 'soar_list_message_destinationsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_list_scripts': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_scripts',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'length': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Length',
+          }),
+          'name_contains': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Name Contains',
+          }),
+          'start': dict({
+            'default': 0,
+            'title': 'Start',
+            'type': 'integer',
+          }),
+        }),
+        'title': 'soar_list_scriptsArguments',
         'type': 'object',
       }),
       'tier': 0,

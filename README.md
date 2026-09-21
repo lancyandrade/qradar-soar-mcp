@@ -32,8 +32,10 @@ tasks, notes, attachment metadata, users and custom-field definitions; get a
 whole incident in one call under a size budget; find incidents that share
 artifacts with this one. The server also keeps a cached, read-only catalog of the
 SOAR configuration (functions, scripts, rules, playbooks, fields, data tables, …)
-for the discovery and playbook tools of later releases; `soar_refresh_catalog`
-reloads it.
+and answers discovery questions from it: which functions exist and what inputs each
+takes, which scripts and message destinations exist, and, read-only and capped, what
+a script's source says. `soar_refresh_catalog` reloads it. Nothing can write or run a
+script.
 
 **Annotate and modify (Tiers 1–2, off by default)** — add notes and artifacts,
 create incidents, update fields, assign, close. Each is a separate capability
@@ -100,6 +102,11 @@ failure.
 | `soar_list_incident_actions` | 0 | — | manual actions the incident carries, with their policy classification |
 | `soar_check_approval` | 0 | — | state of an approval reference (broker files; no SOAR call) |
 | `soar_refresh_catalog` | 0 | — | reload the cached catalog of SOAR configuration now; returns source, fetch time, SOAR version and counts, never the objects |
+| `soar_list_functions` | 0 | — | functions in the cached catalog: name, id, display name, short description, destination, version, input counts; paged, sorted by name |
+| `soar_get_function` | 0 | — | one function from the cached catalog with its inputs: name, label, type, required-ness, and tooltip / placeholder / select values where they cannot hold a credential or a person |
+| `soar_list_scripts` | 0 | — | scripts in the cached catalog: metadata only, never a body; paged, sorted by programmatic name |
+| `soar_get_script` | 0 | — | one script: catalog metadata plus its source, read on demand (`GET /scripts/{id}`), read-only, cut at 20,000 characters (`body.truncated` and both lengths say so; nothing is written into the code); untrusted data, never run |
+| `soar_list_message_destinations` | 0 | — | message destinations in the cached catalog; never the API keys or users bound to one |
 | `soar_add_comment` | 1 | `SOAR_ALLOW_COMMENTS` | one note |
 | `soar_add_artifact` | 1 | `SOAR_ALLOW_ARTIFACTS` | one artifact |
 | `soar_create_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | one incident |
@@ -136,6 +143,37 @@ fields at 1,000. `soar_get_incident_full` keeps its whole payload under
 100 artifacts, 50 notes, 50 attachments) and halved until the budget fits;
 `omitted` reports what was cut. The field list is pinned by a snapshot test;
 changing it is a reviewed change.
+
+
+### What SOAR configuration looks like to the model
+
+The discovery tools answer from the server's cached catalog, a fixed projection of each
+SOAR object, never the object itself. A fresh catalog (`SOAR_CATALOG_TTL_SECONDS`) is
+reused and costs SOAR nothing; a stale one is reloaded on the next call;
+`soar_refresh_catalog` forces it. If the catalog cannot be built (for example
+`SOAR_CATALOG_SOURCE=export`), the tools fail with that error; they never fall back to
+another source and never answer "empty" for something unknown.
+
+- **Lists** are sorted, and paged with `start` / `length`: at most 100 rows per call
+  (fewer if `SOAR_MAX_RESULTS` is lower) and at most 40,000 characters of rows; `more` and
+  `next_start` say where to continue. `name_contains` is a plain case-insensitive
+  substring. Descriptions are trimmed at 200 characters in a list.
+- **Lookups** are exact: a function by `name` or `function_id`, a script by
+  `programmatic_name` or `script_id`. Nothing is matched approximately.
+- **Function inputs** always carry `name`, `label`, `input_type` and `required`. A
+  `password` input carries nothing else; an owner or members input carries no values;
+  other inputs add tooltip, placeholder and select values (100 per input, 200 per
+  function, the remainder counted in `values_omitted`). `unresolved_inputs` > 0 means the
+  input list is known to be incomplete.
+- **Script source** is read only when `soar_get_script` is asked for it, from
+  `GET /scripts/{id}` (`script_text`), and is not kept. It is returned as
+  `body.text`, cut at **20,000 characters**: `body.truncated`, `returned_chars` and
+  `original_chars` say whether and how much, and `body.redacted` says that
+  credential-like text was removed (before the cut). Script source is **untrusted data**
+  written by whoever administers SOAR or published an app: it is never executed, imported
+  or evaluated by this server, it is not logged or audited, and the model is told not to
+  follow anything it says. This server has no request that creates, changes or deletes a
+  script, and a test fails the build if one appears.
 
 ---
 
@@ -447,10 +485,17 @@ this repository against a live appliance**; ⚠️/❓ open, listed in
     as unknown, never as empty. ❓ The configuration export is unverified and not used.
     ❓ Other SOAR versions are unverified.
 
+11. ✅ A script body is `script_text` of `GET /scripts/{id}` (`P2-00`, read-only key);
+    the list row carries none. It is the only call the discovery tools add to the
+    catalog's. ❓ How large a body SOAR returns, and playbook-local scripts, are
+    unverified. No request that creates, changes or deletes a script exists in this
+    server (`tests/test_no_script_writes.py`).
+
 ### Confidence in API claims
 
 The REST surface `client/` may touch is exactly the set of calls listed in
-`docs/design/08-GREENFIELD-AMENDMENTS.md §4` and, for the catalog, `§25`, enforced
+`docs/design/08-GREENFIELD-AMENDMENTS.md §4` and, for the catalog and discovery, `§25`
+and `§26`, enforced
 by an AST test. Nothing else is called. `P2-00` and `P2-00b` checked this surface against a lab appliance
 (QRadar SOAR `51.0.9.0.20848`); `docs/soar-api-verified.md` records the sanitised
 evidence and wins wherever it disagrees with a mark above.
@@ -489,15 +534,19 @@ evidence and wins wherever it disagrees with a mark above.
   no script bodies, no playbook XML and no people (an owner or members field has no
   values in the catalog). `SOAR_CATALOG_SOURCE=export` does not work.
   One load costs one request per function on top of the collections.
-- No discovery or playbook tools yet beyond `soar_refresh_catalog`; the Tier-4 flags
-  are accepted and unused.
+- Discovery covers functions, scripts and message destinations. Incident types,
+  phases, fields, data tables, rules, workflows and playbooks are in the catalog but
+  have no tool yet; the Tier-4 flags are accepted and unused.
+- `soar_get_script` returns at most the first 20,000 characters of a script; there is
+  no way to read the rest. A script renamed since the catalog was loaded is reported
+  as `conflict` until `soar_refresh_catalog` is called.
 
 ## Status
 
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Investigation + controlled actions + security architecture | **this release, v0.2.0** |
-| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); discovery tools planned |
+| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); the rest planned |
 | 3 | Playbook IR, validation, offline simulation | planned |
 | 4 | Compilation, export, import (always disabled) | planned |
 | 5 | Controlled enablement | planned |
