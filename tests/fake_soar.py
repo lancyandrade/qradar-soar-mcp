@@ -73,6 +73,9 @@ class Fault:
     headers: dict[str, str] = field(default_factory=dict)
     times: int | None = None  # None = every time
     chunked: bool = False  # stream raw_body without a Content-Length header
+    # Process the request normally first, then answer with the fault: a request that took
+    # effect although its answer was lost or unusable. A test device, not SOAR behaviour.
+    processed: bool = False
 
 
 @dataclass
@@ -202,6 +205,8 @@ class FakeSoar:
                     if fault.times <= 0:
                         continue
                     fault.times -= 1
+                if fault.processed:
+                    self._respond(request, method, path, params, body)
                 if fault.exc is not None:
                     # Note: respx rewrites __cause__ on the way out; a TLS cause cannot be
                     # modelled here (see test_client_base.test_tls_failure_is_reported_as_tls).
@@ -217,7 +222,11 @@ class FakeSoar:
                         fault.status or 200, content=fault.raw_body, headers=fault.headers
                     )
                 return self._json(fault.status or 500, fault.body, fault.headers)
+        return self._respond(request, method, path, params, body)
 
+    def _respond(
+        self, request: httpx.Request, method: str, path: str, params: dict[str, str], body: Any
+    ) -> httpx.Response:
         expected = "Basic " + base64.b64encode(f"{API_KEY_ID}:{API_KEY_SECRET}".encode()).decode()
         if request.headers.get("Authorization") != expected:
             return self._error(401, "Unauthorized")

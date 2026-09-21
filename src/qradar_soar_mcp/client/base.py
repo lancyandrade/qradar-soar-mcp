@@ -159,9 +159,12 @@ class SoarClient:
 
         ``format_headers`` sends the two output-format controls as request headers
         instead, and then no default query parameter is added: the form the task
-        update was verified with (08 §24). Only ``TASK_FORMAT_HEADERS`` is accepted.
+        update was verified with (08 §24). Only ``TASK_FORMAT_HEADERS`` is accepted,
+        and only on GET and PUT of this org's ``tasks/{task_id}`` without a query: this
+        is not a header facility, and that representation is verified nowhere else.
         PUT is transport support for that one update, not a general verb: it is
         refused for any path but this org's ``tasks/{task_id}`` and in any other form.
+        Everything refused here is refused before any I/O (``not_sent``).
 
         Raises:
             SoarError: for any HTTP status >= 400, any transport failure, an
@@ -169,23 +172,33 @@ class SoarClient:
         """
         method = method.upper()
         if method not in {"GET", "POST", "PATCH", "PUT"}:
-            raise SoarValidationError(f"HTTP method {method} is not part of the Phase-1 contract")
-        if "?" in path:
-            raise SoarValidationError("pass query parameters via params=, not in the path")
-        if method == "PUT" and not (
-            re.fullmatch(rf"/rest/orgs/{self.org_id}/tasks/[0-9]+", path)
-            and format_headers is not None
-            and not params
-        ):
             raise SoarValidationError(
-                "PUT is part of the contract for /tasks/{task_id} in its verified form only"
+                f"HTTP method {method} is not part of the Phase-1 contract", not_sent=True
+            )
+        if "?" in path:
+            raise SoarValidationError(
+                "pass query parameters via params=, not in the path", not_sent=True
+            )
+        single_task = re.fullmatch(rf"/rest/orgs/{self.org_id}/tasks/[0-9]+", path) is not None
+        if method == "PUT" and not (single_task and format_headers is not None and not params):
+            raise SoarValidationError(
+                "PUT is part of the contract for /tasks/{task_id} in its verified form only",
+                not_sent=True,
             )
         if format_headers is None:
             merged: dict[str, Any] = {**DEFAULT_PARAMS, **(params or {})}
         elif dict(format_headers) != TASK_FORMAT_HEADERS:
-            raise SoarValidationError("format_headers carries exactly the two format controls")
+            raise SoarValidationError(
+                "format_headers carries exactly the two format controls", not_sent=True
+            )
+        elif method not in {"GET", "PUT"} or not single_task or params:
+            raise SoarValidationError(
+                "the task format headers are part of the contract for GET and PUT "
+                "/tasks/{task_id} only, without a query",
+                not_sent=True,
+            )
         else:
-            merged = dict(params or {})
+            merged = {}
         failure: SoarError | None = None
         status = 0
         raw = b""

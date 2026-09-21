@@ -95,6 +95,14 @@ async def test_format_headers_replace_the_default_query_parameters(
     for bad in ({}, {"handle_format": "ids"}, {**controls, "X-Forwarded-For": "x"}):
         with pytest.raises(SoarValidationError, match="format controls"):
             await client.get(INC, format_headers=bad)
+    # Not a header facility: the verified pair is accepted on the single-task calls only.
+    for path in (INC, "/rest/orgs/201/users", "/rest/orgs/201/incidents/42/tasks"):
+        with pytest.raises(SoarValidationError, match="GET and PUT /tasks/"):
+            await client.get(path, format_headers=controls)
+    with pytest.raises(SoarValidationError, match="GET and PUT /tasks/"):
+        await client.request(
+            "POST", "/rest/orgs/201/tasks/9001", json_body={}, format_headers=controls
+        )
     assert len(fake.requests) == 1
 
 

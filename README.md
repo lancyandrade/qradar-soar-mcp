@@ -455,9 +455,11 @@ ticket `P2-00`), every ✅ above is re-verified against a real appliance and
   API-key configuration. No task version was observed there, so a concurrent edit
   is neither detected nor prevented; what closing the last required task of a phase
   does was not tested. It refuses a task that is inactive, frozen, already in the
-  requested status, or not in the given incident. A write SOAR accepted but that
-  could not be read back is reported as `unverified_write`, never as a success. The API key needs SOAR's
-  task-edit capability; without it SOAR refuses and the refusal is returned.
+  requested status, or not in the given incident. The `PUT` is sent once and never
+  retried; unless SOAR explicitly refuses it, the task is read back, and a change
+  that the read-back does not confirm is reported as `unverified_write`, never as
+  a success and never as "unchanged". The API key needs SOAR's task-edit
+  capability; without it SOAR refuses and the refusal is returned.
 - `soar_list_incident_actions` lists the incident's own actions, not those its
   tasks and artifacts carry.
 - Attachment contents are never read; there is no text extraction.

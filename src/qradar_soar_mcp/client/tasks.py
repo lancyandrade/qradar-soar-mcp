@@ -10,6 +10,12 @@ was verified with. The ``PUT`` body is the complete object the ``GET`` returned:
 nothing is dropped, added or normalised, ``closed_date`` is the server's and is passed
 through as read, and no version field is sent because none was observed.
 
+The ``PUT`` is sent once and never retried. Once it may have reached SOAR, only the
+read-back says what the task's status is: an explicit refusal (a 4xx, or a StatusDTO
+with ``success: false``) ends the call as a refusal; every other outcome (``success:
+true``, an answer that establishes neither, a 5xx, a timeout, a dropped connection)
+is settled by that one ``GET``, and is a success only if it shows the requested status.
+
 Nothing here protects a task against a concurrent edit: on that appliance no conflict
 was ever observed and no version field was seen on a task. The read and the write are
 kept adjacent; a change made by someone else between them can still be overwritten.
@@ -19,6 +25,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -31,16 +38,34 @@ from qradar_soar_mcp.errors import (
     SoarValidationError,
 )
 
+logger = logging.getLogger(__name__)
+
 TASK_STATUS_CODES: dict[str, str] = {"open": "O", "closed": "C"}
+PUT_ACCEPTED = "success"
+
+
+def _rules_out_the_write(failure: SoarError) -> bool:
+    """Whether a failed PUT leaves no doubt that the task was not changed by it.
+
+    Only two things do: reliable evidence that the request was never sent, and a 4xx, by
+    which SOAR refuses the request. A 5xx, a timeout, a dropped connection or an
+    unusable answer leave it open whether SOAR processed the request.
+    """
+    return failure.not_sent or (failure.status is not None and 400 <= failure.status < 500)
 
 
 @dataclass(frozen=True, slots=True)
 class TaskStatusOutcome:
-    """What a status change did: the task as read before the PUT and after it."""
+    """What a status change did: the task as read before the PUT and after it.
+
+    ``put_answer`` is ``success`` when SOAR said so, else ``unconfirmed (<why>)``: the
+    change was then established by the read-back alone.
+    """
 
     pre_image: dict[str, Any]
     post_image: dict[str, Any]
     changes: dict[str, tuple[Any, Any]]
+    put_answer: str = PUT_ACCEPTED
 
 
 class TasksClient:
@@ -89,19 +114,27 @@ class TasksClient:
             raise SoarValidationError(f"task {int(task_id)} is already {status}; nothing was sent")
         if current.get("active") is not True or current.get("frozen") is not False:
             raise SoarValidationError(
-                f"task {int(task_id)} is inactive or frozen; its status is not changed here"
+                f"task {int(task_id)} is not reported active and unfrozen; its status is "
+                "not changed here"
             )
 
         candidate = copy.deepcopy(current)
         candidate["status"] = code
         path = self._c.org_path(f"tasks/{int(task_id)}")
-        response = await self._c.put(path, json_body=candidate, format_headers=TASK_FORMAT_HEADERS)
-        if not isinstance(response, dict) or not isinstance(response.get("success"), bool):
-            raise SoarMalformedResponseError(
-                f"PUT {path} ({before} -> {code}) did not return a status object; "
-                "the task's state is unverified"
+        # Sent once, never retried. The exception is kept and re-raised outside the
+        # ``except`` block so nothing is chained.
+        response: Any = None
+        put_failure: SoarError | None = None
+        try:
+            response = await self._c.put(
+                path, json_body=candidate, format_headers=TASK_FORMAT_HEADERS
             )
-        if response["success"] is not True:
+        except SoarError as exc:
+            put_failure = exc
+        if put_failure is not None and _rules_out_the_write(put_failure):
+            raise put_failure
+        answer = response.get("success") if isinstance(response, dict) else None
+        if put_failure is None and answer is False:
             message = response.get("message")
             text = self._c.scrub(" ".join(str(message).split())) if message else "success=false"
             raise SoarValidationError(
@@ -109,6 +142,25 @@ class TasksClient:
                 status=200,
                 detail=self._c.scrub(json.dumps(response, default=str)),
             )
+
+        # From here the PUT may have changed the task. SOAR either said so, or its answer
+        # establishes nothing; only the read-back decides, and it is made exactly once.
+        put_detail: str | None = None
+        if put_failure is None and answer is True:
+            put_answer = PUT_ACCEPTED
+            lead = f"PUT {path} ({before} -> {code}) was accepted"
+        else:
+            reason = put_failure.code if put_failure is not None else "malformed_response"
+            put_answer = f"unconfirmed ({reason})"
+            lead = (
+                f"PUT {path} ({before} -> {code}) was sent, but SOAR's answer did not "
+                f"establish its result ({reason})"
+            )
+            if put_failure is not None:
+                put_detail = put_failure.detail
+            else:
+                put_detail = self._c.scrub(json.dumps(response, default=str))
+            logger.warning("soar PUT %s -> outcome unconfirmed (%s); reading back", path, reason)
 
         failure: SoarError | None = None
         after: dict[str, Any] = {}
@@ -118,16 +170,19 @@ class TasksClient:
             failure = exc
         if failure is not None:
             raise SoarUnverifiedWriteError(
-                f"PUT {path} ({before} -> {code}) was accepted but the task could not be "
-                f"read back ({failure.code}); its state is unverified. List the incident's "
-                "tasks before retrying",
-                detail=failure.detail,
+                f"{lead}. The task could not be read back ({failure.code}); its state is "
+                "unverified. List the incident's tasks before retrying",
+                detail="; ".join(d for d in (put_detail, failure.detail) if d) or None,
             )
         if after.get("status") != code:
             raise SoarUnverifiedWriteError(
-                f"PUT {path} ({before} -> {code}) was accepted but the task does not show "
-                f"status {code!r} afterwards. List the incident's tasks before retrying"
+                f"{lead}. The task does not show status {code!r} afterwards; whether the "
+                "write took effect is unverified. List the incident's tasks before retrying",
+                detail=put_detail,
             )
         return TaskStatusOutcome(
-            pre_image=current, post_image=after, changes={"status": (before, code)}
+            pre_image=current,
+            post_image=after,
+            changes={"status": (before, code)},
+            put_answer=put_answer,
         )

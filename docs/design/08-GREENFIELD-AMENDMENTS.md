@@ -136,7 +136,7 @@ unless absolute; every request carries `handle_format=names` and
 | PATCH | `incidents/{id}` | PatchDTO `{version, changes: [{field: {name}, old_value: {object}, new_value: {object}}]}`; `success:false` raises |
 | GET | `incidents/{id}/tasks` | |
 | GET | `tasks/{id}` | §24: `handle_format: ids` and `text_content_output_format: objects_convert` as headers, no query string |
-| PUT | `tasks/{id}` | §24: the same two headers; the body is the whole object that `GET` returned with `status` as the only change; a StatusDTO answer, `success` other than `true` raises. The only `PUT` there is |
+| PUT | `tasks/{id}` | §24: the same two headers; the body is the whole object that `GET` returned with `status` as the only change; a StatusDTO answer; sent once, and any outcome that is not an explicit refusal is settled by the verifying `GET`. The only `PUT` there is |
 | GET / POST | `incidents/{id}/artifacts` | |
 | GET / POST | `incidents/{id}/comments` | `{"text": {"format": "text", "content": ...}}` |
 | GET | `incidents/{id}/attachments` | metadata only; contents endpoint is ⚠️ and not used |
@@ -485,19 +485,32 @@ wider; where that record is silent, the tool refuses rather than guesses.
 2. Deep-copy the object and set `status` (`O` or `C`). Nothing else is touched: no key
    is dropped, added or normalised, `task_layout` goes back as it came, `closed_date` is
    passed through as read, and no version field is sent because none was observed.
-3. `PUT /tasks/{task_id}` with that object and the same two headers. Anything but a
-   StatusDTO with `success: true` fails the call.
-4. `GET /tasks/{task_id}` again; the call fails unless the task shows the requested
-   status. A success answer that is not reflected, or a task that cannot be read back, is
-   reported as `unverified_write` (a new error class beside the existing ones; it is
-   deliberately not `conflict`, because nothing here detects a concurrent edit) with a
-   message naming the transition and saying the write was accepted and its result is
-   unverified. Nothing is retried and there is no alternate body.
+3. `PUT /tasks/{task_id}` with that object and the same two headers, **once**. It is
+   never sent again and there is no alternate body. Its outcome is one of three:
+   - **refused** — SOAR said no (a 4xx, or a StatusDTO with `success: false`), or there
+     is reliable evidence the request never left (no connection was established, or the
+     client refused to send it). The error is returned as it is and nothing is read back.
+   - **accepted** — a StatusDTO with `success: true`.
+   - **ambiguous** — everything else once the request may have reached SOAR: an HTTP-200
+     answer that is not JSON, not an object, or carries no boolean `success`; an oversized
+     answer; a 5xx; a timeout; a dropped connection. None of these says whether SOAR
+     processed the request, so none of them is reported as it is.
+4. For *accepted* and *ambiguous* alike, `GET /tasks/{task_id}` again, exactly once, and
+   that read alone decides. If the task shows the requested status the call succeeds
+   (after an ambiguous answer the audit record says `unconfirmed (<why>)` instead of
+   `success`, so it is visible that the read-back, not SOAR's answer, established the
+   change). If it shows another status, or cannot be read back, the call fails as
+   `unverified_write` (a new error class beside the existing ones; it is deliberately not
+   `conflict`, because nothing here detects a concurrent edit). The message names the
+   transition and says either that the write was accepted or that it was sent and SOAR's
+   answer did not establish its result, and never that the task is unchanged.
 
-In the audit log such a call is `MUTATION_FAILED` like any other tool error, without
-pre/post images; the message carries the requested transition (`O -> C`). The same holds
-for a `PUT` that times out or loses its connection: the task's state is unknown, exactly
-as for the Phase-1 `POST` tools.
+This is a read-back, not a transaction: the appliance offers none, and a task that reads
+unchanged after an ambiguous answer is reported as unverified, not as untouched. In the
+audit log an `unverified_write` is `MUTATION_FAILED` like any other tool error, without
+pre/post images; the message carries the requested transition (`O -> C`). The unusable
+answer itself goes to the redacting log only, scrubbed, and never to MCP output or the
+audit log.
 
 **Refused before any `PUT`**, each as an ordinary tool error after `MUTATION_PENDING`,
 like every other Tier-2 validation failure: a status other than `open` / `closed`

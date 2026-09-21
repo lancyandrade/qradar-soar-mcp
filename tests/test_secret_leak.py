@@ -64,10 +64,15 @@ TOOLS_WITHOUT_SOAR = {"soar_check_approval"}
 # Declared unsupported: refused before anything is sent, whatever SOAR would answer
 # (P1-CORR-01 D4; 08 §21). soar_update_task_status is no longer one of them (P1-CORR-02):
 # it runs the fault matrix like every other tool. There every method is faulted, so its
-# first GET fails; the ``put_*`` cases fault the PUT alone so the write path leaks nothing.
+# first GET fails; the ``put_*`` cases fault the PUT alone so the write path leaks nothing,
+# and the ``putdone_*`` cases do the same after the fake has applied the write, which is
+# the path where an unusable answer is settled by the read-back (08 §24).
 TOOLS_REFUSED_BEFORE_SOAR = {"soar_invoke_action"}
 TASK_TOOL = "soar_update_task_status"
 PUT_ONLY = "put_"
+PUT_DONE = "putdone_"
+# PUT outcomes that do not rule the write out: read back, and reported as unverified.
+AMBIGUOUS_PUT_FAULTS = {"500", "timeout", "malformed", "oversized"}
 
 
 def _tls_transport() -> httpx.MockTransport:
@@ -108,15 +113,19 @@ def _cases():
     for fault in FAULTS:
         if fault not in ("ok", "tls"):
             yield pytest.param(TASK_TOOL, PUT_ONLY + fault, id=f"{TASK_TOOL}-{PUT_ONLY}{fault}")
+    for fault in sorted(AMBIGUOUS_PUT_FAULTS):
+        yield pytest.param(TASK_TOOL, PUT_DONE + fault, id=f"{TASK_TOOL}-{PUT_DONE}{fault}")
 
 
 @pytest.mark.parametrize(("tool", "fault"), list(_cases()))
 async def test_no_secret_anywhere(
     tool: str, fault: str, fake: FakeSoar, tmp_path: Path, monkeypatch
 ):
-    if fault.startswith(PUT_ONLY):
-        fault = fault.removeprefix(PUT_ONLY)
-        fake.fault("PUT", r".*", **FAULTS[fault])
+    put_only = fault.startswith(PUT_ONLY)
+    put_done = fault.startswith(PUT_DONE)
+    if put_only or put_done:
+        fault = fault.removeprefix(PUT_DONE if put_done else PUT_ONLY)
+        fake.fault("PUT", r".*", processed=put_done, **FAULTS[fault])
     elif fault not in ("ok", "tls"):
         for method in ("GET", "POST", "PATCH", "PUT"):
             fake.fault(method, r".*", **FAULTS[fault])
@@ -144,6 +153,10 @@ async def test_no_secret_anywhere(
     assert "Basic " not in rendered
     if tool in TOOLS_REFUSED_BEFORE_SOAR:
         assert out["ok"] is False and out["error"]["code"] == "DENY_UNSUPPORTED", out
+    elif put_done:
+        assert out["ok"] is True, out  # the write took effect and the read-back proved it
+    elif put_only and fault in AMBIGUOUS_PUT_FAULTS:
+        assert out["ok"] is False and out["error"]["code"] == "unverified_write", out
     elif fault == "ok" or tool in TOOLS_WITHOUT_SOAR:
         assert out["ok"] is True, out
     else:

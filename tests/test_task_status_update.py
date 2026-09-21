@@ -337,55 +337,94 @@ async def test_a_state_the_contract_was_not_verified_for_sends_no_put(
 
 
 # ---------------------------------------------------------------- failure paths
+#
+# Three outcomes of the one PUT, kept apart (08 §24):
+#   refused      - SOAR said no (a 4xx, or success: false), or the request provably never
+#                  left: the error is returned as it is, and nothing is read back;
+#   accepted     - success: true, then the verifying GET;
+#   ambiguous    - anything else once the PUT may have reached SOAR. The verifying GET is
+#                  made exactly once and alone decides; the PUT is never sent again.
+
+GET_PUT = [("GET", "/tasks/9001"), ("PUT", "/tasks/9001")]
+GET_PUT_GET = [*GET_PUT, ("GET", "/tasks/9001")]
+
+REFUSED: dict[str, tuple[dict[str, Any], str]] = {
+    "401": ({"status": 401, "body": {"message": f"bad key {SENTINEL}"}}, "auth_failed"),
+    "403": ({"status": 403, "body": {"message": f"no permission {SENTINEL}"}}, "forbidden"),
+    "404": ({"status": 404, "body": {"message": "gone"}}, "not_found"),
+    "409": ({"status": 409, "body": {"message": "Conflicting PUT operation"}}, "conflict"),
+    "400": ({"status": 400, "body": {"message": "bad task"}}, "validation"),
+    "422": ({"status": 422, "body": {"message": f"invalid {SENTINEL}"}}, "validation"),
+    "429": ({"status": 429, "body": {"message": "slow down"}}, "soar_rate_limited"),
+    "success_false": (
+        {"status": 200, "body": {"success": False, "message": f"nope {SENTINEL}"}},
+        "validation",
+    ),
+    # Nothing was sent: no connection was ever established.
+    "connect_refused": ({"exc": httpx.ConnectError}, "connection"),
+    "connect_timeout": ({"exc": httpx.ConnectTimeout}, "timeout"),
+    "pool_timeout": ({"exc": httpx.PoolTimeout}, "timeout"),
+}
+
+# fault -> the reason the error names. Each leaves open whether SOAR processed the PUT.
+AMBIGUOUS: dict[str, tuple[dict[str, Any], str]] = {
+    "not_an_object": ({"status": 200, "body": ["not", "a", SENTINEL]}, "malformed_response"),
+    "no_success_flag": ({"status": 200, "body": {"title": SENTINEL}}, "malformed_response"),
+    "success_is_a_string": ({"status": 200, "body": {"success": "true"}}, "malformed_response"),
+    "success_is_a_number": ({"status": 200, "body": {"success": 1}}, "malformed_response"),
+    "success_is_null": ({"status": 200, "body": {"success": None}}, "malformed_response"),
+    "empty_body": ({"status": 200}, "malformed_response"),
+    "not_json": (
+        {"status": 200, "raw_body": f'{{"success": tru {SENTINEL}'.encode()},
+        "malformed_response",
+    ),
+    "oversized": (
+        {"status": 200, "raw_body": b'{"pad": "' + SENTINEL.encode() * 20_000 + b'"}'},
+        "response_too_large",
+    ),
+    "500": ({"status": 500, "raw_body": f"<html>{SENTINEL}</html>".encode()}, "server_error"),
+    "502": ({"status": 502, "body": {"message": f"bad gateway {SENTINEL}"}}, "server_error"),
+    "read_timeout": ({"exc": httpx.ReadTimeout}, "timeout"),
+    "write_timeout": ({"exc": httpx.WriteTimeout}, "timeout"),
+    "read_error": ({"exc": httpx.ReadError}, "connection"),
+    "write_error": ({"exc": httpx.WriteError}, "connection"),
+    "protocol_error": ({"exc": httpx.RemoteProtocolError}, "connection"),
+}
 
 
-@pytest.mark.parametrize(
-    ("fault", "code"),
-    [
-        ({"status": 403, "body": {"message": f"no permission {SENTINEL}"}}, "forbidden"),
-        ({"status": 409, "body": {"message": "Conflicting PUT operation"}}, "conflict"),
-        ({"status": 400, "body": {"message": "bad task"}}, "validation"),
-        ({"status": 500, "raw_body": f"<html>{SENTINEL}</html>".encode()}, "server_error"),
-        ({"exc": httpx.ReadTimeout}, "timeout"),
-        ({"exc": httpx.ConnectError}, "connection"),
-        ({"status": 200, "body": {"success": False, "message": f"nope {SENTINEL}"}}, "validation"),
-        ({"status": 200, "body": ["not", "a", "status"]}, "malformed_response"),
-        ({"status": 200, "body": {"title": None}}, "malformed_response"),
-        ({"status": 200, "raw_body": b'{"success": tru'}, "malformed_response"),
-    ],
-    ids=[
-        "403",
-        "409",
-        "400",
-        "500",
-        "timeout",
-        "refused",
-        "success_false",
-        "not_an_object",
-        "no_success_flag",
-        "not_json",
-    ],
-)
-async def test_a_failed_put_is_a_failed_mutation(
-    rt: Runtime, fake: FakeSoar, tmp_path: Path, fault: dict[str, Any], code: str
+def _no_leak(out: dict[str, Any], tmp_path: Path) -> None:
+    assert SENTINEL not in json.dumps(out) and "Basic " not in json.dumps(out)
+    assert SENTINEL not in (tmp_path / "state" / "audit.jsonl").read_text(encoding="utf-8")
+
+
+def _one_put(fake: FakeSoar) -> None:
+    assert [r.method for r in fake.requests].count("PUT") == 1
+    assert len(fake.mutating_requests) == 1
+
+
+@pytest.mark.parametrize("name", sorted(REFUSED))
+async def test_a_refused_put_is_a_failed_mutation_and_nothing_is_read_back(
+    rt: Runtime, fake: FakeSoar, tmp_path: Path, name: str
 ):
+    fault, code = REFUSED[name]
     before = copy.deepcopy(fake.task_objects[9001])
     fake.fault("PUT", r"/tasks/9001$", **fault)
     out = await call(rt, **CLOSE)
     assert out["ok"] is False and out["error"]["code"] == code, out
     assert set(out) == {"ok", "request_id", "error"}
-    assert SENTINEL not in json.dumps(out)
-    # One attempt: no retry, no alternate body, and no verifying read of a refused write.
-    assert _calls(fake) == [("GET", "/tasks/9001"), ("PUT", "/tasks/9001")]
+    # One attempt: no retry, no alternate body, and no claim that anything was written.
+    assert _calls(fake) == GET_PUT
+    _one_put(fake)
+    assert "was sent" not in out["error"]["message"]
     assert fake.task_objects[9001] == before
     records = audit_records(tmp_path)
     assert [r["event"] for r in records] == ["MUTATION_PENDING", "MUTATION_FAILED"]
     assert records[1]["soar_response"]["code"] == code
     assert records[1].get("post_image") is None
-    assert SENTINEL not in (tmp_path / "state" / "audit.jsonl").read_text(encoding="utf-8")
+    _no_leak(out, tmp_path)
 
 
-async def test_an_unreflected_status_fails_the_mutation(
+async def test_an_accepted_put_that_is_not_reflected_fails_the_mutation(
     rt: Runtime, fake: FakeSoar, tmp_path: Path
 ):
     """SOAR says success but the task still reads open: reported and audited as failed."""
@@ -393,30 +432,69 @@ async def test_an_unreflected_status_fails_the_mutation(
     out = await call(rt, **CLOSE)
     assert out["ok"] is False and out["error"]["code"] == "unverified_write"
     assert "does not show status 'C'" in out["error"]["message"]
-    assert "(O -> C)" in out["error"]["message"]  # the audit record says what was written
+    assert "(O -> C) was accepted" in out["error"]["message"]
     assert "data" not in out and "http_status" not in out["error"]
-    assert _calls(fake) == [("GET", "/tasks/9001"), ("PUT", "/tasks/9001"), ("GET", "/tasks/9001")]
+    assert _calls(fake) == GET_PUT_GET
+    _one_put(fake)
     records = audit_records(tmp_path)
     assert [r["event"] for r in records] == ["MUTATION_PENDING", "MUTATION_FAILED"]
     assert records[1]["soar_response"]["code"] == "unverified_write"
     assert "(O -> C)" in records[1]["soar_response"]["message"]
 
 
-@pytest.mark.parametrize(
-    "fault",
-    [
-        {"status": 500, "body": {"message": f"boom {SENTINEL}"}},
-        {"exc": httpx.ReadTimeout},
-        {"status": 200, "body": []},
-    ],
-    ids=["500", "timeout", "not_a_task"],
-)
-async def test_an_unreadable_task_after_the_put_fails_the_mutation(
-    tmp_path: Path, fault: dict[str, Any]
+@pytest.mark.parametrize("name", sorted(AMBIGUOUS))
+async def test_an_ambiguous_put_that_took_effect_is_verified_by_the_read_back(
+    rt: Runtime, fake: FakeSoar, tmp_path: Path, name: str
 ):
-    """The write was accepted but cannot be verified: never reported as a success."""
-    fake = FakeSoar()
-    rt = Runtime.build(base_env(tmp_path, SOAR_ALLOW_TASK_WRITES="true"), transport="stdio")
+    """The answer establishes nothing, the write happened: one GET settles it as a success."""
+    fault, reason = AMBIGUOUS[name]
+    before = copy.deepcopy(fake.task_objects[9001])
+    fake.fault("PUT", r"/tasks/9001$", processed=True, **fault)
+    rt.require_client().max_response_bytes = 100_000
+    out = await call(rt, **CLOSE)
+    assert out["ok"] is True, out
+    assert out["data"]["changed"] == {"status": {"from": "O", "to": "C"}}
+    assert out["data"]["task"]["status"] == "C"
+    assert _calls(fake) == GET_PUT_GET
+    _one_put(fake)
+    assert fake.requests[1].json == {**before, "status": "C"}
+    records = audit_records(tmp_path)
+    assert [r["event"] for r in records] == ["MUTATION_PENDING", "MUTATION_COMMITTED"]
+    # The audit record says the change was established by the read-back, not by SOAR's answer.
+    assert records[1]["soar_response"] == {"put": f"unconfirmed ({reason})"}
+    assert records[1]["post_image"]["status"] == "C"
+    assert records[1]["post_image"]["closed_date"] == TASK_CLOSED_AT
+    _no_leak(out, tmp_path)
+
+
+@pytest.mark.parametrize("name", sorted(AMBIGUOUS))
+async def test_an_ambiguous_put_that_is_not_reflected_is_an_unverified_write(
+    rt: Runtime, fake: FakeSoar, tmp_path: Path, name: str
+):
+    """The answer establishes nothing and the task still reads open: never "unchanged",
+    never the bare transport or parsing error, and never a second PUT."""
+    fault, reason = AMBIGUOUS[name]
+    before = copy.deepcopy(fake.task_objects[9001])
+    fake.fault("PUT", r"/tasks/9001$", **fault)
+    rt.require_client().max_response_bytes = 100_000
+    out = await call(rt, **CLOSE)
+    assert out["ok"] is False and out["error"]["code"] == "unverified_write", out
+    message = out["error"]["message"]
+    assert "(O -> C) was sent" in message and f"({reason})" in message
+    assert "does not show status 'C'" in message and "unverified" in message
+    assert "accepted" not in message and "conflict" not in message.lower()
+    assert set(out) == {"ok", "request_id", "error"} and "http_status" not in out["error"]
+    assert _calls(fake) == GET_PUT_GET
+    _one_put(fake)
+    assert fake.task_objects[9001] == before
+    records = audit_records(tmp_path)
+    assert [r["event"] for r in records] == ["MUTATION_PENDING", "MUTATION_FAILED"]
+    assert records[1]["soar_response"]["code"] == "unverified_write"
+    assert records[1].get("post_image") is None
+    _no_leak(out, tmp_path)
+
+
+def _fail_the_second_get(fake: FakeSoar, fault: dict[str, Any]):
     gets = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -427,19 +505,68 @@ async def test_an_unreadable_task_after_the_put_fails_the_mutation(
                 fake.fault("GET", r"/tasks/9001$", times=1, **fault)
         return fake.handler(request)
 
+    return handler
+
+
+READ_BACK_FAULTS: dict[str, dict[str, Any]] = {
+    "500": {"status": 500, "body": {"message": f"boom {SENTINEL}"}},
+    "timeout": {"exc": httpx.ReadTimeout},
+    "not_a_task": {"status": 200, "body": []},
+    "another_task": {"status": 200, "body": {"id": 9002, "status": "C"}},
+    "not_json": {"status": 200, "raw_body": f"<html>{SENTINEL}".encode()},
+}
+
+
+@pytest.mark.parametrize("read_back", sorted(READ_BACK_FAULTS))
+@pytest.mark.parametrize("put", ["accepted", "no_success_flag", "not_json", "read_timeout", "500"])
+async def test_an_unreadable_task_after_the_put_is_an_unverified_write(
+    tmp_path: Path, put: str, read_back: str
+):
+    """The write went through (explicitly, or behind an unusable answer) but cannot be
+    read back: never reported as a success, never retried."""
+    fake = FakeSoar()
+    rt = Runtime.build(base_env(tmp_path, SOAR_ALLOW_TASK_WRITES="true"), transport="stdio")
+    if put != "accepted":
+        fake.fault("PUT", r"/tasks/9001$", processed=True, **AMBIGUOUS[put][0])
     with respx.mock(base_url=BASE_URL, assert_all_called=False, assert_all_mocked=True) as router:
-        router.route().mock(side_effect=handler)
+        router.route().mock(side_effect=_fail_the_second_get(fake, READ_BACK_FAULTS[read_back]))
         out = await call(rt, **CLOSE)
         await rt.aclose()
-    assert out["ok"] is False and out["error"]["code"] == "unverified_write"
-    assert "was accepted" in out["error"]["message"] and "unverified" in out["error"]["message"]
+    assert out["ok"] is False and out["error"]["code"] == "unverified_write", out
+    message = out["error"]["message"]
+    assert "could not be read back" in message and "unverified" in message
+    assert ("(O -> C) was accepted" in message) is (put == "accepted")
+    assert ("(O -> C) was sent" in message) is (put != "accepted")
     assert "http_status" not in out["error"]  # the read's status is not the write's
-    assert SENTINEL not in json.dumps(out)
     assert [r.method for r in fake.requests] == ["GET", "PUT", "GET"]
+    _one_put(fake)
     assert fake.task_objects[9001]["status"] == "C"  # the write did happen; it is not retried
     records = audit_records(tmp_path)
     assert [r["event"] for r in records] == ["MUTATION_PENDING", "MUTATION_FAILED"]
-    assert "(O -> C) was accepted" in records[1]["soar_response"]["message"]
+    assert records[1]["soar_response"]["code"] == "unverified_write"
+    _no_leak(out, tmp_path)
+
+
+async def test_the_unconfirmed_answer_is_kept_for_the_log_only(fake: FakeSoar):
+    """``detail`` carries the scrubbed answer for the redacting logger; MCP output does not."""
+    from qradar_soar_mcp.errors import SoarUnverifiedWriteError
+
+    fake.fault("PUT", r"/tasks/9001$", status=200, body={"title": f"odd {SENTINEL}", "x": 1})
+    async with SoarClient(Settings.load(connection_env())) as client:
+        with pytest.raises(SoarUnverifiedWriteError) as info:
+            await client.tasks.set_status(42, 9001, "closed")
+    err = info.value
+    assert err.__cause__ is None and err.__context__ is None
+    assert err.detail and '"x": 1' in err.detail and SENTINEL not in err.detail
+    assert "odd" not in json.dumps(err.to_dict()) and "[REDACTED]" in err.detail
+    assert err.status is None and err.not_sent is False
+
+
+async def test_the_audit_record_of_a_confirmed_put_says_so(
+    rt: Runtime, fake: FakeSoar, tmp_path: Path
+):
+    assert (await call(rt, **CLOSE))["ok"] is True
+    assert audit_records(tmp_path)[-1]["soar_response"] == {"put": "success"}
 
 
 # ------------------------------------------------------------------ the gates
@@ -533,7 +660,8 @@ async def test_tier2_runs_over_http_like_the_other_tier2_tools(fake: FakeSoar, t
 async def test_three_failures_trip_the_breaker(rt: Runtime, fake: FakeSoar, tmp_path: Path):
     fake.fault("PUT", r"/tasks/9001$", status=500, body={"message": "boom"})
     for _ in range(3):
-        assert (await call(rt, **CLOSE))["error"]["code"] == "server_error"
+        # A 5xx does not rule the write out: read back, found unchanged, still a failure.
+        assert (await call(rt, **CLOSE))["error"]["code"] == "unverified_write"
     n = len(fake.requests)
     out = await call(rt, **CLOSE)
     assert out["error"]["code"] == "DENY_BREAKER" and len(fake.requests) == n
@@ -574,8 +702,68 @@ async def test_put_is_transport_support_for_the_task_update_only(fake: FakeSoar)
             {**TASK_FORMAT_HEADERS, "handle_format": "names"},
             {**TASK_FORMAT_HEADERS, "handle_format": 1},
         ):
-            with pytest.raises(SoarValidationError, match="format controls"):
+            with pytest.raises(SoarValidationError, match="format controls") as info:
                 await client.get(task, format_headers=headers)
+            assert info.value.not_sent is True
         with pytest.raises(SoarValidationError, match="not part of the Phase-1 contract"):
             await client.request("DELETE", f"{ORG}/tasks/9001")
         assert fake.requests == []
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "params"),
+    [
+        ("GET", f"{ORG}/incidents/42", None),
+        ("GET", f"{ORG}/users", None),
+        ("GET", f"{ORG}/incidents/42/tasks", None),
+        ("GET", f"{ORG}/incidents/42/tasktree", None),
+        ("GET", f"{ORG}/types/incident/fields", None),
+        ("GET", f"{ORG}/tasks", None),
+        ("GET", f"{ORG}/tasks/9001/attachments", None),
+        ("GET", "/rest/orgs/202/tasks/9001", None),
+        ("GET", "/rest/session", None),
+        ("GET", f"{ORG}/tasks/9001", {"return_level": "normal"}),
+        ("GET", f"{ORG}/tasks/9001", {"handle_format": "names"}),
+        ("POST", f"{ORG}/tasks/9001", None),
+        ("PATCH", f"{ORG}/tasks/9001", None),
+        ("POST", f"{ORG}/incidents/query_paged", {"return_level": "normal"}),
+        ("POST", f"{ORG}/incidents/42/comments", None),
+        ("PATCH", f"{ORG}/incidents/42", None),
+    ],
+)
+async def test_the_task_representation_cannot_leave_the_single_task_calls(
+    fake: FakeSoar, method: str, path: str, params: dict[str, str] | None
+):
+    """The ids / objects_convert header form is verified for GET and PUT /tasks/{id} and
+    nowhere else: asking for it anywhere else is refused before any I/O."""
+    async with SoarClient(Settings.load(connection_env())) as client:
+        with pytest.raises(SoarValidationError, match="GET and PUT /tasks/") as info:
+            await client.request(
+                method,
+                path,
+                params=params,
+                json_body=None if method == "GET" else {},
+                format_headers=TASK_FORMAT_HEADERS,
+            )
+        assert info.value.not_sent is True and fake.requests == []
+        # The same calls in the ordinary Phase-1 form are untouched by this restriction.
+        if method == "GET" and path in (f"{ORG}/incidents/42", f"{ORG}/users"):
+            await client.get(path)
+            rec = fake.requests[-1]
+            assert rec.params == {
+                "handle_format": "names",
+                "text_content_output_format": "always_text",
+            }
+            assert "handle_format" not in rec.headers
+
+
+async def test_the_two_single_task_calls_still_take_the_task_representation(fake: FakeSoar):
+    async with SoarClient(Settings.load(connection_env())) as client:
+        task = await client.get(f"{ORG}/tasks/9001", format_headers=TASK_FORMAT_HEADERS)
+        assert len(task) == 41 and fake.requests[-1].params == {}
+        answer = await client.put(
+            f"{ORG}/tasks/9001",
+            json_body={**task, "status": "C"},
+            format_headers=TASK_FORMAT_HEADERS,
+        )
+        assert answer == _status_ok() and fake.requests[-1].params == {}

@@ -281,4 +281,6 @@ async def soar_update_task_status(
         target={"incident_id": incident_id, "task_id": task_id},
         pre_image=task_audit_image(out.pre_image),
         post_image=task_audit_image(out.post_image),
+        # "success", or "unconfirmed (<why>)" when only the read-back established the change.
+        soar_response={"put": out.put_answer},
     )
