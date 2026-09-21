@@ -26,7 +26,17 @@ client that invents a reduced body or its own ``closed_date`` cannot pass. Only
 O -> C and C -> O exist. Conflicts, permissions, phase effects and every other task
 field are not modelled because they were not verified.
 
-All state comes from synthetic fixtures in ``tests/fixtures/soar``.
+The read-only discovery collections of P2-01 are modelled as the verified record lists
+them (docs/soar-api-verified.md §1 Q1/Q4/Q5, §2; 08 §25), wrapper for wrapper: ``entities``
+for functions, rules (``actions``), scripts, workflows, message destinations and phases; a
+bare list for groups and field definitions; a name-keyed map for ``types`` and
+``incident_types``; ``data`` with totals for the playbook query, which is a POST with a
+criteria-only body (any other body is refused with a ``fake_soar:`` message, stricter than
+anything observed), while ``GET /playbooks`` answers 500 as the appliance did. Only GET
+exists on the other collections. There is no configuration export route.
+
+All state comes from synthetic fixtures in ``tests/fixtures/soar``, and the discovery
+payloads from ``tests/discovery_data.py``.
 """
 
 from __future__ import annotations
@@ -40,6 +50,8 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
+from tests.discovery_data import build_payloads
 
 FIXTURES = Path(__file__).parent / "fixtures" / "soar"
 
@@ -114,6 +126,7 @@ class FakeSoar:
             int(k): v for k, v in cols["attachments"].items()
         }
         self.users: list[dict[str, Any]] = cols["users"]
+        self.discovery: dict[str, Any] = build_payloads()
         self.session_status = session_status
         self.faults: list[tuple[str, re.Pattern[str], Fault]] = []
         self.requests: list[Recorded] = []
@@ -251,6 +264,11 @@ class FakeSoar:
                         400, f"fake_soar: missing required query param {key}={value}"
                     )
 
+        if path == "/rest/const":
+            if method != "GET":
+                return self._error(405, "method not allowed")
+            return self._json(200, self.discovery["const"])
+
         if path == "/rest/session":
             if self.session_status != 200:
                 return self._error(self.session_status, "session not available to API keys")
@@ -349,12 +367,70 @@ class FakeSoar:
                 return self._error(400, "fake_soar: PUT /tasks/{id} was verified in header form")
             return self._put_task(int(m.group(1)), body)
 
+        found = self._discovery(method, rest, params, body)
+        if found is not None:
+            return found
+
         if rest == "/users" and method == "GET":
             return self._json(200, self.users)
         if rest == "/types/incident/fields" and method == "GET":
             return self._json(200, self.fields)
 
         return self._error(404, "fake_soar: no route")
+
+    # ------------------------------------------------------------- discovery
+    def _discovery(
+        self, method: str, rest: str, params: dict[str, str], body: Any
+    ) -> httpx.Response | None:
+        if rest == "/playbooks/query_paged" and method == "POST":
+            if params.get("return_level") != "normal":
+                return self._error(400, "fake_soar: query_paged requires return_level=normal")
+            if (
+                not isinstance(body, dict)
+                or set(body) != {"filters", "start", "length"}
+                or body["filters"] != []
+            ):
+                return self._error(400, "fake_soar: only the criteria-only body was verified")
+            rows = self.discovery["playbooks"]
+            start, length = int(body["start"]), int(body["length"])
+            return self._json(
+                200,
+                {
+                    "recordsTotal": len(rows),
+                    "recordsFiltered": len(rows),
+                    "data": rows[start : start + length],
+                },
+            )
+        if rest == "/playbooks" and method == "GET":
+            return self._error(500, "Internal Server Error")  # verified: no GET collection
+
+        key: str | None = None
+        m = re.fullmatch(r"/functions/(\d+)", rest)
+        if m:
+            key = f"function:{m.group(1)}"
+        elif rest == "/types/__function/fields":
+            key = "function_fields"
+        elif re.fullmatch(r"/types/(task|artifact)/fields", rest):
+            key = "fields:" + rest.split("/")[2]
+        elif rest.lstrip("/") in (
+            "functions",
+            "actions",
+            "scripts",
+            "workflows",
+            "message_destinations",
+            "phases",
+            "groups",
+            "types",
+            "incident_types",
+        ):
+            key = rest.lstrip("/")
+        if key is None:
+            return None
+        if method != "GET":
+            return self._error(405, "method not allowed")
+        if key not in self.discovery:
+            return self._error(404, "not found")
+        return self._json(200, self.discovery[key])
 
     # ----------------------------------------------------------------- tasks
     def _put_task(self, task_id: int, body: Any) -> httpx.Response:

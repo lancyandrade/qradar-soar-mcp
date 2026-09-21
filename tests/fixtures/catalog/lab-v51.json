@@ -1,0 +1,813 @@
+{
+  "api_key_permissions": [],
+  "datatables": {
+    "table_1": {
+      "columns": [
+        {
+          "input_type": "text",
+          "label": "text-901",
+          "name": "column_a",
+          "order": 0,
+          "required": null
+        },
+        {
+          "input_type": "text",
+          "label": "text-901",
+          "name": "column_b",
+          "order": 1,
+          "required": null
+        }
+      ],
+      "display_name": "display_name-901",
+      "id": 901,
+      "parent_types": [
+        "incident"
+      ],
+      "type_name": "table_1",
+      "uuid": "uuid-901"
+    },
+    "table_2": {
+      "columns": [
+        {
+          "input_type": "text",
+          "label": "text-902",
+          "name": "column_a",
+          "order": 0,
+          "required": null
+        },
+        {
+          "input_type": "text",
+          "label": "text-902",
+          "name": "column_b",
+          "order": 1,
+          "required": null
+        }
+      ],
+      "display_name": "display_name-902",
+      "id": 902,
+      "parent_types": [
+        "incident"
+      ],
+      "type_name": "table_2",
+      "uuid": "uuid-902"
+    }
+  },
+  "fetched_at": "2026-09-18T00:00:00Z",
+  "fields": {
+    "artifact.artifact_field_800": {
+      "api_name": "artifact_field_800",
+      "custom": false,
+      "input_type": "boolean",
+      "internal": true,
+      "label": "text-800",
+      "name": "artifact_field_800",
+      "prefix": null,
+      "read_only": true,
+      "required": "required-800",
+      "type_name": "artifact",
+      "values": [
+        {
+          "default": true,
+          "enabled": true,
+          "label": "label-800",
+          "value": 800
+        }
+      ]
+    },
+    "artifact.properties.artifact_field_801": {
+      "api_name": "properties.artifact_field_801",
+      "custom": true,
+      "input_type": "datetimepicker",
+      "internal": true,
+      "label": "text-801",
+      "name": "artifact_field_801",
+      "prefix": "properties",
+      "read_only": true,
+      "required": "required-801",
+      "type_name": "artifact",
+      "values": [
+        {
+          "default": true,
+          "enabled": true,
+          "label": "label-801",
+          "value": 801
+        }
+      ]
+    },
+    "incident.create_date": {
+      "api_name": "create_date",
+      "custom": false,
+      "input_type": "datetimepicker",
+      "internal": true,
+      "label": "Date Created",
+      "name": "create_date",
+      "prefix": null,
+      "read_only": true,
+      "required": null,
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.description": {
+      "api_name": "description",
+      "custom": false,
+      "input_type": "textarea",
+      "internal": false,
+      "label": "Description",
+      "name": "description",
+      "prefix": null,
+      "read_only": false,
+      "required": null,
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.discovered_date": {
+      "api_name": "discovered_date",
+      "custom": false,
+      "input_type": "datetimepicker",
+      "internal": false,
+      "label": "Date Discovered",
+      "name": "discovered_date",
+      "prefix": null,
+      "read_only": false,
+      "required": "always",
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.due_date": {
+      "api_name": "due_date",
+      "custom": false,
+      "input_type": "datetimepicker",
+      "internal": false,
+      "label": "Due Date",
+      "name": "due_date",
+      "prefix": null,
+      "read_only": false,
+      "required": null,
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.end_date": {
+      "api_name": "end_date",
+      "custom": false,
+      "input_type": "datetimepicker",
+      "internal": true,
+      "label": "Date Closed",
+      "name": "end_date",
+      "prefix": null,
+      "read_only": true,
+      "required": null,
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.inc_last_modified_date": {
+      "api_name": "inc_last_modified_date",
+      "custom": false,
+      "input_type": "datetimepicker",
+      "internal": true,
+      "label": "Last Modified",
+      "name": "inc_last_modified_date",
+      "prefix": null,
+      "read_only": true,
+      "required": null,
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.incident_type_ids": {
+      "api_name": "incident_type_ids",
+      "custom": false,
+      "input_type": "multiselect",
+      "internal": false,
+      "label": "Incident Type",
+      "name": "incident_type_ids",
+      "prefix": null,
+      "read_only": false,
+      "required": null,
+      "type_name": "incident",
+      "values": [
+        {
+          "default": false,
+          "enabled": true,
+          "label": "Phishing",
+          "value": 21
+        },
+        {
+          "default": false,
+          "enabled": true,
+          "label": "Malware",
+          "value": 22
+        },
+        {
+          "default": false,
+          "enabled": true,
+          "label": "Suspicious activity",
+          "value": 23
+        }
+      ]
+    },
+    "incident.name": {
+      "api_name": "name",
+      "custom": false,
+      "input_type": "text",
+      "internal": false,
+      "label": "Name",
+      "name": "name",
+      "prefix": null,
+      "read_only": false,
+      "required": "always",
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.owner_id": {
+      "api_name": "owner_id",
+      "custom": false,
+      "input_type": "select_owner",
+      "internal": false,
+      "label": "Owner",
+      "name": "owner_id",
+      "prefix": null,
+      "read_only": false,
+      "required": null,
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.phase_id": {
+      "api_name": "phase_id",
+      "custom": false,
+      "input_type": "select",
+      "internal": false,
+      "label": "Phase",
+      "name": "phase_id",
+      "prefix": null,
+      "read_only": false,
+      "required": null,
+      "type_name": "incident",
+      "values": [
+        {
+          "default": true,
+          "enabled": true,
+          "label": "Initial",
+          "value": 1
+        },
+        {
+          "default": false,
+          "enabled": true,
+          "label": "Engage",
+          "value": 2
+        },
+        {
+          "default": false,
+          "enabled": true,
+          "label": "Post-Incident",
+          "value": 3
+        }
+      ]
+    },
+    "incident.plan_status": {
+      "api_name": "plan_status",
+      "custom": false,
+      "input_type": "select",
+      "internal": false,
+      "label": "Status",
+      "name": "plan_status",
+      "prefix": null,
+      "read_only": false,
+      "required": null,
+      "type_name": "incident",
+      "values": [
+        {
+          "default": true,
+          "enabled": true,
+          "label": "Active",
+          "value": "A"
+        },
+        {
+          "default": false,
+          "enabled": true,
+          "label": "Closed",
+          "value": "C"
+        }
+      ]
+    },
+    "incident.properties.asset_count": {
+      "api_name": "properties.asset_count",
+      "custom": true,
+      "input_type": "number",
+      "internal": false,
+      "label": "Asset Count",
+      "name": "asset_count",
+      "prefix": "properties",
+      "read_only": false,
+      "required": null,
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.properties.root_cause": {
+      "api_name": "properties.root_cause",
+      "custom": true,
+      "input_type": "text",
+      "internal": false,
+      "label": "Root Cause",
+      "name": "root_cause",
+      "prefix": "properties",
+      "read_only": false,
+      "required": "close",
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.properties.threat_source": {
+      "api_name": "properties.threat_source",
+      "custom": true,
+      "input_type": "text",
+      "internal": false,
+      "label": "Threat Source",
+      "name": "threat_source",
+      "prefix": "properties",
+      "read_only": false,
+      "required": null,
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.properties.triage_summary": {
+      "api_name": "properties.triage_summary",
+      "custom": true,
+      "input_type": "textarea",
+      "internal": false,
+      "label": "Triage Summary",
+      "name": "triage_summary",
+      "prefix": "properties",
+      "read_only": false,
+      "required": null,
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.resolution_id": {
+      "api_name": "resolution_id",
+      "custom": false,
+      "input_type": "select",
+      "internal": false,
+      "label": "Resolution",
+      "name": "resolution_id",
+      "prefix": null,
+      "read_only": false,
+      "required": "close",
+      "type_name": "incident",
+      "values": [
+        {
+          "default": false,
+          "enabled": true,
+          "label": "Not an Issue",
+          "value": 51
+        },
+        {
+          "default": false,
+          "enabled": true,
+          "label": "Duplicate",
+          "value": 52
+        },
+        {
+          "default": false,
+          "enabled": true,
+          "label": "Resolved",
+          "value": 53
+        },
+        {
+          "default": false,
+          "enabled": true,
+          "label": "Unresolved",
+          "value": 54
+        }
+      ]
+    },
+    "incident.resolution_summary": {
+      "api_name": "resolution_summary",
+      "custom": false,
+      "input_type": "textarea",
+      "internal": false,
+      "label": "Resolution Summary",
+      "name": "resolution_summary",
+      "prefix": null,
+      "read_only": false,
+      "required": "close",
+      "type_name": "incident",
+      "values": []
+    },
+    "incident.severity_code": {
+      "api_name": "severity_code",
+      "custom": false,
+      "input_type": "select",
+      "internal": false,
+      "label": "Severity",
+      "name": "severity_code",
+      "prefix": null,
+      "read_only": false,
+      "required": null,
+      "type_name": "incident",
+      "values": [
+        {
+          "default": false,
+          "enabled": true,
+          "label": "Low",
+          "value": 4
+        },
+        {
+          "default": true,
+          "enabled": true,
+          "label": "Medium",
+          "value": 5
+        },
+        {
+          "default": false,
+          "enabled": true,
+          "label": "High",
+          "value": 6
+        }
+      ]
+    },
+    "incident.start_date": {
+      "api_name": "start_date",
+      "custom": false,
+      "input_type": "datetimepicker",
+      "internal": false,
+      "label": "Start Date",
+      "name": "start_date",
+      "prefix": null,
+      "read_only": false,
+      "required": null,
+      "type_name": "incident",
+      "values": []
+    },
+    "task.properties.task_field_801": {
+      "api_name": "properties.task_field_801",
+      "custom": true,
+      "input_type": "datetimepicker",
+      "internal": true,
+      "label": "text-801",
+      "name": "task_field_801",
+      "prefix": "properties",
+      "read_only": true,
+      "required": "required-801",
+      "type_name": "task",
+      "values": [
+        {
+          "default": true,
+          "enabled": true,
+          "label": "label-801",
+          "value": 801
+        }
+      ]
+    },
+    "task.task_field_800": {
+      "api_name": "task_field_800",
+      "custom": false,
+      "input_type": "boolean",
+      "internal": true,
+      "label": "text-800",
+      "name": "task_field_800",
+      "prefix": null,
+      "read_only": true,
+      "required": "required-800",
+      "type_name": "task",
+      "values": [
+        {
+          "default": true,
+          "enabled": true,
+          "label": "label-800",
+          "value": 800
+        }
+      ]
+    }
+  },
+  "format_version": 1,
+  "functions": {
+    "function_200": {
+      "description": "description-200",
+      "destination_handle": "destination_handle-200",
+      "display_name": "display_name-200",
+      "id": 200,
+      "inputs": [
+        {
+          "input_type": "boolean",
+          "label": "text-100",
+          "name": "input_100",
+          "placeholder": "placeholder-100",
+          "required": "required-100",
+          "tooltip": "tooltip-100",
+          "uuid": "uuid-100",
+          "values": [
+            {
+              "default": true,
+              "enabled": true,
+              "label": "label-100",
+              "value": 100
+            }
+          ]
+        },
+        {
+          "input_type": "select",
+          "label": "text-101",
+          "name": "input_101",
+          "placeholder": "placeholder-101",
+          "required": "required-101",
+          "tooltip": "tooltip-101",
+          "uuid": "uuid-101",
+          "values": [
+            {
+              "default": true,
+              "enabled": true,
+              "label": "label-101",
+              "value": 101
+            }
+          ]
+        }
+      ],
+      "name": "function_200",
+      "unresolved_inputs": 0,
+      "uuid": "uuid-200",
+      "version": 200
+    },
+    "function_201": {
+      "description": "description-201",
+      "destination_handle": "destination_handle-201",
+      "display_name": "display_name-201",
+      "id": 201,
+      "inputs": [
+        {
+          "input_type": "boolean",
+          "label": "text-100",
+          "name": "input_100",
+          "placeholder": "placeholder-100",
+          "required": "required-100",
+          "tooltip": "tooltip-100",
+          "uuid": "uuid-100",
+          "values": [
+            {
+              "default": true,
+              "enabled": true,
+              "label": "label-100",
+              "value": 100
+            }
+          ]
+        },
+        {
+          "input_type": "select",
+          "label": "text-101",
+          "name": "input_101",
+          "placeholder": "placeholder-101",
+          "required": "required-101",
+          "tooltip": "tooltip-101",
+          "uuid": "uuid-101",
+          "values": [
+            {
+              "default": true,
+              "enabled": true,
+              "label": "label-101",
+              "value": 101
+            }
+          ]
+        }
+      ],
+      "name": "function_201",
+      "unresolved_inputs": 0,
+      "uuid": "uuid-201",
+      "version": 201
+    }
+  },
+  "groups": {
+    "group_700": {
+      "enabled": true,
+      "id": 700,
+      "is_assignable": true,
+      "is_task_assignable": true,
+      "name": "group_700",
+      "uuid": "uuid-700"
+    },
+    "group_701": {
+      "enabled": true,
+      "id": 701,
+      "is_assignable": true,
+      "is_task_assignable": true,
+      "name": "group_701",
+      "uuid": "uuid-701"
+    }
+  },
+  "incident_types": {
+    "incident_type_950": {
+      "enabled": true,
+      "hidden": true,
+      "id": 950,
+      "name": "incident_type_950",
+      "parent_id": null,
+      "system": true,
+      "uuid": "uuid-950"
+    },
+    "incident_type_951": {
+      "enabled": true,
+      "hidden": true,
+      "id": 951,
+      "name": "incident_type_951",
+      "parent_id": null,
+      "system": true,
+      "uuid": "uuid-951"
+    }
+  },
+  "installed_apps": {},
+  "message_destinations": {
+    "programmatic_name-500": {
+      "destination_type": 500,
+      "expect_ack": true,
+      "id": 500,
+      "name": "destination_500",
+      "programmatic_name": "programmatic_name-500",
+      "uuid": "uuid-500"
+    },
+    "programmatic_name-501": {
+      "destination_type": 501,
+      "expect_ack": true,
+      "id": 501,
+      "name": "destination_501",
+      "programmatic_name": "programmatic_name-501",
+      "uuid": "uuid-501"
+    }
+  },
+  "org_id": "201",
+  "phases": {
+    "phase_600": {
+      "enabled": true,
+      "id": 600,
+      "name": "phase_600",
+      "order": 600,
+      "uuid": "uuid-600"
+    },
+    "phase_601": {
+      "enabled": true,
+      "id": 601,
+      "name": "phase_601",
+      "order": 601,
+      "uuid": "uuid-601"
+    }
+  },
+  "playbooks": {
+    "playbook_1000": {
+      "activation_type": "automatic",
+      "description": null,
+      "display_name": "display_name-1000",
+      "has_logical_errors": true,
+      "id": 1000,
+      "is_deleted": true,
+      "is_locked": true,
+      "name": "playbook_1000",
+      "object_type": "incident",
+      "status": "enabled",
+      "type": "type-1000",
+      "uuid": "uuid-1000",
+      "version": 1000
+    },
+    "playbook_1001": {
+      "activation_type": "automatic",
+      "description": null,
+      "display_name": "display_name-1001",
+      "has_logical_errors": true,
+      "id": 1001,
+      "is_deleted": true,
+      "is_locked": true,
+      "name": "playbook_1001",
+      "object_type": "incident",
+      "status": "enabled",
+      "type": "type-1001",
+      "uuid": "uuid-1001",
+      "version": 1001
+    }
+  },
+  "rules": {
+    "rule_300": {
+      "conditions": [
+        {
+          "field_name": "field_name-300",
+          "method": "method-300"
+        }
+      ],
+      "enabled": true,
+      "id": 300,
+      "logic_type": "logic_type-300",
+      "message_destinations": [
+        "message_destinations-300"
+      ],
+      "name": "rule_300",
+      "object_type": "artifact",
+      "timeout_seconds": 300,
+      "type": 300,
+      "uuid": "uuid-300"
+    },
+    "rule_301": {
+      "conditions": [
+        {
+          "field_name": "field_name-301",
+          "method": "method-301"
+        }
+      ],
+      "enabled": true,
+      "id": 301,
+      "logic_type": "logic_type-301",
+      "message_destinations": [
+        "message_destinations-301"
+      ],
+      "name": "rule_301",
+      "object_type": "incident",
+      "timeout_seconds": 301,
+      "type": 301,
+      "uuid": "uuid-301"
+    }
+  },
+  "scripts": {
+    "programmatic_name-400": {
+      "description": "description-400",
+      "enabled": true,
+      "id": 400,
+      "language": "language-400",
+      "name": "script_400",
+      "object_type": "artifact",
+      "programmatic_name": "programmatic_name-400",
+      "uuid": "uuid-400"
+    },
+    "programmatic_name-401": {
+      "description": "description-401",
+      "enabled": true,
+      "id": 401,
+      "language": "language-401",
+      "name": "script_401",
+      "object_type": "incident",
+      "programmatic_name": "programmatic_name-401",
+      "uuid": "uuid-401"
+    }
+  },
+  "sections": {
+    "api_key_permissions": {
+      "count": 0,
+      "reason": "a read-only API key cannot read its own permission set on 51.0.9.0.20848, and successful reads do not show what a key may write",
+      "state": "not_observable"
+    },
+    "datatables": {
+      "count": 2,
+      "reason": null,
+      "state": "loaded"
+    },
+    "fields": {
+      "count": 23,
+      "reason": null,
+      "state": "loaded"
+    },
+    "functions": {
+      "count": 2,
+      "reason": null,
+      "state": "loaded"
+    },
+    "groups": {
+      "count": 2,
+      "reason": null,
+      "state": "loaded"
+    },
+    "incident_types": {
+      "count": 2,
+      "reason": null,
+      "state": "loaded"
+    },
+    "installed_apps": {
+      "count": 0,
+      "reason": "no verified read reports installed apps or their versions",
+      "state": "not_observable"
+    },
+    "message_destinations": {
+      "count": 2,
+      "reason": null,
+      "state": "loaded"
+    },
+    "phases": {
+      "count": 2,
+      "reason": null,
+      "state": "loaded"
+    },
+    "playbooks": {
+      "count": 2,
+      "reason": null,
+      "state": "loaded"
+    },
+    "rules": {
+      "count": 2,
+      "reason": null,
+      "state": "loaded"
+    },
+    "scripts": {
+      "count": 2,
+      "reason": null,
+      "state": "loaded"
+    },
+    "workflows": {
+      "count": 0,
+      "reason": null,
+      "state": "loaded"
+    }
+  },
+  "soar_version": "51.0.9.0.20848",
+  "source": "collections",
+  "workflows": {}
+}

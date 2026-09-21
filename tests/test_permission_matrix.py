@@ -163,6 +163,8 @@ EXPECTED: dict[str, dict[str, dict[str, str]]] = {
     "soar_check_approval": _READ,
     "soar_get_incident_full": _READ,
     "soar_find_similar_incidents": _READ,
+    # P2-01 (08 §25): a Tier-0 discovery read. No flag, no approval, kill switch irrelevant.
+    "soar_refresh_catalog": _READ,
     "soar_add_comment": _COMMENTS,
     "soar_add_artifact": _ARTIFACTS,
     "soar_create_incident": _INCIDENT_WRITES,
@@ -186,6 +188,7 @@ MINIMAL_ARGS: dict[str, dict[str, Any]] = {
     "soar_check_approval": {"approval_id": "APR-2026-0917-abcdef"},
     "soar_get_incident_full": {"incident_id": 42},
     "soar_find_similar_incidents": {"incident_id": 42},
+    "soar_refresh_catalog": {},
     "soar_add_comment": {"incident_id": 42, "text": "matrix"},
     "soar_add_artifact": {
         "incident_id": 42,

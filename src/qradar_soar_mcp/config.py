@@ -216,11 +216,13 @@ def _approval_mode(value: Any) -> str:
 
 
 def _catalog_source(value: Any) -> str:
+    """``collections`` | ``export``. Anything else resolves to ``collections``, the
+    read-only source, and never to the export, which needs a more privileged key (08 §25)."""
     raw = str(value).strip().lower()
     if raw in {"export", "collections"}:
         return raw
-    _warn(f"SOAR_CATALOG_SOURCE={value!r} is not recognised; using export")
-    return "export"
+    _warn(f"SOAR_CATALOG_SOURCE={value!r} is not recognised; using collections")
+    return "collections"
 
 
 def _log_level(value: Any) -> str:
@@ -382,10 +384,14 @@ class Settings(BaseSettings):
     kill_switch_file: Annotated[Path, BeforeValidator(_path("HALT"))] = Path("HALT")
     log_level: Annotated[str, BeforeValidator(_log_level)] = "INFO"
 
-    # ── catalog (Phase 2; held) ────────────────────────────────────────
-    catalog_source: Annotated[str, BeforeValidator(_catalog_source)] = "export"
+    # ── catalog (P2-01; 08 §25) ────────────────────────────────────────
+    catalog_source: Annotated[str, BeforeValidator(_catalog_source)] = "collections"
+    # 0 reloads on every read; a day is the ceiling (a larger value is clamped to it).
     catalog_ttl_seconds: Annotated[
-        int, BeforeValidator(_int_parser("SOAR_CATALOG_TTL_SECONDS", default=300, minimum=0))
+        int,
+        BeforeValidator(
+            _int_parser("SOAR_CATALOG_TTL_SECONDS", default=300, minimum=0, maximum=86_400)
+        ),
     ] = 300
 
     # ── transport ──────────────────────────────────────────────────────

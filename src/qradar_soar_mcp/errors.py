@@ -165,6 +165,17 @@ class SoarUnsupportedError(SoarError):
     failure_class = "Unsupported"
 
 
+class SoarCatalogUnavailableError(SoarError):
+    """The configured catalog source cannot build a catalog (08 §25).
+
+    Raised before anything is sent to SOAR. The catalog never falls back to another
+    source, so this is the whole answer until the configuration changes.
+    """
+
+    code = "catalog_unavailable"
+    failure_class = "Catalog unavailable"
+
+
 class SoarRateLimitedError(SoarError):
     code = "soar_rate_limited"
     failure_class = "Rate limited by SOAR"

@@ -186,6 +186,118 @@ async def test_no_secret_anywhere(
         assert SENTINEL not in audit.read_text(encoding="utf-8"), "audit log contained the secret"
 
 
+# ------------------------------------------------------------- P2-01 catalog
+PW_DEFAULT = "PW-DEFAULT-DO-NOT-LEAK-91c4"
+
+
+def _plant_password_input(fake: FakeSoar) -> None:
+    """A ``password``-typed function input whose definition holds a default everywhere one
+    could hide: the selected value, a placeholder, a tooltip, a template, and keys the
+    verified shape does not even have. The API key is echoed into configuration text too."""
+    field = fake.discovery["function_fields"][0]
+    field.update(
+        input_type="password",
+        placeholder=PW_DEFAULT,
+        tooltip=f"default is {PW_DEFAULT}",
+        default_value=PW_DEFAULT,
+        default=PW_DEFAULT,
+        values=[{"label": PW_DEFAULT, "value": PW_DEFAULT, "default": True, "enabled": True}],
+        templates=[{"id": 1, "name": "t", "template": PW_DEFAULT, "uuid": "uuid-t"}],
+    )
+    fake.discovery["function:200"]["description"] = f"connects with {SENTINEL}"
+    fake.discovery["scripts"]["entities"][0]["description"] = f"Authorization: Basic {SENTINEL}"
+
+
+async def test_catalog_loading_and_refresh_leak_no_password_default_and_no_credential(
+    fake: FakeSoar, tmp_path: Path, monkeypatch
+):
+    _plant_password_input(fake)
+    env = base_env(tmp_path, SOAR_LOG_LEVEL="DEBUG")
+    stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stderr)
+    handler = configure_logging("DEBUG", secrets=[SENTINEL])
+    probe = LeakProbe()
+    logging.getLogger().addHandler(probe)
+    try:
+        rt = Runtime.build(env, transport="stdio")
+        out = await run_pipeline(TOOL_REGISTRY["soar_refresh_catalog"], rt, {})
+        catalog = await rt.require_catalog().get()
+        await rt.aclose()
+    finally:
+        logging.getLogger().removeHandler(probe)
+        logging.getLogger().removeHandler(handler)
+
+    assert out["ok"] is True, out
+    # Sanitised at ingestion: the model holds the input, and nothing a value could hide in.
+    secret_input = catalog.functions["function_200"].inputs[0]
+    assert secret_input.input_type == "password" and secret_input.name == "input_100"
+    assert secret_input.values == () and secret_input.placeholder is None
+    assert secret_input.tooltip is None
+    stored = catalog.to_json()
+    assert PW_DEFAULT not in stored and PW_DEFAULT not in repr(catalog)
+    # The API key echoed into configuration text is scrubbed at ingestion as well, with
+    # anything shaped like a credential; the output redactor is only the backstop.
+    assert SENTINEL not in stored and "Basic " + SENTINEL not in stored
+    assert "[REDACTED]" in catalog.functions["function_200"].description
+    assert "[REDACTED]" in (next(iter(catalog.scripts.values())).description or "")
+    rendered = json.dumps(out, default=str)
+    for secret in (PW_DEFAULT, SENTINEL):
+        assert secret not in rendered
+        assert secret not in "\n".join(probe.texts), "a raw log record contained it"
+        assert secret not in stderr.getvalue()
+    assert "Basic " not in rendered
+    assert audit_text(tmp_path) == ""  # a read writes no audit record at all
+
+
+def audit_text(tmp_path: Path) -> str:
+    audit = tmp_path / "state" / "audit.jsonl"
+    return audit.read_text(encoding="utf-8") if audit.exists() else ""
+
+
+async def test_the_raw_catalog_payloads_are_never_logged(
+    fake: FakeSoar, tmp_path: Path, monkeypatch
+):
+    marker = "RAW-PAYLOAD-MARKER-5d20"
+    fake.discovery["actions"]["entities"][0]["name"] = marker
+    fake.discovery["playbooks"][0]["description"] = marker
+    stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stderr)
+    handler = configure_logging("DEBUG", secrets=[SENTINEL])
+    probe = LeakProbe()
+    logging.getLogger().addHandler(probe)
+    try:
+        rt = Runtime.build(base_env(tmp_path, SOAR_LOG_LEVEL="DEBUG"), transport="stdio")
+        out = await run_pipeline(TOOL_REGISTRY["soar_refresh_catalog"], rt, {})
+        await rt.aclose()
+    finally:
+        logging.getLogger().removeHandler(probe)
+        logging.getLogger().removeHandler(handler)
+    assert out["ok"] is True
+    assert marker not in "\n".join(probe.texts) and marker not in stderr.getvalue()
+    assert marker not in json.dumps(out)
+
+
+async def test_a_malformed_catalog_row_does_not_put_its_values_anywhere(
+    fake: FakeSoar, tmp_path: Path, monkeypatch
+):
+    fake.discovery["scripts"]["entities"][0]["id"] = PW_DEFAULT  # not the verified type
+    stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stderr)
+    handler = configure_logging("DEBUG", secrets=[SENTINEL])
+    probe = LeakProbe()
+    logging.getLogger().addHandler(probe)
+    try:
+        rt = Runtime.build(base_env(tmp_path, SOAR_LOG_LEVEL="DEBUG"), transport="stdio")
+        out = await run_pipeline(TOOL_REGISTRY["soar_refresh_catalog"], rt, {})
+        await rt.aclose()
+    finally:
+        logging.getLogger().removeHandler(probe)
+        logging.getLogger().removeHandler(handler)
+    assert out["ok"] is False and out["error"]["code"] == "malformed_response"
+    assert PW_DEFAULT not in json.dumps(out)
+    assert PW_DEFAULT not in "\n".join(probe.texts) and PW_DEFAULT not in stderr.getvalue()
+
+
 async def test_redaction_backstop_catches_a_logged_secret(monkeypatch):
     """If some future code path logs the secret, the handler still hides it."""
     stderr = io.StringIO()

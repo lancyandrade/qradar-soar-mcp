@@ -6,13 +6,13 @@ conflicts with `00-` to `07-`, this document wins *for that point only*. It
 does not license any other redesign; anything not listed here is governed by
 `00-` to `07-` unchanged.
 
-`00-` to `07-` are the baseline and are not edited, with six recorded
+`00-` to `07-` are the baseline and are not edited, with seven recorded
 exceptions: before first publication the private lab topology was replaced by
 generic placeholders (§17), P2-00 added a status pointer to `05` (§20),
 P1-CORR-01 added an implementation-status note to `05` (§21), P2-TLS added
 the TLS trust model to `02` as §7.1 (§22), P2-00b added a research-status
-note to `05` (§23), and P1-CORR-02 added an implementation-status note to
-`05` (§24).
+note to `05` (§23), P1-CORR-02 added an implementation-status note to
+`05` (§24), and P2-01 added an implementation-status note to `05` (§25).
 
 ---
 
@@ -112,6 +112,8 @@ behaviour".
 | `soar_update_task_status` | 2 | `SOAR_ALLOW_TASK_WRITES` | `GET` + `PUT` + `GET /tasks/{id}` (§24) |
 | `soar_invoke_action` | per policy (1–5) | `SOAR_ALLOW_ACTIONS` (+ `SOAR_ALLOW_DESTRUCTIVE_ACTIONS` when the rule is destructive) | none: every call is refused as `DENY_UNSUPPORTED`; the invocation contract is unverified (§21) |
 
+`P2-01` adds one Tier-0 tool to this contract, `soar_refresh_catalog` (§25.5).
+
 **Explicitly not in Phase 1:** `soar_ping`, `soar_security_status`, data-table
 reads, `/functions`, org-level `/actions`, any playbook tool, any generic REST
 tool, and anything else not in this table. Connectivity checking is the
@@ -142,6 +144,9 @@ unless absolute; every request carries `handle_format=names` and
 | GET | `incidents/{id}/attachments` | metadata only; contents endpoint is ⚠️ and not used |
 | GET | `users` | |
 | GET | `types/incident/fields` | field definitions incl. `prefix: properties` for custom fields |
+
+`P2-01` adds the read-only discovery calls of §25.3, in `client/discovery.py` only; the
+paragraph below still describes the Phase-1 modules.
 
 Precedence over any prior implementation: a task's status is changed with the
 verified `PUT /tasks/{id}`, never `PATCH`, and only as §24 describes; `query_paged` sends
@@ -576,3 +581,167 @@ pass), owns `closed_date`, and models no conflict, permission or phase behaviour
 
 This ticket's only edit to the baseline is one implementation-status note in `05`, under
 the P2-00b note (the sixth exception).
+
+## 25. P2-01 — the catalog foundation
+
+Ticket `P2-01` of `06`, implemented on 2026-09-21, offline, from the evidence `P2-00` and
+`P2-00b` committed. **No request was sent to an appliance for it.** This section amends
+the wording of `06 P2-01`, `04 §1` and `05 §2.1` where the verified record
+(`docs/soar-api-verified.md`, QRadar SOAR `51.0.9.0.20848`) overtook them, adds one row to
+§3 and the calls below to §4. It adds no capability flag and changes nothing in
+`security/` or in `tools/registry.py`.
+
+### 25.1 "Dual backends", as the evidence allows
+
+`06 P2-01` asks for a `collections` and an `export` backend, "defaulting to whichever
+P2-00 proved reliable", and for a lab-marked test that both produce an equivalent
+catalog. `P2-00` answered the first part and made the second impossible for now:
+
+- **`collections` is the default** `SOAR_CATALOG_SOURCE`, reversing `05 §2.1`. Every
+  call it needs answered 200 to a read-only key (§25.3 says exactly what was and was not
+  seen of the playbook paging).
+- **`export` is selectable and unavailable.** `POST /configurations/exports` was sent
+  once with the approved read-only key and answered HTTP 403, as did
+  `GET /configurations/exports/history`; no export document was ever obtained, so its
+  contents are unverified and there is nothing to write a parser against. `ExportBackend`
+  therefore refuses every load with `catalog_unavailable` and a fixed text that says why.
+  It holds no client, so it cannot send a request, and it knows no other backend, so it
+  cannot fall back: a server configured for `export` has no catalog, and says so at
+  start-up (a warning; Phase-1 tools are unaffected) and on every load. It becomes a real
+  backend when an export contract is verified with a suitably privileged key in a
+  disposable org (`docs/soar-api-verified.md §8`, `P2-00b` remainder).
+- The "both backends produce an equivalent catalog" acceptance criterion is **deferred
+  with the export contract**; it cannot be met or tested until then. No live export
+  request is made to satisfy it.
+- An unrecognised `SOAR_CATALOG_SOURCE` warns and resolves to `collections`. Before this
+  ticket it resolved to `export`; an invalid value must never select the source that
+  needs the more privileged key.
+
+### 25.2 The model (`catalog/models.py`)
+
+`Catalog` has the fields of `04 §1`, as frozen pydantic models that forbid unknown keys,
+with four recorded adjustments. Each exists so that the catalog never states more than
+the appliance was seen to state:
+
+| Adjustment | Why |
+|---|---|
+| `sections: {name -> {state, count, reason}}`, one entry per section of `04 §1` | `04 §1` cannot tell *known empty* from *not observable*: an empty `frozenset` of permissions would read as "this key has no permissions". States: `loaded` (read in a verified shape; empty means SOAR returned none), `unverified` (SOAR returned rows of a shape that is not verified; they are counted and none is parsed), `not_observable` (no verified source). A section that is not `loaded` must be empty, and a `loaded` one must count its entries; the model enforces both |
+| `source` | which backend built the catalog, so a cached catalog can never be served for another configured source |
+| `format_version` | the schema of the JSON form |
+| `org_id` is the configured org as a string; `fetched_at` must be timezone-aware and is normalised to UTC | `04 §1` types |
+
+What is **not observable** and stays so:
+
+- `api_key_permissions` — always empty, state `not_observable`. A read-only key cannot
+  read its own permission set (`Q6`), and successful reads are no evidence about what a
+  key may write, so nothing is inferred from them.
+- `installed_apps` — always empty, state `not_observable`: no verified read reports apps
+  or versions.
+- `workflows` — `GET /workflows` answered `{entities: []}` to the research key, so no key
+  of the workflow object is verified. An empty answer is `loaded` with count 0 (SOAR
+  returned none to this key, which is all that state claims); a non-empty one is
+  `unverified` with the row count and **no** parsed entry. `WorkflowSummary` deliberately
+  has no fields; `P2-04` fills it once the shape is verified.
+
+A spec is a fixed projection, never the raw object. Not carried by any spec: principals
+(creators, modifiers, group members, the API keys and users bound to a message
+destination, and the users and groups that an owner or members field offers as its
+values: a `select_owner` or `multiselect_members` field has no values here, and a value
+SOAR marks with `principal_type` is dropped from any field), script bodies, playbook XML,
+output examples, templates, rule condition values, and any free-text default. A
+`password`-typed input or field keeps its name, label, type and required-ness and nothing
+else, neither values nor placeholder nor tooltip (`04 §1`); the models refuse to be built
+otherwise. That input type was not among those seen on the appliance, so this is a rule
+without live evidence. Every string read from SOAR also passes the credential scrubber
+and the redactor before a spec is built, so the API key cannot be stored in the catalog
+even if configuration text were to echo it. Text is capped at 1,000 characters.
+
+Keys: functions, playbooks, rules, phases, groups and incident types by `name`; scripts
+and message destinations by `programmatic_name`; data tables by `type_name`; fields by
+`<type>.<name>`, or `<type>.<prefix>.<name>` when SOAR gives the field a prefix
+(`incident.severity_code`, `incident.properties.root_cause`). `FieldSpec.prefix` is SOAR's
+value as it came; only `properties` is given a meaning (a custom field, as in Phase 1).
+Two objects under one key fail the load; one of them is never silently kept.
+
+### 25.3 Calls added to §4 (`client/discovery.py` only)
+
+All with the two Phase-1 query parameters, all verified 200 in the `P2-00` ledger:
+
+| Method | Path | Wrapper | Used for |
+|---|---|---|---|
+| GET | `/rest/const` | object | `server_version.version` |
+| GET | `functions` | `entities` | the function list (a row's `view_items` is empty) |
+| GET | `functions/{id}` | object | `view_items`, `destination_handle`, `version`; one request per function |
+| GET | `types/__function/fields` | bare list | function inputs, joined to `view_items[].content` by `uuid` (`Q5`) |
+| GET | `actions` | `entities` | rules |
+| GET | `scripts` | `entities` | scripts, list rows only (no body) |
+| GET | `workflows` | `entities` | see §25.2 |
+| GET | `message_destinations` | `entities` | |
+| GET | `phases` | `entities` | |
+| GET | `groups` | bare list | |
+| GET | `incident_types` | name-keyed map | |
+| GET | `types` | name-keyed map | data tables: `type_id == 8` (`Q4`), columns from the type's own `fields` |
+| GET | `types/incident/fields`, `types/task/fields`, `types/artifact/fields` | bare list | fields |
+| POST | `playbooks/query_paged` | `data` + totals | `return_level=normal`; body `{"filters": [], "start": n, "length": 10}`, the criteria-only form of `Q1`; `GET /playbooks` answers 500 and is never sent |
+
+Of the playbook paging, this much was seen live: that body from `start` 0, with `length`
+1 (`P2-00`) and 10 (`P2-00b`, which saw every playbook of the org in its first page). A
+later page (`start` > 0) is the documented paging of the query and was never needed, so
+it is checked rather than trusted: unless the pages add up to exactly `recordsTotal`, the
+load fails.
+
+There is no universal wrapper: each method checks the one it was verified with, and any
+other answer is `malformed_response`. The one `POST` is read-only in effect and is
+criteria-only by construction: the client builds the body from two integers, and no
+caller supplies a filter, a path or a method. Verified but **not** used by this ticket,
+and therefore not in `client/`: `GET /actions/{id}`, `/actions/{id}/view`,
+`/scripts/{id}`, `/playbooks/{id}`, `/types/{type}` and `GET /users` for the catalog
+(people are not catalog content). Never sent: the configuration export and its history,
+any import, any execution query, any `PUT`, `PATCH` or `DELETE`. `base.py` is unchanged
+apart from the `discovery` accessor; the AST tests pin these pairs to `discovery.py`,
+keep the Phase-1 modules at exactly their Phase-1 calls, and keep the Phase-2 word ban
+everywhere else.
+
+A load is **all or nothing**. Any failed read, any row without a verified key, playbook
+pages that do not add up, more than 1,000 functions or 2,000 playbooks: the load raises
+and no catalog exists; nothing is
+truncated or filled in. (Tolerating a collection a key may not read, as an explicit
+section state, is possible later and is the owner's decision.)
+
+### 25.4 Cache (`catalog/cache.py`)
+
+In-process, one per runtime, in front of the configured backend.
+`SOAR_CATALOG_TTL_SECONDS` (default 300, `0` = never reuse, clamped to 86,400; the
+existing integer-parsing conventions) bounds reuse, counted from the moment a load began; `refresh()` always reloads, except
+that refreshes queued behind one another share a load that started after they asked (a
+burst costs SOAR one load, and nobody gets data older than their request); a failed
+load raises and leaves the previous entry untouched, and a stale entry is never served in
+place of the error; an entry is tied to the source that produced it, and a backend that
+labels its catalog with another source is refused. Time is an injected monotonic clock.
+
+### 25.5 `soar_refresh_catalog`
+
+| Tool | Tier | Capability flag | REST |
+|---|---|---|---|
+| `soar_refresh_catalog` | 0 | — | the calls of §25.3 |
+
+Declared with `@soar_tool` and executed only by `run_pipeline`, like every tool: no
+capability, no mutation, no approval, no mutation audit record. It takes no argument,
+forces a reload from the configured source and returns the source, the fetch time, the
+SOAR version, the org id, the TTL, a count per loaded section and the state and reason of
+every section that is not loaded; never a spec. It is the only tool this ticket adds; the
+listing tools are `P2-02` to `P2-05`.
+
+### 25.6 JSON and the offline fixture
+
+`Catalog.to_json()` is stable text (sorted keys, sorted sets, UTC, LF); `from_json()` is
+strict (no coercion, no unknown key at any level) and rejects a document whole.
+`tests/fixtures/catalog/lab-v51.json` is the offline catalog `04 §1` asks for. It is
+**not** a copy of the lab: `P2-00` kept shapes, not values, so the file is the real
+collections backend run against the offline fake, whose payloads are those recorded
+shapes filled with obviously synthetic values (`tests/discovery_data.py`). A test
+rebuilds it and compares, loads it with the network blocked, and runs the probe
+sanitiser and the repository scanner over it.
+
+This ticket's only edit to the baseline is one implementation-status note in `05`, under
+the P1-CORR-02 note (the seventh exception).
