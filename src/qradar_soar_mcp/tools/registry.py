@@ -202,9 +202,23 @@ def _redacted(value: Any) -> Any:
 
     Always round-trips through JSON so the response is JSON-native (tuples
     become lists, non-JSON values become strings) whether or not anything
-    was redacted.
+    was redacted. Every string of the result, keys included, is then redacted as the
+    text it is. The serialised document is never redacted as one string: there a
+    pattern can run past the end of a value into the JSON around it, which removes
+    text that is no credential and can leave a document that no longer parses, and
+    JSON escaping can hide a credential that holds a quote or a backslash.
     """
-    return json.loads(redact(json.dumps(value, default=str, ensure_ascii=False)))
+    return _redact_strings(json.loads(json.dumps(value, default=str, ensure_ascii=False)))
+
+
+def _redact_strings(value: Any) -> Any:
+    if isinstance(value, str):
+        return redact(value)
+    if isinstance(value, list):
+        return [_redact_strings(item) for item in value]
+    if isinstance(value, dict):
+        return {redact(key): _redact_strings(item) for key, item in value.items()}
+    return value
 
 
 def _audit(rt: Runtime, event: str, **fields: Any) -> None:
