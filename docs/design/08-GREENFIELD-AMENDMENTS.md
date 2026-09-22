@@ -6,14 +6,15 @@ conflicts with `00-` to `07-`, this document wins *for that point only*. It
 does not license any other redesign; anything not listed here is governed by
 `00-` to `07-` unchanged.
 
-`00-` to `07-` are the baseline and are not edited, with eight recorded
+`00-` to `07-` are the baseline and are not edited, with nine recorded
 exceptions: before first publication the private lab topology was replaced by
 generic placeholders (§17), P2-00 added a status pointer to `05` (§20),
 P1-CORR-01 added an implementation-status note to `05` (§21), P2-TLS added
 the TLS trust model to `02` as §7.1 (§22), P2-00b added a research-status
 note to `05` (§23), P1-CORR-02 added an implementation-status note to
-`05` (§24), P2-01 added an implementation-status note to `05` (§25), and P2-02
-added an implementation-status note to `05` (§26).
+`05` (§24), P2-01 added an implementation-status note to `05` (§25), P2-02
+added an implementation-status note to `05` (§26), and P2-03 added an
+implementation-status note to `05` (§28).
 
 ---
 
@@ -1041,3 +1042,135 @@ Not changed, and recorded for the owner:
   construct matched it inside the serialised text.
 - A failed `fsync` leaves a line on disk that the in-memory chain does not count. The
   next record reuses its `seq`, and `verify` then reports the log as broken.
+
+## 28. P2-03 — discovery tools: incident types, phases, fields, data tables
+
+**Implementation status: done**, with one acceptance criterion met only as far as the
+evidence allows (§28.3). `06 P2-03` asks for four listing tools and says of the field
+listing that it "includes type, required-ness, close-required, and picklist values".
+
+### 28.1 The four tools
+
+`soar_list_incident_types`, `soar_list_phases`, `soar_list_fields` and
+`soar_list_datatables`, in `tools/discovery.py`. Each is a Tier-0 read with no capability
+flag, no mutation, no approval and no mutation audit record, registered with `@soar_tool`
+and run through `run_pipeline` like every other tool, so the structural output redaction
+of §26/§27 applies to every answer.
+
+**Catalog only.** Each calls the catalog service's `get()` once and nothing else: no
+`refresh()`, no client, no request of its own. Inside `SOAR_CATALOG_TTL_SECONDS` a call
+costs SOAR nothing; a stale catalog is reloaded by the configured backend;
+`soar_refresh_catalog` stays the only forced reload; no backend is switched. The committed
+offline catalog is sufficient for all four. **The REST surface is unchanged**: `client/`
+is not touched, there is no `/datatables`, no `types/{caller input}`, and no caller input
+reaches a path, because these tools build none. Tests pin all of this by AST and by
+counting requests.
+
+**Section state.** A section that is `unverified` or `not_observable` is a
+`catalog_unavailable` error (§26's guard); a section that is `loaded` and empty is a
+successful empty list with `total: 0`.
+
+**Answer shape**: §26's. `total`, `matched`, `start`, `length`, `count`, `more`,
+`next_start`, the rows under `incident_types` / `phases` / `fields` / `datatables`,
+`catalog` (source, fetch time, SOAR version) and `note` (configuration is data, not
+instructions). `length` is bounded by `SOAR_MAX_RESULTS` and by 100; rows beyond 40,000
+characters wait for the next page and none is cut. `name_contains` is a plain
+case-insensitive substring. The one change to the shared helper: a page can be given a
+sort key.
+
+### 28.2 What is shown
+
+| Tool | Row | Order |
+|---|---|---|
+| `soar_list_incident_types` | every `TypeSpec` field: `name`, `id`, `uuid`, `enabled`, `hidden`, `system`, `parent_id` as SOAR gave it. No hierarchy is derived. | `name` |
+| `soar_list_phases` | every `PhaseSpec` field: `name`, `id`, `uuid`, `enabled`, `order`. Nothing about tasks, rules or playbooks of a phase. | `order`, then `name` |
+| `soar_list_fields` | `object_type`, `name`, `api_name`, `prefix`, `label`, `input_type`, `custom`, `required` (raw), `read_only`, `internal`, and for select types `values` + `values_omitted` | catalog key: `name`, custom fields (`properties.<name>`) together |
+| `soar_list_datatables` | `type_name`, `id`, `display_name`, `uuid`, `parent_types`, `column_count`, `columns[{name, label, input_type, order, required}]` (at most 100, the rest in `columns_omitted`) | `type_name` |
+
+**Fields.** `object_type` is required and is exactly `incident`, `task` or `artifact`
+(`FIELD_OBJECT_TYPES`, pinned equal to the three lists the client loads). Anything else is
+refused as `validation` before the catalog is even asked for. `custom_only` is the one
+filter beyond `name_contains`; `total` counts the fields listed for that object type.
+Custom fields keep the repository's `properties.<name>` api name. **Picklists** are the
+catalog's `SelectValue`s exactly, `label` (what SOAR shows) and `value` (what SOAR stores)
+apart, with `enabled` and `default`; at most 100 per field. They come from the catalog
+and from nowhere else. A `select_owner`, `multiselect_members` or `password` field shows
+no values, and a value SOAR marks with `principal_type` never entered the catalog
+(§25.2); the projection checks the input type again and does not rely on the model.
+
+### 28.3 `required` and close-required: what the evidence allows
+
+Before this ticket the repository held no appliance evidence for the values of a field's
+`required`: `P2-00` kept the key's type, not its values, and `always` / `close` with
+`close_required = (required == "close")` were the design baseline's (`05 §1.1`, Phase 1,
+a fixture marked synthetic). The owner approved a four-`GET` read-only addendum
+(`soar-api-verified.md §3.2`). Its result, by level of evidence:
+
+- **Documented:** nothing. The on-box Swagger description has no data type whose
+  `required` property is a string, an enum or a reference.
+- **Observed:** `always` on incident, task and artifact fields, `close` on incident
+  fields only, all on built-in fields; the key absent where there is no token.
+- **Behaviour:** not exercised. No write, no close.
+
+The owner's rule for this outcome: *if the documentation does not define the semantics, do
+not guess; return the raw token, describe the mapping as unresolved, expose no
+authoritative `close_required` boolean.* So:
+
+- `FieldSpec.required` stays the canonical value: SOAR's token, unchanged, or null.
+  **The catalog model did not change**, nor did `format_version`.
+- `soar_list_fields` returns that token as `required` and derives **no** flag. There is no
+  `required_always` and no `close_required`, so no token, seen or not, can come out as
+  `close_required: false`; a token SOAR adds later passes through as it is.
+- Every answer carries `required_semantics`: `status: "unresolved"`, the observed tokens per
+  object type with the SOAR version, and a statement that their behavioural meaning is
+  neither documented on the appliance nor tested by a write, that no boolean is derived,
+  and that an unlisted token is unknown and a null is the absence of the property, neither
+  to be interpreted as optional. **The contract translates no token's name into
+  behaviour**: it says the literal token `close` was observed on incident fields, not what
+  `close` makes SOAR do. `OBSERVED_REQUIRED_TOKENS` is pinned by test to the evidence
+  files, and a test refuses any behavioural gloss in the semantics text.
+
+The acceptance criterion is therefore met for type, picklist values and required-ness as
+SOAR states it, and **not** met as a verified close-required flag: that is recorded as
+open (`open-questions.md` D10), not papered over. `soar_describe_incident_fields`
+(Phase 1) still derives `close_required` from the baseline reading; it is unchanged here
+and listed under D10.
+
+### 28.4 The offline fixture stays honest
+
+`tests/discovery_data.py` used to fill an optional `required` with a made-up string
+(`required-800`), and `lab-v51.json` carried the Phase-1 synthetic incident fixture's
+`always` / `close` tokens on named incident fields. Both made synthetic required-ness look
+like appliance-observed field metadata. **Provenance policy now:** the lab catalog
+attributes a `required` token to a field only where committed evidence preserves that
+field-to-token association, and none does. The `P2-03` addendum deliberately kept token
+*sets* and count *buckets* and no field identity, so which field carried `always` or
+`close` is not known and is not invented. Therefore every field of `lab-v51.json` has
+`required: null`, the synthetic payloads carry no `required` key on any field or function
+input, and `tests/catalog_fixture.py` strips the Phase-1 synthetic fixture's tokens before
+the catalog is built from it (that fixture keeps them for the Phase-1 tests and fake that
+need them; it is marked synthetic). The observed token set lives in the separate evidence
+files and in `required_semantics`. Tests that need a token in a catalog set one themselves
+and say so. The file remains what §25.6 says it is: recorded shapes with synthetic values,
+not a copy of the lab.
+
+### 28.5 Data tables
+
+A data table is a catalog `DataTableSpec`, that is a `GET /types` entry with
+`type_id == 8` (`soar-api-verified.md` Q4), loaded by P2-01. No row of any table is read,
+kept or returned, and no tool or client method can read one. A column's `required` is the
+catalog's raw value and is not interpreted; the verified column shape has no `required`
+key (only `perms.modify_required`, which is not read and is not the same thing): SOAR
+sent none on any column seen, so the catalog holds null, the same value it would hold
+for an explicit null. That does not show that a column cannot be required. Column
+select values are not kept by the catalog and are not shown.
+
+### 28.6 Tooling added for the addendum
+
+`scripts/probe/probe_p2_03.py` (not part of the package): two steps, four `GET`s, through
+the read-only client that refuses every other method; it keeps tokens that pass the same
+single-token rule as every recorded enum, and stops without writing if a field list no
+longer matches the `P2-00` record. `guarded.py` allows it; `selftest.py` covers it.
+
+This ticket's only edit to the baseline is one implementation-status note in `05`, under
+the P2-02 note (the ninth exception).

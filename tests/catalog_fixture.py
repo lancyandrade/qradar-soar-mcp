@@ -6,6 +6,13 @@ with synthetic values (``tests/discovery_data.py``). So the file has the structu
 returned and no value from it: no host, id, name, text or credential. Its timestamp is
 fixed, and the org id is the repository's placeholder.
 
+The incident field definitions come from the fake's Phase-1 synthetic fixture
+(``tests/fixtures/soar/incident_fields.json``), whose ``required`` tokens are baseline
+assumptions on named fields. They are stripped here: the only committed evidence for
+token values (the P2-03 addendum) kept token sets per object type and no field identity,
+so the catalog attributes no ``required`` token to any field (08 §28.4). The Phase-1
+fixture itself is unchanged for the tests and fake behaviour that rely on it.
+
 ``test_catalog_fixture.py`` rebuilds it and compares, so the committed file cannot drift
 from the models, the backend or the verified shapes. To regenerate after such a change::
 
@@ -17,6 +24,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import respx
 
@@ -30,8 +38,15 @@ FIXTURE = Path(__file__).parent / "fixtures" / "catalog" / "lab-v51.json"
 FETCHED_AT = datetime(2026, 9, 18, tzinfo=UTC)  # the day P2-00 recorded the shapes
 
 
+def without_required_tokens(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The field definitions with no ``required`` key: absent, as the appliance sends it
+    where a field has no token, and never a token this fixture cannot attribute."""
+    return [{k: v for k, v in row.items() if k != "required"} for row in rows]
+
+
 async def build_lab_catalog(fake: FakeSoar | None = None) -> Catalog:
     engine = fake or FakeSoar()
+    engine.fields = without_required_tokens(engine.fields)
     with respx.mock(base_url=BASE_URL, assert_all_called=False, assert_all_mocked=True) as router:
         router.route().mock(side_effect=engine.handler)
         async with SoarClient(Settings.load(connection_env())) as client:

@@ -46,6 +46,20 @@ exercised.
 | 📄 Documented by the appliance, **not** seen live | The filter logic defaults (`ALL` within a filter, `ANY` across filters); the entry shape of a carried `actions` list (`ActionInfoDTO`); the invoke data types and the one e-mail endpoint that uses them; the execution detail and activity types; the meaning of the `write` and `close` flags of a task's `perms` map; the documented read-only and create-only `TaskDTO` properties. |
 | ❓ Unresolved | How a reply to a note is nested; the workflow object; the row shape of an execution and whether function results are retrievable; export contents; action invocation for incidents, tasks and artifacts; conflict (`409`) behaviour; what closing the last required task of a phase does. |
 
+### P2-03 addendum (2026-09-22): the `required` property of a field definition
+
+A narrow, owner-approved addendum to answer one question for `P2-03`: what is the
+`required` property of a field definition? It is marked `P2-03` wherever it adds to the
+record; §3.2 is entirely its work.
+
+| | |
+|---|---|
+| Requests | **Exactly four `GET`s**, each sent once and answered `200`: the static `GET /docs/rest-api/ui/swagger.json`, and `GET /types/incident/fields`, `GET /types/task/fields`, `GET /types/artifact/fields` with the two default query parameters (`handle_format`, `text_content_output_format`) `P2-00` verified them with. No body. Two earlier attempts at the first request ended in a connect timeout while the lab was down; nothing was delivered by them. |
+| Writes | **None.** No `PUT`, `PATCH`, `POST` or `DELETE`; no incident was created, modified or closed and no field was filled or cleared. The tool that sent them can send nothing else. |
+| Credential, TLS | The key in the lab `.env`, used for reads only; verified TLS (CA bundle, host name checked). |
+| Appliance version | `51.0.9.0.20848`, as `P2-00b` established it. The version read is not one of the four requests and was not repeated. |
+| What is stored | Four shape-only files, `p2_03_*.json`, and `_ledger_p2_03.json`: the distinct `required` tokens per object type, counts as buckets, and schema facts of the description. No field name, label or other value. Tooling: [`probe_p2_03.py`](../scripts/probe/probe_p2_03.py), which stops without writing anything if a field list no longer looks like the one `P2-00` recorded (it did). |
+
 An earlier pass with a different key was halted when that key proved to be
 broader than read-only; its output was deleted and is not evidence here. Two
 observations from it are mentioned below where useful, and are labelled as such.
@@ -410,6 +424,29 @@ of the Swagger description finds them used by exactly one endpoint,
 artifact invocation endpoint is documented**, and nothing was invoked. D4 stays
 unresolved and `soar_invoke_action` stays disabled.
 
+### 3.2 The `required` property of a field definition (`P2-03` addendum)
+
+`P2-00` recorded that a field definition has an optional `required` key holding a string,
+and kept no value of it. Phase 1 and `05 §1.1` assume the values `always` and `close`, and
+that `close` means *must be filled before the incident can be closed*. That assumption
+came from the design baseline, not from this appliance (its fixture is marked synthetic).
+Three levels of evidence exist for it, and they are kept apart:
+
+| Level | What it would establish | Result |
+|---|---|---|
+| 📄 **Documented** | What the on-box reference says the property means. | **Nothing.** In the Swagger 2.0 description beside the reference, **no data type has a `required` property that is a string, an enumeration or a reference**; the only `required` properties are plain booleans (fewer than ten data types; `P2-00b` saw the task's among them, §3.1). So the description gives no type, no enum and no meaning for the token, and states nowhere that a token means *required when closing an incident*. ⚠️ Limit of this read: the names of the data types with a boolean `required` were not kept, so whether the description declares the field definition's own `required` as a boolean (which would contradict the strings below) or does not describe it at all is **not established**. The HTML page of the field-definition type was not read. |
+| ✅ **Observed** | Which tokens the returned field definitions actually carry. | `incident`: **`always`**, **`close`**. `task`: **`always`**. `artifact`: **`always`**. Each token sat on fewer than ten fields, **all of them built-in**; no custom field carried one. Wherever there was no token the key was **absent**, never `null`. No other value, and no value that was not a single token, occurred. These are the tokens in use in this org's configuration, **not** a list of every token SOAR knows. |
+| ❓ **Behaviourally verified** | Whether, and when, SOAR rejects a write or a close because a field carrying one of these tokens is empty. | **Not verified, and not attempted**: it needs a write. |
+
+**Conclusion.** `always` and `close` are real tokens on this version, which is as far as
+the Phase-1 assumption is confirmed. What they make SOAR enforce is not established:
+undocumented on the appliance and unexercised. `P2-03` therefore exposes the raw token,
+derives no `required`/`close_required` flag from it and translates no token's name into
+behaviour (08 §28.3). Data-table
+columns are a different matter: their verified shape has no `required` key at all, only
+`perms.modify_required` (whether the caller may change required-ness), and nothing here
+is carried over to them.
+
 ### Confirmed
 
 - HTTP Basic with API key id/secret; both default query parameters accepted everywhere.
@@ -429,7 +466,8 @@ unresolved and `soar_invoke_action` stays disabled.
   `lname`, `email`, `status`. Artifacts have `id`, `type`, `value`,
   `description`, `created`, `hits`.
 - Field definitions have `name`, `text`, `input_type`, `prefix`, `read_only`,
-  `internal`, `values[{value, label, enabled, …}]` and an optional `required`.
+  `internal`, `values[{value, label, enabled, …}]` and an optional `required`
+  (`P2-03`: a string token, `always` or `close` where present; §3.2).
 - `GET /rest/session` is **not** denied to an API key on this version (it
   answers 200 with no permission data).
 - 📄 `PATCH /incidents/{inc_id}`, `POST /incidents`, and `GET|POST` on comments
@@ -438,7 +476,8 @@ unresolved and `soar_invoke_action` stays disabled.
 ### Not verifiable read-only, or not verified
 
 - The PatchDTO shape, `success:false` on a stale version, and the close
-  semantics (writes).
+  semantics (writes). That includes what a field's `required` token enforces:
+  the tokens are observed, their effect is not (§3.2).
 - AND-within / OR-across filter semantics: the queries ran and were consistent,
   but the research key sees **no closed incident**, so the check could not distinguish
   the two. ❓ live. 📄 `P2-00b`: the reference states it — a filter's `logic_type`

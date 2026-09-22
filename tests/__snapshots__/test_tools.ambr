@@ -666,6 +666,110 @@
       }),
       'tier': 0,
     }),
+    'soar_list_datatables': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_datatables',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'length': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Length',
+          }),
+          'name_contains': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Name Contains',
+          }),
+          'start': dict({
+            'default': 0,
+            'title': 'Start',
+            'type': 'integer',
+          }),
+        }),
+        'title': 'soar_list_datatablesArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_list_fields': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_fields',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'custom_only': dict({
+            'default': False,
+            'title': 'Custom Only',
+            'type': 'boolean',
+          }),
+          'length': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Length',
+          }),
+          'name_contains': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Name Contains',
+          }),
+          'object_type': dict({
+            'title': 'Object Type',
+            'type': 'string',
+          }),
+          'start': dict({
+            'default': 0,
+            'title': 'Start',
+            'type': 'integer',
+          }),
+        }),
+        'required': list([
+          'object_type',
+        ]),
+        'title': 'soar_list_fieldsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
     'soar_list_functions': dict({
       'annotations': dict({
         'destructive_hint': False,
@@ -736,6 +840,52 @@
       }),
       'tier': 0,
     }),
+    'soar_list_incident_types': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_incident_types',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'length': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Length',
+          }),
+          'name_contains': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Name Contains',
+          }),
+          'start': dict({
+            'default': 0,
+            'title': 'Start',
+            'type': 'integer',
+          }),
+        }),
+        'title': 'soar_list_incident_typesArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
     'soar_list_message_destinations': dict({
       'annotations': dict({
         'destructive_hint': False,
@@ -778,6 +928,52 @@
           }),
         }),
         'title': 'soar_list_message_destinationsArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_list_phases': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_phases',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'length': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Length',
+          }),
+          'name_contains': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Name Contains',
+          }),
+          'start': dict({
+            'default': 0,
+            'title': 'Start',
+            'type': 'integer',
+          }),
+        }),
+        'title': 'soar_list_phasesArguments',
         'type': 'object',
       }),
       'tier': 0,

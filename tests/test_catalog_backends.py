@@ -345,6 +345,8 @@ async def test_function_inputs_resolve_through_view_items_to_function_fields(
     client: SoarClient, fake: FakeSoar
 ):
     fields = fake.discovery["function_fields"]
+    assert "required" not in fields[0]  # no token value was ever recorded for an input
+    fields[0]["required"] = "token-100"  # synthetic: whatever SOAR says is kept as it is
     detail = fake.discovery["function:200"]
     assert fake.discovery["functions"]["entities"][0]["view_items"] == []  # as verified
     assert [item["content"] for item in detail["view_items"]] == [f["uuid"] for f in fields]
@@ -353,7 +355,8 @@ async def test_function_inputs_resolve_through_view_items_to_function_fields(
     assert [i.uuid for i in fn.inputs] == [f["uuid"] for f in fields]
     assert [i.name for i in fn.inputs] == ["input_100", "input_101"]
     assert [i.input_type for i in fn.inputs] == ["boolean", "select"]
-    assert fn.inputs[0].required == "required-100" and fn.unresolved_inputs == 0
+    assert fn.inputs[0].required == "token-100" and fn.inputs[1].required is None
+    assert fn.unresolved_inputs == 0
     assert fn.destination_handle == "destination_handle-200" and fn.version == 200
     # No special parameter: the single read carries only the two default ones.
     single = next(r for r in fake.requests if r.path.endswith("/functions/200"))
@@ -391,7 +394,7 @@ async def test_a_catalog_the_model_refuses_is_an_error_not_a_partial_catalog(
 
 async def test_an_optional_required_key_may_be_absent(client: SoarClient, fake: FakeSoar):
     assert "required?" in verified("function_fields")["shape"][0]  # optional on the appliance
-    del fake.discovery["function_fields"][0]["required"]
+    assert "required" not in fake.discovery["function_fields"][0]  # and absent here
     fn = (await load(client)).functions["function_200"]
     assert fn.inputs[0].required is None
 

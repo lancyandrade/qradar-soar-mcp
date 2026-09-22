@@ -59,6 +59,14 @@
 > representation, and never stored; nothing can write a script.
 > See `08-GREENFIELD-AMENDMENTS.md §26`.
 
+> **Implementation status — P2-03, 2026-09-22.** `soar_list_incident_types`,
+> `soar_list_phases`, `soar_list_fields` (`incident`, `task`, `artifact`) and
+> `soar_list_datatables` are implemented as Tier-0 reads over that catalog and add no
+> call. A field's `required` is returned as SOAR's raw token: `always` and `close` were
+> observed on `51.0.9.0.20848`, but what they enforce is neither documented on the
+> appliance nor verified by behaviour, so the close-required reading of §1.1 remains an
+> assumption and no flag is derived from it. See `08-GREENFIELD-AMENDMENTS.md §28`.
+
 All paths are relative to `https://{host}/rest/orgs/{org_id}` unless noted.
 Auth: HTTP Basic with API key id/secret. Common params `handle_format=names`
 and `text_content_output_format=always_text` as already implemented.

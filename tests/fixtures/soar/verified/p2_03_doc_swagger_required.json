@@ -1,0 +1,23 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "data_type_count": "100+",
+    "data_types": {},
+    "data_types_with_a_boolean_required": "1-9",
+    "spec_version": "2.0"
+  },
+  "_fixture": "verified-shape",
+  "_note": "documented, not live: schema facts of the `required` property from the description published next to the reference; descriptions are paraphrased in docs/soar-api-verified.md, never stored",
+  "_question": "docs",
+  "_request": {
+    "method": "GET",
+    "path": "/docs/rest-api/ui/swagger.json",
+    "query_keys": []
+  },
+  "_status": 200,
+  "_ticket": "P2-03",
+  "shape": null
+}

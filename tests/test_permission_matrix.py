@@ -172,6 +172,11 @@ EXPECTED: dict[str, dict[str, dict[str, str]]] = {
     "soar_list_scripts": _READ,
     "soar_get_script": _READ,
     "soar_list_message_destinations": _READ,
+    # P2-03 (08 §28): four more Tier-0 reads, answered from the cached catalog alone.
+    "soar_list_incident_types": _READ,
+    "soar_list_phases": _READ,
+    "soar_list_fields": _READ,
+    "soar_list_datatables": _READ,
     "soar_add_comment": _COMMENTS,
     "soar_add_artifact": _ARTIFACTS,
     "soar_create_incident": _INCIDENT_WRITES,
@@ -201,6 +206,10 @@ MINIMAL_ARGS: dict[str, dict[str, Any]] = {
     "soar_list_scripts": {},
     "soar_get_script": {"script_id": 400},
     "soar_list_message_destinations": {},
+    "soar_list_incident_types": {},
+    "soar_list_phases": {},
+    "soar_list_fields": {"object_type": "incident"},
+    "soar_list_datatables": {},
     "soar_add_comment": {"incident_id": 42, "text": "matrix"},
     "soar_add_artifact": {
         "incident_id": 42,
