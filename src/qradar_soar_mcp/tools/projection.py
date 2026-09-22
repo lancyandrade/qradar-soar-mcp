@@ -420,9 +420,11 @@ def summarise_datatable(spec: DataTableSpec) -> dict[str, Any]:
 
 # What is known about a field definition's ``required`` token (P2-03 addendum; 08 §28.3,
 # ``docs/soar-api-verified.md`` §3.2). Observed: the distinct tokens the three field lists
-# of QRadar SOAR 51.0.9.0.20848 carried, read-only. Documented: nothing; the description
-# published with the on-box reference has no data type whose ``required`` property is a
-# string or an enumeration. Behaviour: never exercised; no incident was closed.
+# of QRadar SOAR 51.0.9.0.20848 carried, read-only, as literal tokens and nothing more.
+# Documented: nothing; the description published with the on-box reference has no data
+# type whose ``required`` property is a string or an enumeration. Behaviour: never
+# exercised; no field was written and no incident was closed. Nothing here, and nothing
+# a tool says, translates a token's name into what SOAR does with it.
 OBSERVED_REQUIRED_TOKENS: dict[str, tuple[str, ...]] = {
     "incident": ("always", "close"),
     "task": ("always",),
@@ -431,20 +433,19 @@ OBSERVED_REQUIRED_TOKENS: dict[str, tuple[str, ...]] = {
 REQUIRED_SEMANTICS: dict[str, Any] = {
     "status": "unresolved",
     "required": (
-        "SOAR's own token for the field, unchanged; null when the field definition carries none."
+        "SOAR's raw token from the field definition, unchanged; null when the property was absent."
     ),
     "observed_tokens": {
         "soar_version": "51.0.9.0.20848",
         **{name: list(tokens) for name, tokens in OBSERVED_REQUIRED_TOKENS.items()},
     },
     "meaning": (
-        "What a token makes SOAR enforce is not documented in the on-box API description "
-        "and was not verified by behaviour: no incident was closed and no field was "
-        "written to find out. The observed names read as 'always required' and 'required "
-        "to close an incident'; that is a reading of the names, not an established fact, "
-        "so this server derives no required or close-required flag from them. A token "
-        "that is not listed under observed_tokens is unknown: it does not mean optional. "
-        "SOAR itself decides whether a write or a close is accepted."
+        "The behavioural meaning of these tokens is not established by the on-box API "
+        "description and was not tested by a write: no field was written and no incident "
+        "was closed. No required or close-required boolean is derived from them. A token "
+        "not listed under observed_tokens is unknown and must not be interpreted as "
+        "optional; a null token is the absence of the property, not a statement about "
+        "the field."
     ),
 }
 
@@ -453,9 +454,9 @@ def summarise_field(spec: FieldSpec) -> dict[str, Any]:
     """A field definition, with what a caller needs to address and fill the field.
 
     ``required`` is SOAR's own token, exactly as the catalog holds it, and nothing is
-    derived from it: what a token means is unresolved (``REQUIRED_SEMANTICS``), and a
-    boolean here would turn a reading of the token's name into a fact. In particular no
-    token, known or not, ever becomes ``close_required: false``.
+    derived from it: the meaning of a token is unresolved (``REQUIRED_SEMANTICS``), and a
+    boolean here would state a meaning the evidence does not establish. No token, known
+    or not, and no null ever becomes ``required: false`` or ``close_required: false``.
 
     ``values`` are the catalog's select values, label and stored value apart. The catalog
     keeps none for a credential- or people-typed field (08 §25.2); this does not rely on

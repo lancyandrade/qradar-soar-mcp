@@ -18,6 +18,7 @@ import pytest
 
 from qradar_soar_mcp.catalog.models import (
     FIELD_OBJECT_TYPES,
+    Catalog,
     FieldSpec,
     SectionState,
     SectionStatus,
@@ -598,8 +599,9 @@ async def test_a_field_with_many_values_shows_a_bounded_number(rt: Runtime):
 
 # ------------------------------------- the ``required`` token (P2-03 addendum)
 # Three levels of evidence, kept apart (docs/soar-api-verified.md §3.2): DOCUMENTED (the
-# on-box description defines no string ``required``), OBSERVED (the tokens below, read
-# from the appliance) and BEHAVIOUR (never exercised: no incident was closed).
+# on-box description defines no string ``required``), OBSERVED (the literal tokens below,
+# read from the appliance) and BEHAVIOUR (never exercised: no field was written and no
+# incident was closed). No test here gives a token a meaning.
 EVIDENCE = Path(__file__).parent / "fixtures" / "soar" / "verified"
 DERIVED_FLAGS = {"close_required", "required_always", "required_at_close", "optional", "mandatory"}
 
@@ -652,6 +654,7 @@ async def test_the_answer_says_what_is_known_about_required_and_no_more(rt: Runt
     data = await ok(rt, "soar_list_fields", object_type="task")
     semantics = data["required_semantics"]
     assert semantics == REQUIRED_SEMANTICS and semantics["status"] == "unresolved"
+    assert set(semantics) == {"status", "required", "observed_tokens", "meaning"}
     assert semantics["observed_tokens"] == {
         "soar_version": "51.0.9.0.20848",
         "incident": ["always", "close"],
@@ -659,39 +662,122 @@ async def test_the_answer_says_what_is_known_about_required_and_no_more(rt: Runt
         "artifact": ["always"],
     }
     meaning = semantics["meaning"]
-    assert "not documented" in meaning and "not verified by behaviour" in meaning
-    assert "no incident was closed" in meaning and "does not mean optional" in meaning
+    assert "not established" in meaning and "not tested by a write" in meaning
+    assert "no incident was closed" in meaning and "must not be interpreted as optional" in meaning
+    assert "null token is the absence of the property" in meaning
 
 
-@pytest.mark.parametrize(
-    ("object_type", "with_token", "without"),
-    [
-        ("incident", {"name": "always", "resolution_id": "close"}, "description"),
-        ("task", {"task_field_800": "always"}, "properties.task_field_801"),
-        ("artifact", {"artifact_field_800": "always"}, "properties.artifact_field_801"),
-    ],
+# Phrases that would turn a token's name into behaviour. The evidence established none
+# of them (docs/soar-api-verified.md §3.2), so the public contract must not say them.
+SEMANTIC_GLOSS = (
+    "always required",
+    "always-required",
+    "required to close",
+    "required-to-close",
+    "required when closing",
+    "required at close",
+    "must be filled",
+    "before the incident can be closed",
+    "read as",
+    "reads as",
+    "means ",
+    "mandatory",
+    "is optional",
+    "means optional",
+    "not required",
 )
-async def test_the_raw_token_survives_ingestion_and_nothing_is_derived_from_it(
-    object_type: str, with_token: dict[str, str], without: str, rt: Runtime, fake: FakeSoar
+
+
+def test_the_public_contract_translates_no_token_into_behaviour():
+    """Every public text of the P2-03 contract: the semantics object, the tool's
+    description and the projection's own documentation."""
+    texts = {
+        "required_semantics": json.dumps(REQUIRED_SEMANTICS),
+        "soar_list_fields.__doc__": TOOL_REGISTRY["soar_list_fields"].func.__doc__ or "",
+        "summarise_field.__doc__": summarise_field.__doc__ or "",
+    }
+    for where, text in texts.items():
+        lowered = " ".join(text.split()).lower()
+        assert not [g for g in SEMANTIC_GLOSS if g in lowered], where
+    # The literal tokens are named, and nothing is said about what they do.
+    assert "always" in texts["required_semantics"] and "close" in texts["required_semantics"]
+
+
+# Synthetic: these tokens are planted on the fake's synthetic rows to prove that the
+# software preserves whatever token SOAR sends, end to end. They are not appliance
+# evidence, and the synthetic field names carry no meaning.
+SYNTHETIC_TOKENS = {
+    "incident": {"name": "always", "resolution_id": "close", "description": None},
+    "task": {"task_field_800": "future_token", "properties.task_field_801": None},
+    "artifact": {"artifact_field_800": "close", "properties.artifact_field_801": None},
+}
+
+
+@pytest.mark.parametrize("object_type", list(SYNTHETIC_TOKENS))
+async def test_a_raw_token_survives_ingestion_and_nothing_is_derived_from_it(
+    object_type: str, rt: Runtime, fake: FakeSoar
 ):
-    """From the collection rows, through the real backend and the catalog, to the tool."""
+    """From the collection rows, through the real backend and the catalog, to the tool.
+    Synthetic tokens: SOAR was not seen to send any of them on these fields."""
+    rows = fake.fields if object_type == "incident" else fake.discovery[f"fields:{object_type}"]
+    for row in rows:
+        row.pop("required", None)
+    for api_name, token in SYNTHETIC_TOKENS[object_type].items():
+        row = next(r for r in rows if r["name"] == api_name.removeprefix("properties."))
+        if token is not None:
+            row["required"] = token
     fields = await fields_of(rt, object_type)
-    for api_name, token in with_token.items():
-        assert fields[api_name]["required"] == token
-    assert fields[without]["required"] is None
+    for api_name, token in SYNTHETIC_TOKENS[object_type].items():
+        assert fields[api_name]["required"] == token  # unchanged, or null when absent
     for field in fields.values():
         assert not DERIVED_FLAGS & set(field)
-    tokens = {f["required"] for f in fields.values()} - {None}
-    assert tokens <= set(OBSERVED_REQUIRED_TOKENS[object_type])  # the fixture invents none
+        assert field["required"] is None or isinstance(field["required"], str)
 
 
-def test_the_offline_catalog_carries_no_filler_token():
-    tokens = {spec.required for spec in lab_catalog().fields.values()}
-    assert tokens == {None, "always", "close"}
-    for function in lab_catalog().functions.values():
+@pytest.mark.parametrize("token", ["always", "close", "future_token", None])
+def test_the_projection_preserves_a_token_and_states_nothing_about_it(token: str | None):
+    """Pure projection, synthetic ``FieldSpec``: software behaviour, not SOAR semantics."""
+    spec = FieldSpec(
+        type_name="incident",
+        name="x",
+        api_name="x",
+        label="X",
+        input_type="text",
+        custom=False,
+        required=token,
+    )
+    row = summarise_field(spec)
+    assert row["required"] == token
+    assert not DERIVED_FLAGS & set(row)
+    assert [k for k, v in row.items() if v is False] == ["custom", "read_only", "internal"]
+
+
+def test_the_offline_catalog_attributes_no_required_token_to_any_field():
+    """Provenance: the P2-03 evidence kept token sets and count buckets per object type
+    and deliberately no field identity, so no committed evidence says which field carried
+    which token, and the lab catalog says nothing either."""
+    for object_type in FIELD_OBJECT_TYPES:
+        doc = evidence(f"fields_{object_type}_required")
+        assert doc["shape"] is None  # no row shape, so no field name, label or id
+        kept = json.dumps(doc["_facts"]) + json.dumps(doc["_enums"])
+        assert "name" not in kept and "label" not in kept and "uuid" not in kept
+    catalog = lab_catalog()
+    assert {spec.required for spec in catalog.fields.values()} == {None}
+    assert len(catalog.fields) == catalog.sections["fields"].count == 23
+    for function in catalog.functions.values():
         assert {i.required for i in function.inputs} == {None}  # never recorded, so none
-    for table in lab_catalog().datatables.values():
+    for table in catalog.datatables.values():
         assert {c.required for c in table.columns} == {None}  # the column shape has no such key
+    # And the tokens the Phase-1 synthetic fixture puts on named incident fields are the
+    # tokens the builder strips: the file's incident fields are that fixture, minus them.
+    assert {f.get("required") for f in fake_incident_fields()} > {None}
+    assert Catalog.from_json(catalog.to_json()) == catalog
+
+
+def fake_incident_fields() -> list[dict[str, Any]]:
+    from tests.fake_soar import load_fixture
+
+    return list(load_fixture("incident_fields"))
 
 
 async def test_a_token_never_seen_before_stays_raw_and_is_never_read_as_optional(rt: Runtime):
@@ -707,12 +793,16 @@ async def test_a_token_never_seen_before_stays_raw_and_is_never_read_as_optional
     assert "unknown" in data["required_semantics"]["meaning"]
 
 
-async def test_the_three_object_types_keep_their_own_tokens(rt: Runtime):
+async def test_each_object_type_keeps_only_its_own_tokens(rt: Runtime, fake: FakeSoar):
+    """Synthetic: a token planted on one object type's rows does not appear on another."""
+    fake.discovery["fields:task"][0]["required"] = "task_only"
+    fake.discovery["fields:artifact"][0]["required"] = "artifact_only"
     seen = {}
     for object_type in FIELD_OBJECT_TYPES:
         fields = await fields_of(rt, object_type)
         seen[object_type] = sorted({f["required"] for f in fields.values()} - {None})
-    assert seen == {"incident": ["always", "close"], "task": ["always"], "artifact": ["always"]}
+    assert seen["task"] == ["task_only"] and seen["artifact"] == ["artifact_only"]
+    assert seen["incident"] == ["always", "close"]  # the Phase-1 synthetic fixture's
 
 
 def test_a_datatable_column_is_not_given_field_semantics():

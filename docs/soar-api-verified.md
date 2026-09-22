@@ -436,12 +436,13 @@ Three levels of evidence exist for it, and they are kept apart:
 |---|---|---|
 | 📄 **Documented** | What the on-box reference says the property means. | **Nothing.** In the Swagger 2.0 description beside the reference, **no data type has a `required` property that is a string, an enumeration or a reference**; the only `required` properties are plain booleans (fewer than ten data types; `P2-00b` saw the task's among them, §3.1). So the description gives no type, no enum and no meaning for the token, and states nowhere that a token means *required when closing an incident*. ⚠️ Limit of this read: the names of the data types with a boolean `required` were not kept, so whether the description declares the field definition's own `required` as a boolean (which would contradict the strings below) or does not describe it at all is **not established**. The HTML page of the field-definition type was not read. |
 | ✅ **Observed** | Which tokens the returned field definitions actually carry. | `incident`: **`always`**, **`close`**. `task`: **`always`**. `artifact`: **`always`**. Each token sat on fewer than ten fields, **all of them built-in**; no custom field carried one. Wherever there was no token the key was **absent**, never `null`. No other value, and no value that was not a single token, occurred. These are the tokens in use in this org's configuration, **not** a list of every token SOAR knows. |
-| ❓ **Behaviourally verified** | Whether SOAR refuses a close while a `close` field is empty, or a write that leaves an `always` field empty. | **Not verified, and not attempted**: it needs a write. |
+| ❓ **Behaviourally verified** | Whether, and when, SOAR rejects a write or a close because a field carrying one of these tokens is empty. | **Not verified, and not attempted**: it needs a write. |
 
 **Conclusion.** `always` and `close` are real tokens on this version, which is as far as
-the Phase-1 assumption is confirmed. What they make SOAR enforce is a reading of their
-names: undocumented on the appliance and unexercised. `P2-03` therefore exposes the raw
-token and derives no `required`/`close_required` flag from it (08 §28.3). Data-table
+the Phase-1 assumption is confirmed. What they make SOAR enforce is not established:
+undocumented on the appliance and unexercised. `P2-03` therefore exposes the raw token,
+derives no `required`/`close_required` flag from it and translates no token's name into
+behaviour (08 §28.3). Data-table
 columns are a different matter: their verified shape has no `required` key at all, only
 `perms.modify_required` (whether the caller may change required-ness), and nothing here
 is carried over to them.

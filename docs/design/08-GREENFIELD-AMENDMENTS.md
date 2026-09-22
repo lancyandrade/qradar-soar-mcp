@@ -1122,10 +1122,13 @@ authoritative `close_required` boolean.* So:
   `required_always` and no `close_required`, so no token, seen or not, can come out as
   `close_required: false`; a token SOAR adds later passes through as it is.
 - Every answer carries `required_semantics`: `status: "unresolved"`, the observed tokens per
-  object type with the SOAR version, and a statement that their effect is neither
-  documented on the appliance nor verified by behaviour, that the names *read* as
-  always-required and required-to-close, and that an unlisted token is unknown, not
-  optional. `OBSERVED_REQUIRED_TOKENS` is pinned by test to the evidence files.
+  object type with the SOAR version, and a statement that their behavioural meaning is
+  neither documented on the appliance nor tested by a write, that no boolean is derived,
+  and that an unlisted token is unknown and a null is the absence of the property, neither
+  to be interpreted as optional. **The contract translates no token's name into
+  behaviour**: it says the literal token `close` was observed on incident fields, not what
+  `close` makes SOAR do. `OBSERVED_REQUIRED_TOKENS` is pinned by test to the evidence
+  files, and a test refuses any behavioural gloss in the semantics text.
 
 The acceptance criterion is therefore met for type, picklist values and required-ness as
 SOAR states it, and **not** met as a verified close-required flag: that is recorded as
@@ -1136,14 +1139,20 @@ and listed under D10.
 ### 28.4 The offline fixture stays honest
 
 `tests/discovery_data.py` used to fill an optional `required` with a made-up string
-(`required-800`). It now carries only what was observed: for `task` and `artifact` fields
-the first recorded token on the built-in row and no key on the custom row, and **no**
-`required` on a function input, whose token values were never recorded (the tests that
-need one set a synthetic one themselves). `lab-v51.json` was regenerated; its
-incident fields still come from the Phase-1 synthetic fixture, whose tokens are the two
-observed ones but whose *custom* `close` field is synthetic (no custom field carried a
-token on the lab). The file remains what §25.6 says it is: recorded shapes with synthetic
-values, not a copy of the lab.
+(`required-800`), and `lab-v51.json` carried the Phase-1 synthetic incident fixture's
+`always` / `close` tokens on named incident fields. Both made synthetic required-ness look
+like appliance-observed field metadata. **Provenance policy now:** the lab catalog
+attributes a `required` token to a field only where committed evidence preserves that
+field-to-token association, and none does. The `P2-03` addendum deliberately kept token
+*sets* and count *buckets* and no field identity, so which field carried `always` or
+`close` is not known and is not invented. Therefore every field of `lab-v51.json` has
+`required: null`, the synthetic payloads carry no `required` key on any field or function
+input, and `tests/catalog_fixture.py` strips the Phase-1 synthetic fixture's tokens before
+the catalog is built from it (that fixture keeps them for the Phase-1 tests and fake that
+need them; it is marked synthetic). The observed token set lives in the separate evidence
+files and in `required_semantics`. Tests that need a token in a catalog set one themselves
+and say so. The file remains what §25.6 says it is: recorded shapes with synthetic values,
+not a copy of the lab.
 
 ### 28.5 Data tables
 

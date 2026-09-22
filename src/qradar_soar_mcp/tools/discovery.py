@@ -480,13 +480,13 @@ async def soar_list_fields(
     shows) and ``value`` (what SOAR stores), ``enabled`` and ``default``: at most 100 per
     field, the rest counted in ``values_omitted``. Use these instead of guessing a value.
     A field whose values are people or groups (owner, members), or a credential, shows no
-    values. ``required`` is SOAR's own token, unchanged, or null. On 51.0.9.0.20848 the
-    tokens seen were ``always`` (incident, task, artifact) and ``close`` (incident only).
-    What they make SOAR enforce is NOT documented on the appliance and was NOT tested, so
-    no required or close-required flag is derived: ``required_semantics`` says exactly
-    what is known. The names read as always-required and required-to-close; that is a
-    reading of the names, not a fact, and a token not seen before is unknown, never
-    optional. Sorted by
+    values. ``required`` is SOAR's own token, unchanged, or null when the property was
+    absent. On 51.0.9.0.20848 the literal tokens observed were ``always`` (incident, task,
+    artifact) and ``close`` (incident only). What a token makes SOAR do is NOT documented
+    on the appliance and was NOT tested, so no required or close-required boolean is
+    derived and no token is interpreted: ``required_semantics`` says exactly what is
+    known. A token not listed there is unknown, and neither it nor a null is to be
+    interpreted as optional. Sorted by
     name, custom fields (``properties.``) together. ``name_contains`` matches the name,
     the api name or the label (case-insensitive); ``custom_only`` keeps custom fields;
     ``start`` and ``length`` page as in soar_list_functions, and ``total`` counts the

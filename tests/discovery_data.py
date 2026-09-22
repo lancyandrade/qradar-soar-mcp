@@ -6,10 +6,11 @@ into a payload by filling it with obviously made-up values (``name-1``, a counte
 ``uuid-1``), so the offline fake serves objects that have every key, wrapper and type
 the appliance was seen to return, and nothing from it. The only values taken from the
 record are the enumerations it kept on purpose (input types, object types, statuses) and
-the appliance version. A field definition's ``required`` is one of them: the P2-03
-addendum recorded its tokens for ``incident``, ``task`` and ``artifact`` fields, and for
-nothing else, so a function input (a ``__function`` field) carries no ``required`` here
-rather than a made-up one.
+the appliance version. A field definition's optional ``required`` is the exception: the
+P2-03 addendum recorded which tokens occurred per object type and deliberately not which
+field carried which, so no field and no function input carries a ``required`` key here.
+A made-up token would look like appliance metadata, and an observed token on a synthetic
+field would be an association the evidence does not hold (08 §28.4).
 
 The payloads feed ``FakeSoar`` and, through the real collections backend, the committed
 ``tests/fixtures/catalog/lab-v51.json``.
@@ -165,11 +166,7 @@ def build_payloads(minimal: bool = False) -> dict[str, Any]:
             kinds = [k for k in doc["_enums"]["input_type"] if k not in PRINCIPAL_INPUT_TYPES]
             row["input_type"] = kinds[i % len(kinds)]
             row["prefix"] = "properties" if i else None  # one built-in and one custom field
-            # As observed (P2-03): tokens on built-in fields only, the key absent elsewhere.
-            tokens = verified(f"p2_03_fields_{type_name}_required")["_enums"]["required"]
-            row.pop("required", None)
-            if not i and tokens and not minimal:
-                row["required"] = tokens[0]
+            row.pop("required", None)  # no field-to-token association is in evidence
             for value in row["values"]:
                 value.pop("principal_type", None)  # an ordinary select value, not a person
         out[f"fields:{type_name}"] = rows

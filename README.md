@@ -175,12 +175,13 @@ another source and never answer "empty" for something unknown.
   `soar_list_datatables`. A custom field's `api_name` is `properties.<name>`. A select
   field lists its choices as `label` (what SOAR shows) and `value` (what SOAR stores),
   100 per field, the remainder counted in `values_omitted`; owner, members and
-  `password` fields list none. **`required` is SOAR's own token, unchanged.** On
-  51.0.9.0.20848 the tokens seen were `always` (incident, task, artifact) and `close`
-  (incident). What they make SOAR enforce is not documented on the appliance and was not
-  tested (that needs a write), so **no `close_required` flag is derived**; every answer
-  says so under `required_semantics`, and a token not seen before is unknown, never
-  optional. SOAR itself decides whether a close is accepted.
+  `password` fields list none. **`required` is SOAR's own token, unchanged**, or null
+  when the property was absent. On 51.0.9.0.20848 the literal tokens observed were
+  `always` (incident, task, artifact) and `close` (incident). What a token makes SOAR do
+  is not documented on the appliance and was not tested (that needs a write), so **no
+  required or close-required boolean is derived and no token is interpreted**; every
+  answer says so under `required_semantics`. A token not listed there is unknown, and
+  neither it nor a null is to be interpreted as optional.
 - **Data tables** are definitions only: type name, display name, parent types and
   columns (`name`, `label`, `input_type`, `order`, and SOAR's raw `required`; SOAR sent
   no such key on any column seen, so it is null). No row of a table is read, kept or returned.
