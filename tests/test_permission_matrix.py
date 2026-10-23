@@ -177,6 +177,11 @@ EXPECTED: dict[str, dict[str, dict[str, str]]] = {
     "soar_list_phases": _READ,
     "soar_list_fields": _READ,
     "soar_list_datatables": _READ,
+    # P2-04 (08 §29): four more Tier-0 reads; include_raw is still a read.
+    "soar_list_rules": _READ,
+    "soar_get_rule": _READ,
+    "soar_list_workflows": _READ,
+    "soar_get_workflow": _READ,
     "soar_add_comment": _COMMENTS,
     "soar_add_artifact": _ARTIFACTS,
     "soar_create_incident": _INCIDENT_WRITES,
@@ -210,6 +215,10 @@ MINIMAL_ARGS: dict[str, dict[str, Any]] = {
     "soar_list_phases": {},
     "soar_list_fields": {"object_type": "incident"},
     "soar_list_datatables": {},
+    "soar_list_rules": {},
+    "soar_get_rule": {"rule_id": 300},
+    "soar_list_workflows": {},
+    "soar_get_workflow": {"workflow_id": 1100},
     "soar_add_comment": {"incident_id": 42, "text": "matrix"},
     "soar_add_artifact": {
         "incident_id": 42,

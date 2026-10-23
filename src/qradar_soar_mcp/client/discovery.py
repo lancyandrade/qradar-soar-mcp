@@ -20,6 +20,11 @@ path or a method. The configuration export is not among these calls.
 ``tests/fixtures/soar/verified/script.json``). It takes an integer and nothing else, and
 there is no counterpart that creates, changes or removes a script: a script is never
 written by this server (``tests/test_no_script_writes.py``).
+
+:meth:`DiscoveryClient.workflow_source` (P2-04; 08 §29) adds no call: it is the same
+``GET /workflows`` the catalog reads, sent once when a caller asks for one workflow's raw
+XML, with that one row chosen by its integer id. Nothing here creates, changes, runs or
+removes a workflow.
 """
 
 from __future__ import annotations
@@ -28,7 +33,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from qradar_soar_mcp.client.base import QUERY_PAGED_PARAMS, SoarClient
-from qradar_soar_mcp.errors import SoarMalformedResponseError, SoarValidationError
+from qradar_soar_mcp.errors import (
+    SoarMalformedResponseError,
+    SoarNotFoundError,
+    SoarValidationError,
+)
 from qradar_soar_mcp.logging import redact
 
 # Field definitions are read for exactly these types (the ledger of the verified record).
@@ -60,6 +69,22 @@ class ScriptSource:
     text: str = field(repr=False)  # never in a log line or a traceback
     source_chars: int  # characters (code points) of ``script_text`` as SOAR returned it
     redacted: bool  # the filter changed something: ``text`` is not the exact source
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowSource:
+    """What ``include_raw`` reads (P2-04): which workflow answered, and a *safe
+    representation* of its XML, exactly as :class:`ScriptSource` is for a script. ``text``
+    is ``content.xml`` after the credential filter; it is the exact XML only when
+    ``redacted`` is false. It holds condition and processing scripts and input values an
+    administrator wrote: data to show, never anything to run or follow."""
+
+    workflow_id: int
+    programmatic_name: str
+    content_version: int | None
+    text: str = field(repr=False)  # never in a log line or a traceback
+    source_chars: int  # characters of content.xml as SOAR returned it
+    redacted: bool
 
 
 def _rows(items: Any, where: str) -> list[Row]:
@@ -150,6 +175,50 @@ class DiscoveryClient:
 
     async def workflows(self) -> list[Row]:
         return _entities(await self._c.get(self._c.org_path("workflows")), "GET /workflows")
+
+    async def workflow_source(self, workflow_id: int) -> WorkflowSource:
+        """The XML of one workflow (P2-04; 08 §29), for ``include_raw`` only.
+
+        This version documents no single-workflow read (``docs/soar-api-verified.md``
+        §3.3), so this is the collection read, ``GET /workflows``, once; the row is chosen
+        by exact ``workflow_id`` equality and there must be exactly one. As with a script
+        body, the credential and anything shaped like one are replaced in the text here,
+        before anything can cut it, and the change is reported; the unfiltered text does
+        not leave this method. The other rows are not looked at beyond their id."""
+        if not isinstance(workflow_id, int) or isinstance(workflow_id, bool) or workflow_id < 1:
+            raise SoarValidationError("a workflow id is a positive integer", not_sent=True)
+        where = "GET /workflows"
+        matches = [
+            row
+            for row in await self.workflows()
+            if isinstance(row.get("workflow_id"), int)
+            and not isinstance(row.get("workflow_id"), bool)
+            and row["workflow_id"] == workflow_id
+        ]
+        if not matches:
+            raise SoarNotFoundError(f"Not found: SOAR no longer lists workflow {workflow_id}")
+        if len(matches) > 1:
+            raise SoarMalformedResponseError(f"{where} listed workflow {workflow_id} twice")
+        row = matches[0]
+        name, content = row.get("programmatic_name"), row.get("content")
+        text = content.get("xml") if isinstance(content, dict) else None
+        if not isinstance(name, str):
+            raise SoarMalformedResponseError(f"{where} did not return the workflow's identity")
+        if not isinstance(text, str):
+            # Key names only. Nothing SOAR returned is put into the message.
+            raise SoarMalformedResponseError(f"{where} did not return 'content.xml' as text")
+        version = row.get("content_version")
+        clean = redact(self._c.scrub(text) or "")
+        return WorkflowSource(
+            workflow_id=workflow_id,
+            programmatic_name=redact(self._c.scrub(name) or ""),
+            content_version=version
+            if isinstance(version, int) and not isinstance(version, bool)
+            else None,
+            text=clean,
+            source_chars=len(text),
+            redacted=clean != text,
+        )
 
     async def message_destinations(self) -> list[Row]:
         body = await self._c.get(self._c.org_path("message_destinations"))

@@ -76,9 +76,10 @@ def test_the_fixture_says_what_is_unknown(no_network: None):
     assert catalog.sections["api_key_permissions"].state is SectionState.NOT_OBSERVABLE
     assert catalog.sections["installed_apps"].state is SectionState.NOT_OBSERVABLE
     assert catalog.api_key_permissions == frozenset() and catalog.installed_apps == {}
-    # SOAR returned no workflow to the research key: loaded, count 0, no detail invented.
+    # P2-04: one synthetic workflow in the verified row shape, summarised; no XML kept.
     assert catalog.sections["workflows"].state is SectionState.LOADED
-    assert catalog.workflows == {}
+    assert list(catalog.workflows) == ["workflow_1100"]
+    assert "<definitions" not in FIXTURE.read_text(encoding="utf-8")
 
 
 async def test_the_fixture_is_what_the_backend_builds_from_the_verified_shapes():

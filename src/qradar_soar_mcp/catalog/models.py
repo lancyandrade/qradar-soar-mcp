@@ -15,9 +15,9 @@ catalog never says more than QRadar SOAR ``51.0.9.0.20848`` was seen to say
 
 What a spec carries is a projection fixed here, never the raw SOAR object. Principals
 (creators, members, API-key names, the users and groups a member-type field offers as
-values), script bodies, playbook XML, output examples and free-text defaults are not part
-of any spec, and a ``password``-typed input or field keeps its name, label, type and
-required-ness and nothing else.
+values), script bodies, playbook and workflow XML, output examples and free-text defaults
+are not part of any spec, and a ``password``-typed input or field keeps its name, label,
+type and required-ness and nothing else.
 
 The models are frozen; the mappings inside a catalog are ordinary dicts. The cache hands
 one instance to every caller, so a catalog is read, never edited in place.
@@ -40,7 +40,7 @@ from pydantic import (
     model_validator,
 )
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2  # 2: workflows carry a summary (P2-04; 08 §29)
 CatalogSourceName = Literal["collections", "export"]
 
 # Input types whose definition may hold a credential. Only ``password`` is named by
@@ -257,11 +257,107 @@ class RuleSpec(_Spec):
     conditions: tuple[RuleCondition, ...] = ()
 
 
+FunctionResolution = Literal["resolved", "unresolved", "no_uuid"]
+WorkflowStructure = Literal["parsed", "refused"]
+EdgeKind = Literal["default", "conditional", "unconditional"]
+
+
+class WorkflowFunctionCall(_Spec):
+    """A function a workflow calls: the reference, never the settings' values.
+
+    ``uuid`` is the ``uuid`` attribute of the call's function element. It is
+    ``resolved`` when it equals the uuid of a function in the same catalog, and then
+    ``function`` is that function's catalog key; otherwise ``unresolved`` (or ``no_uuid``)
+    and ``function`` is null: nothing is matched loosely. ``input_names`` are the keys of
+    the call's ``inputs``; the values given to them, and the pre- and post-processing
+    scripts, are not kept, only whether a script is present."""
+
+    uuid: str | None = None
+    resolution: FunctionResolution
+    function: str | None = None
+    input_names: tuple[str, ...] = ()
+    has_pre_processing_script: bool = False
+    has_post_processing_script: bool = False
+    result_name: str | None = None
+    settings_parsed: bool = True
+
+    @model_validator(mode="after")
+    def _resolution_agrees(self) -> Self:
+        if (self.resolution == "resolved") != (self.function is not None):
+            raise ValueError("a function is named exactly when the reference resolved")
+        if (self.resolution == "no_uuid") != (self.uuid is None):
+            raise ValueError("no_uuid exactly when the reference carries no uuid")
+        return self
+
+
+class WorkflowNode(_Spec):
+    """A BPMN flow node: its element id, its BPMN element name as ``type``, and its name.
+    ``type_observed`` is false for a node type the verified workflow did not contain."""
+
+    id: str
+    type: str
+    type_observed: bool
+    name: str | None = None
+    function: WorkflowFunctionCall | None = None
+
+
+class WorkflowEdge(_Spec):
+    """A ``sequenceFlow``, the only element edges are taken from. ``kind`` is ``default``
+    when its source gateway names it as the default flow, ``conditional`` when it holds a
+    condition (whose language is kept and whose text is not), else ``unconditional``.
+    ``valid`` is false when its source or target names no node of the workflow."""
+
+    id: str
+    source: str
+    target: str
+    name: str | None = None
+    kind: EdgeKind
+    condition_language: str | None = None
+    valid: bool = True
+
+
 class WorkflowSummary(_Spec):
-    """Deliberately without fields. SOAR returned no workflow to the research key, so no
-    key of the workflow object is verified (``docs/soar-api-verified.md`` §3, §7.9), and P2-01
-    never builds one: a non-empty ``GET /workflows`` makes the section ``unverified``.
-    The type exists so that the catalog has the shape of 04 §1 for P2-04 to fill."""
+    """A workflow (P2-04; 08 §29): identity from its row of ``GET /workflows`` and a
+    bounded summary of the XML in it. The XML itself is never part of the catalog: it is
+    read during a load, summarised and dropped.
+
+    Kept from the row: ``workflow_id``, ``programmatic_name``, ``name``, ``description``,
+    ``object_type``, ``content_version`` and ``last_modified_time``. Not kept: the people
+    (``creator_id``, ``last_modified_by``), the row's ``uuid`` (null on the one observed
+    row), and ``actions`` and ``tags``, whose elements were never seen.
+
+    ``structure`` is ``refused`` when the XML could not be summarised safely; ``refusal``
+    then says why in a fixed sentence and the workflow has no nodes or edges here, which
+    says nothing about the workflow itself. ``problems`` lists structural findings about
+    a parsed one (dangling references, a default flow that is not the gateway's own, an
+    unresolved function, unreachable nodes, ...)."""
+
+    workflow_id: int
+    programmatic_name: str
+    name: str
+    description: str | None = None
+    object_type: str
+    content_version: int | None = None
+    last_modified_time: int | None = None
+    structure: WorkflowStructure
+    refusal: str | None = None
+    nodes: tuple[WorkflowNode, ...] = ()
+    edges: tuple[WorkflowEdge, ...] = ()
+    annotations: int = 0
+    problems: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _refused_means_empty(self) -> Self:
+        if self.structure == "refused":
+            if self.refusal is None or self.nodes or self.edges or self.problems:
+                raise ValueError("a refused workflow has a refusal and no structure")
+        elif self.refusal is not None:
+            raise ValueError("a parsed workflow has no refusal")
+        return self
+
+    @property
+    def functions(self) -> tuple[WorkflowFunctionCall, ...]:
+        return tuple(n.function for n in self.nodes if n.function is not None)
 
 
 class GroupSpec(_Spec):
@@ -294,7 +390,7 @@ SECTION_NAMES: tuple[str, ...] = (*MAPPING_SECTIONS, "api_key_permissions")
 
 
 class Catalog(_Spec):
-    format_version: Literal[1] = 1
+    format_version: Literal[2] = 2
     source: CatalogSourceName
     fetched_at: AwareDatetime
     soar_version: str

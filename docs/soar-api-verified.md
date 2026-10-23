@@ -44,7 +44,7 @@ exercised.
 |---|---|
 | ✅ Verified experimentally | The task-status `PUT` contract and the documented `GET /tasks/{task_id}` as its source (§3.1); the server's handling of `closed_date`; the `StatusDTO`-compatible success response; attachment content for one attachment (Q7); the execution-query route and its wrapper, with zero rows (Q8); a note row carrying `children` and `parent_id`; the task tree's representation of a task (provenance only). |
 | 📄 Documented by the appliance, **not** seen live | The filter logic defaults (`ALL` within a filter, `ANY` across filters); the entry shape of a carried `actions` list (`ActionInfoDTO`); the invoke data types and the one e-mail endpoint that uses them; the execution detail and activity types; the meaning of the `write` and `close` flags of a task's `perms` map; the documented read-only and create-only `TaskDTO` properties. |
-| ❓ Unresolved | How a reply to a note is nested; the workflow object; the row shape of an execution and whether function results are retrievable; export contents; action invocation for incidents, tasks and artifacts; conflict (`409`) behaviour; what closing the last required task of a phase does. |
+| ❓ Unresolved | How a reply to a note is nested; the workflow object beyond the one workflow `P2-04` read (§3.3); the row shape of an execution and whether function results are retrievable; export contents; action invocation for incidents, tasks and artifacts; conflict (`409`) behaviour; what closing the last required task of a phase does. |
 
 ### P2-03 addendum (2026-09-22): the `required` property of a field definition
 
@@ -59,6 +59,20 @@ record; §3.2 is entirely its work.
 | Credential, TLS | The key in the lab `.env`, used for reads only; verified TLS (CA bundle, host name checked). |
 | Appliance version | `51.0.9.0.20848`, as `P2-00b` established it. The version read is not one of the four requests and was not repeated. |
 | What is stored | Four shape-only files, `p2_03_*.json`, and `_ledger_p2_03.json`: the distinct `required` tokens per object type, counts as buckets, and schema facts of the description. No field name, label or other value. Tooling: [`probe_p2_03.py`](../scripts/probe/probe_p2_03.py), which stops without writing anything if a field list no longer looks like the one `P2-00` recorded (it did). |
+
+### P2-04 addendum (2026-09-22, 2026-10-23): the workflow object
+
+A narrow, owner-approved, read-only addendum for `P2-04`: what is a workflow, where is
+its XML, and how does it refer to a function? It is marked `P2-04` wherever it adds to
+the record; §3.3 is entirely its work.
+
+| | |
+|---|---|
+| Requests | **`GET` only, each approved by the owner before it was sent.** 2026-09-22: three static documentation reads, each answered `200` (`GET /docs/rest-api/ui/swagger.json`, `GET /docs/rest-api/json_WorkflowDTO.html`, `GET /docs/rest-api/resource_WorkflowREST.html`); `GET /workflows` with the two default query parameters (`handle_format`, `text_content_output_format`) `P2-00` verified it with, answered **`403`**; after a change to the lab `.env` credential, the same read answered **`200`** with no row. 2026-10-23: the same read, once more on each of three approvals: the first was **not delivered** (the lab host name did not resolve: `ConnectError`, nothing reached the appliance); the second answered **`403`**; after the owner gave the key the permission to read workflows (and verified that `.env` holds that key), the third answered **`200`** with **one row**, the disposable workflow below, whose XML was analysed in memory. No single-workflow read exists on this version (§3.3) and none was sent. The ledger keeps one line per step and status, so the two `403`s share one line there; this paragraph is the complete account. |
+| Writes | **None through the API.** No `PUT`, `PATCH`, `POST` or `DELETE`; no workflow was changed, exported or run through the API; no workflow-instance endpoint was called. The probe can send nothing but `GET`. The workflow that was read was created **in the SOAR UI**, on the owner's explicit instruction, as a disposable test object: object type incident, attached to no rule, so nothing runs it. It is a start event, one function call (an installed function, its inputs left empty), one exclusive gateway with a default flow and a conditional flow (script condition `False`), and two end events, plus the editor's own "start here" note. The UI showed it last modified again by the owner after it was built; its read structure matches that description. It was not deleted. |
+| Credential, TLS | The key in the lab `.env`, used for reads only; verified TLS (CA bundle, host name checked) before each read on 2026-10-23. Whether it is the key `P2-00` and `P2-00b` used is not recorded. On 2026-10-23 the owner confirmed it is the lab's read-access key and enabled its workflow-read permission between the second and third read; that explains the last `403`, not the one of 2026-09-22. |
+| Appliance version | `51.0.9.0.20848`, as `P2-00b` established it. The version read is not one of the four requests and was not repeated. |
+| What is stored | Three documentation files, `p2_04_doc_*.json`; the collection's shape, `p2_04_workflows.json` (key names, JSON types and allow-listed tokens of the row, against the documented `WorkflowDTO`); the XML's structure, `p2_04_workflow_xml.json` (element names by namespace class, attribute names by element, which attributes carry an identifier or a source/target reference and whether those references resolve, which elements carry text, the key shape of the JSON inside the vendor element, count buckets); and `_ledger_p2_04.json`. **No value of any kind:** no name, id, uuid, text, script, input value or namespace URI outside the exact OMG/W3C allow-list; the XML was never written to disk. Of a `403`, nothing but its status, content type and size bucket. Tooling: [`probe_p2_04.py`](../scripts/probe/probe_p2_04.py). |
 
 An earlier pass with a different key was halted when that key proved to be
 broader than read-only; its output was deleted and is not evidence here. Two
@@ -447,6 +461,103 @@ columns are a different matter: their verified shape has no `required` key at al
 `perms.modify_required` (whether the caller may change required-ness), and nothing here
 is carried over to them.
 
+### 3.3 The workflow object (`P2-04` addendum)
+
+Three levels of evidence, kept apart. **Documented** (📄): the description published
+next to the reference and the two reference pages, read 2026-09-22 and not exercised.
+**Observed** (✅ / 🚫): what the appliance answered. **Unknown** (❓): what no read has
+shown.
+
+📄 Documented:
+
+- `WorkflowREST` documents **exactly one operation**: `GET /orgs/{org_id}/workflows`,
+  answering `ListContainerDTOOfWorkflowDTO`, with an `object_type` query parameter
+  (a filter) and the two format controls as headers. **No single-workflow route is
+  documented**, neither on the resource page nor in the description: there is no
+  `GET /workflows/{id}` on this version. The `05 §2` row that assumed one is contradicted
+  by the documentation; the path was not sent.
+- `WorkflowDTO` has fourteen properties: `actions` (array of `PartialActionDTO`: `id`,
+  `name`, `type`, `enabled`), `content` (`WorkflowContentDTO`), `content_version`
+  (number), `creator_id` (`ObjectHandle`), `description`, `export_key`,
+  `last_modified_by` (`ObjectHandle`), `last_modified_time` (number), `name`,
+  `object_type` (`ObjectHandle`), `programmatic_name`, `tags` (array of `TagRefDTO`),
+  `uuid` and `workflow_id` (number). The reference marks every one but `content`,
+  `content_version` and `tags` read-only.
+- `WorkflowContentDTO` has `version` (integer, its one required property), `workflow_id`
+  (`ObjectHandle`) and **`xml` (string)**. So the documentation places a workflow's XML
+  at `content.xml`, as a string, **inside the list row**: on this version the collection
+  itself carries the content, and there is nothing else to read it from.
+- Other data types named like a workflow, names only: `ActionDataWorkflowInfoDTO`,
+  `FutureDTOOfWorkflowDTO`, `ListContainerDTOOfWorkflowDTO`, `WorkflowInstanceDTO`,
+  `WorkflowInstanceInfoDTO`, `WorkflowInstanceStatus`, `WorkflowModelProblemDTO`,
+  `WorkflowStatusDTO`.
+
+🚫 / ✅ Access:
+
+- `GET /workflows`, with the two default query parameters, answered **HTTP 403** to the
+  `.env` key on 2026-09-22, then `200` with no row after a change to that credential.
+  `P2-00` (2026-09-18) and `P2-00b` saw `200` with `{"entities": []}`. On 2026-10-23 it
+  answered `403` again, and `200` once the owner had given the key the permission to read
+  workflows. **A key without workflow-read is refused with `403`**; why the key of
+  2026-09-22 was refused is still not established.
+
+✅ Observed, 2026-10-23: one workflow (the disposable one described in the addendum
+table), read-only, structure only (`p2_04_workflows.json`, `p2_04_workflow_xml.json`):
+
+- **The row** has exactly the documented `WorkflowDTO` properties but `export_key`, which
+  was absent: `actions` (an empty list), `content`, `content_version` (integer),
+  `creator_id` and `last_modified_by` (strings, with `handle_format=names`),
+  `description` (string), `last_modified_time` (integer), `name`, `object_type` (the
+  token `incident`), `programmatic_name` (strings), `tags` (an empty list), **`uuid`
+  (null)** and `workflow_id` (integer). The collection answered as documented, inside
+  `entities`.
+- **`content`** is `{version: integer, workflow_id: string, xml: string}`, as documented:
+  the definition is the string `content.xml` of the list row (under 10 KB here).
+- **The XML is standard BPMN 2.0.** Its root is `definitions` (attribute
+  `targetNamespace`) in the OMG BPMN 2.0 model namespace, matched exactly; the diagram
+  uses the OMG BPMN DI, DD DC and DD DI namespaces, also matched exactly. Under the root,
+  a `process` (`id`, `isExecutable`, `name`) holds:
+  - **nodes**, each with an `id`: `startEvent`, `serviceTask` (`id`, `name`, `type`),
+    `exclusiveGateway` (`id`, `default`), `endEvent`;
+  - **edges**: `sequenceFlow` (`id`, `name`, `sourceRef`, `targetRef`); a conditional
+    one holds a `conditionExpression` (`language`, `type`) whose text is the condition;
+  - `incoming` and `outgoing` children, as text, on the nodes;
+  - a `textAnnotation` (with a `text` child) linked by an `association`
+    (`id`, `sourceRef`, `targetRef`): a note, not flow; and a `documentation` element.
+- **References resolve.** Every `sourceRef` / `targetRef` value named an element `id`
+  of the document. The elements so referenced were the four node types and the
+  annotation. The gateway's `default` attribute was not part of that check (the probe
+  matched source- and target-like attribute names only), so what it names is not
+  verified; `P2-04`'s parser checks it.
+- **A function call** is a `serviceTask` whose `extensionElements` hold one element named
+  **`function`, in a namespace on an `ibm.com` host** (its exact URI was deliberately not
+  recorded), with **one attribute, `uuid`**, and a **JSON object as its text**:
+  `inputs` (an object keyed by input name, each `{input_type, static_input:
+  {select_value}}` here), `pre_processing_script`, `pre_processing_script_language`,
+  `post_processing_script`, `post_processing_script_language` and `result_name` (all
+  null here). The JSON names no function by id or name: **the `uuid` attribute is the
+  only reference to the function.**
+
+❓ Unknown, still:
+
+- **That the call's `uuid` is the called function's `uuid`.** The function list rows
+  carry a `uuid` too (Q5), but no value was kept, so their equality was not observed and
+  the reference is not documented. `P2-04` resolves a call only by exact equality with a
+  function's uuid in the same catalog, and reports any other call as unresolved.
+- Node and edge kinds not present in this one workflow (other events, gateways, tasks,
+  sub-processes, timers), a document with more than one process, and the values the
+  attributes `type`, `language` and `targetNamespace` take.
+- Whether the value types of the JSON keys that were null here (scripts, languages,
+  `result_name`) are strings when set, and what `input_type` tokens exist.
+- Which rules start a workflow: the rule rows seen had `workflows: []`, and the workflow
+  row `actions: []`, so neither link's element form was observed.
+
+Consequence for `P2-04` (decided by the owner, `open-questions.md` D11, and implemented
+in `08 §29`): the catalog summarises each workflow's XML during a load and **does not
+keep the XML**; `soar_get_workflow` answers from that summary, and only with
+`include_raw=true` sends one `GET /workflows` for the XML of one workflow, chosen by its
+`workflow_id`, credential-filtered, capped and labelled untrusted.
+
 ### Confirmed
 
 - HTTP Basic with API key id/secret; both default query parameters accepted everywhere.
@@ -487,7 +598,10 @@ is carried over to them.
   in all three variants.
 - Comment threading: ✅ `P2-00b` saw a note row, with `children` (an empty list) and
   `parent_id` (null) among its 26 keys; ❓ no reply existed, so nesting was not observed.
-- The workflow object (`content.xml`): the org has no workflows. ❓
+- The workflow object (`content.xml`): ✅ `P2-04` read one workflow's row and the
+  structure of its BPMN 2.0 XML (§3.3). ❓ Still open: that a function call's `uuid`
+  equals the function's uuid, node kinds beyond the four observed, and rule-to-workflow
+  links.
 - Attachment metadata keys: ✅ `P2-00b`, Q7.
 
 ---
@@ -576,6 +690,15 @@ IP. See `P2-TLS` (§8).
 8. **Enable (`P5-00`)**: no dedicated endpoint is documented; still research.
 9. **Workflows**: this org has none, so the workflow shape is unverified. On
    this version playbooks are clearly the primary automation object.
+   > **Status, 2026-09-22 (`P2-04` research, §3.3):** the on-box reference documents
+   > no single-workflow route; the XML is documented at `content.xml` of the list
+   > row, as a string; `GET /workflows` answered `403` to the lab key on that day.
+   >
+   > **Status, 2026-10-23:** one disposable workflow was read (§3.3): BPMN 2.0, edges
+   > as `sequenceFlow`, a function call as a `serviceTask` carrying a vendor `function`
+   > element with a `uuid` attribute. `P2-04` is implemented on that evidence
+   > ([`design/08-GREENFIELD-AMENDMENTS.md §29`](design/08-GREENFIELD-AMENDMENTS.md)),
+   > built and tested offline.
 
 ---
 

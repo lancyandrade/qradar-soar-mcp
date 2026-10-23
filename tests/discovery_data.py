@@ -26,6 +26,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from tests.workflow_data import workflow_xml
+
 VERIFIED = Path(__file__).parent / "fixtures" / "soar" / "verified"
 APPLIANCE_PREFIX = "QRadar SOAR "
 ROWS = 2  # per collection
@@ -131,9 +133,6 @@ def build_payloads(minimal: bool = False) -> dict[str, Any]:
         detail.update(row)
         detail["script_text"] = f"# synthetic body of {row['name']}\nresult = {row['id']}\n"
         out[f"script:{row['id']}"] = detail
-    assert verified("workflows")["shape"] == {"entities": []}  # the org had none
-    out["workflows"] = {"entities": []}
-
     groups = verified("groups")
     out["groups"] = _rows("groups", groups["shape"][0], "group", groups["_enums"], 700, minimal)
 
@@ -156,6 +155,20 @@ def build_payloads(minimal: bool = False) -> dict[str, Any]:
         item = detail["view_items"][0]
         detail["view_items"] = [{**item, "content": field["uuid"]} for field in inputs]
         out[f"function:{row['id']}"] = detail
+
+    # P2-04: one workflow in the row shape the P2-04 read recorded, whose XML is the
+    # synthetic document of tests/workflow_data.py calling the first function above.
+    assert verified("workflows")["shape"] == {"entities": []}  # P2-00: the org had none
+    workflow_doc = verified("p2_04_workflows")
+    row = fill(workflow_doc["shape"]["entities"][0], "workflow", 1100, minimal)
+    row.update(
+        workflow_id=1100,
+        programmatic_name="workflow_1100",
+        name="Workflow 1100",
+        object_type=workflow_doc["_enums"]["object_type"][0],
+    )
+    row["content"]["xml"] = workflow_xml(listing[0]["uuid"], input_name=inputs[0]["name"])
+    out["workflows"] = {"entities": [row]}
 
     # The fake serves types/incident/fields from its Phase-1 fixture; ``fields:incident``
     # is the recorded shape of that call, for the tests that want it instead.

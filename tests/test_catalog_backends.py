@@ -452,29 +452,58 @@ async def test_what_the_record_could_not_establish_stays_unknown(
 
 
 async def test_an_empty_workflow_collection_is_known_empty(client: SoarClient, fake: FakeSoar):
-    assert verified("workflows")["_facts"]["rows"] == "0"
+    assert verified("workflows")["_facts"]["rows"] == "0"  # P2-00 saw an empty collection
+    fake.discovery["workflows"] = {"entities": []}
     catalog = await load(client)
     assert catalog.workflows == {}
     assert catalog.sections["workflows"].state is SectionState.LOADED
     assert catalog.sections["workflows"].count == 0
 
 
-async def test_workflow_rows_of_unverified_shape_are_counted_never_parsed(
+async def test_workflow_rows_are_summarised_and_the_xml_is_not_kept(
     client: SoarClient, fake: FakeSoar
 ):
-    fake.discovery["workflows"] = {
-        "entities": [
-            {"workflow_id": 1, "name": "wf", "content": {"xml": "<definitions/>"}},
-            {"anything": "at all"},
-        ]
-    }
+    """P2-04 (08 §29): the verified row shape is parsed; its XML is read and dropped."""
     catalog = await load(client)
     status = catalog.sections["workflows"]
-    assert catalog.workflows == {}
-    assert status.state is SectionState.UNVERIFIED and status.count == 2
-    assert "unverified" in (status.reason or "")
-    assert "definitions" not in catalog.to_json()
+    assert status.state is SectionState.LOADED and status.count == 1
+    workflow = catalog.workflows["workflow_1100"]
+    assert workflow.structure == "parsed"
+    text = catalog.to_json()
+    for marker in ("<definitions", "BPMN/20100524", "conditionExpression", "select_value"):
+        assert marker not in text
     assert not [r for r in fake.requests if r.path.count("/workflows/")]  # no GET by id
+
+
+async def test_a_workflow_row_without_its_verified_keys_fails_the_load(
+    client: SoarClient, fake: FakeSoar
+):
+    fake.discovery["workflows"] = {"entities": [{"anything": "at all"}]}
+    with pytest.raises(SoarMalformedResponseError, match="workflows"):
+        await load(client)
+
+
+async def test_too_many_workflows_fail_the_load(
+    client: SoarClient, fake: FakeSoar, monkeypatch: pytest.MonkeyPatch
+):
+    from qradar_soar_mcp.catalog import backends
+
+    monkeypatch.setattr(backends, "MAX_WORKFLOWS", 0)
+    with pytest.raises(SoarMalformedResponseError, match="more than 0 workflows"):
+        await load(client)
+
+
+async def test_a_function_uuid_two_functions_share_resolves_to_neither(
+    client: SoarClient, fake: FakeSoar
+):
+    second = fake.discovery["functions"]["entities"][1]
+    second["uuid"] = fake.discovery["functions"]["entities"][0]["uuid"]
+    fake.discovery[f"function:{second['id']}"]["uuid"] = second["uuid"]
+    catalog = await load(client)  # the other sections are not affected
+    assert catalog.sections["functions"].count == 2
+    (call,) = catalog.workflows["workflow_1100"].functions
+    assert call.resolution == "unresolved" and call.function is None
+    assert any("shared by more than one" in p for p in catalog.workflows["workflow_1100"].problems)
 
 
 async def test_people_bodies_and_bound_keys_are_not_ingested(client: SoarClient, fake: FakeSoar):

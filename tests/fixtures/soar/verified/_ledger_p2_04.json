@@ -1,0 +1,122 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_fixture": "verified-ledger",
+  "_ticket": "P2-04",
+  "documentation_pages_read": [
+    "json_WorkflowDTO.html",
+    "resource_WorkflowREST.html"
+  ],
+  "refused_by_policy": [],
+  "requests": [
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/docs/rest-api/ui/swagger.json",
+      "query_keys": [],
+      "question": "docs",
+      "size": "<10MB",
+      "status": 200,
+      "step": "doc:ui/swagger.json"
+    },
+    {
+      "allow": null,
+      "content_type": "text/html",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/docs/rest-api/json_WorkflowDTO.html",
+      "query_keys": [],
+      "question": "docs",
+      "size": "<100KB",
+      "status": 200,
+      "step": "doc:json_WorkflowDTO.html"
+    },
+    {
+      "allow": null,
+      "content_type": "text/html",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/docs/rest-api/resource_WorkflowREST.html",
+      "query_keys": [],
+      "question": "docs",
+      "size": "<100KB",
+      "status": 200,
+      "step": "doc:resource_WorkflowREST.html"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/workflows",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<100KB",
+      "status": 200,
+      "step": "workflows"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/workflows",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<1KB",
+      "status": 403,
+      "step": "workflows@403"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/workflows",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "<1KB",
+      "status": 200,
+      "step": "workflows@200"
+    },
+    {
+      "allow": null,
+      "content_type": null,
+      "count": 1,
+      "error": "ConnectError",
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/workflows",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "05§2",
+      "size": "n/a",
+      "status": null,
+      "step": "workflows@None"
+    }
+  ]
+}

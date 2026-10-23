@@ -67,6 +67,15 @@
 > appliance nor verified by behaviour, so the close-required reading of §1.1 remains an
 > assumption and no flag is derived from it. See `08-GREENFIELD-AMENDMENTS.md §28`.
 
+> **Implementation status — P2-04, 2026-10-23.** `soar_list_rules`, `soar_get_rule`,
+> `soar_list_workflows` and `soar_get_workflow` are implemented as Tier-0 reads over
+> that catalog. The §2 row for a single workflow does not hold on `51.0.9.0.20848`:
+> no `GET /workflows/{id}` is documented, and a workflow's BPMN 2.0 XML is
+> `content.xml` of its row in `GET /workflows`. The catalog keeps a structural summary
+> of it, never the XML; `include_raw=true` reads the collection once for one
+> workflow's XML, credential-filtered, capped and labelled untrusted. A function call
+> is resolved only by exact uuid equality. See `08-GREENFIELD-AMENDMENTS.md §29`.
+
 All paths are relative to `https://{host}/rest/orgs/{org_id}` unless noted.
 Auth: HTTP Basic with API key id/secret. Common params `handle_format=names`
 and `text_content_output_format=always_text` as already implemented.

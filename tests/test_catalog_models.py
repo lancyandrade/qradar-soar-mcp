@@ -36,6 +36,9 @@ from qradar_soar_mcp.catalog.models import (
     SectionStatus,
     SelectValue,
     TypeSpec,
+    WorkflowEdge,
+    WorkflowFunctionCall,
+    WorkflowNode,
     WorkflowSummary,
 )
 
@@ -164,7 +167,45 @@ def full_catalog(**overrides: Any) -> Catalog:
                 conditions=(RuleCondition(field_name="incident.severity_code", method="equals"),),
             )
         },
-        "workflows": {"wf": WorkflowSummary()},
+        "workflows": {
+            "wf_enrich": WorkflowSummary(
+                workflow_id=13,
+                programmatic_name="wf_enrich",
+                name="Enrich",
+                description="enriches",
+                object_type="incident",
+                content_version=2,
+                last_modified_time=1_700_000_000_000,
+                structure="parsed",
+                nodes=(
+                    WorkflowNode(id="Start_1", type="startEvent", type_observed=True),
+                    WorkflowNode(
+                        id="Task_1",
+                        type="serviceTask",
+                        type_observed=True,
+                        name="Look up",
+                        function=WorkflowFunctionCall(
+                            uuid="uuid-1",
+                            resolution="resolved",
+                            function="fn_lookup",
+                            input_names=("query",),
+                            has_pre_processing_script=True,
+                        ),
+                    ),
+                ),
+                edges=(
+                    WorkflowEdge(
+                        id="Flow_1",
+                        source="Start_1",
+                        target="Task_1",
+                        kind="conditional",
+                        condition_language="language-1",
+                    ),
+                ),
+                annotations=1,
+                problems=("node Task_1 has no outgoing flow and is not an end event",),
+            )
+        },
         "groups": {"SOC": GroupSpec(id=10, name="SOC", uuid="uuid-12", enabled=True)},
         "api_key_permissions": frozenset({"zeta", "alpha", "mid"}),
         "installed_apps": {"fn_lookup_app": "1.2.3"},
@@ -323,7 +364,10 @@ def _nested(doc: dict[str, Any], path: tuple[Any, ...]) -> Any:
         ("scripts", "set_owner"),
         ("datatables", "hosts", "columns", 0),
         ("rules", "Escalate", "conditions", 0),
-        ("workflows", "wf"),
+        ("workflows", "wf_enrich"),
+        ("workflows", "wf_enrich", "nodes", 1),
+        ("workflows", "wf_enrich", "nodes", 1, "function"),
+        ("workflows", "wf_enrich", "edges", 0),
         ("sections", "functions"),
     ],
     ids=lambda p: ".".join(map(str, p)) or "catalog",
@@ -353,7 +397,7 @@ def test_a_document_that_is_not_a_catalog_is_rejected(text: str):
 @pytest.mark.parametrize(
     ("path", "key", "value"),
     [
-        ((), "format_version", 2),
+        ((), "format_version", 1),  # the format before P2-04
         ((), "source", "guess"),
         ((), "org_id", 201),
         ((), "soar_version", None),
