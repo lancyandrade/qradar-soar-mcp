@@ -1,0 +1,238 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "definitions": {
+      "ObjectHandle": {
+        "composed_of": [],
+        "found": true,
+        "has_example": true,
+        "properties": {
+          "id": {
+            "read_only": false,
+            "ref": null,
+            "type": "object"
+          },
+          "name": {
+            "read_only": false,
+            "ref": null,
+            "type": "string"
+          }
+        },
+        "read_only_properties": [],
+        "required": []
+      },
+      "PartialActionDTO": {
+        "composed_of": [],
+        "found": true,
+        "has_example": true,
+        "properties": {
+          "enabled": {
+            "read_only": false,
+            "ref": null,
+            "type": "boolean"
+          },
+          "id": {
+            "read_only": false,
+            "ref": null,
+            "type": "integer"
+          },
+          "name": {
+            "read_only": false,
+            "ref": null,
+            "type": "string"
+          },
+          "type": {
+            "read_only": false,
+            "ref": null,
+            "type": "integer"
+          }
+        },
+        "read_only_properties": [],
+        "required": [
+          "type"
+        ]
+      },
+      "TagRefDTO": {
+        "composed_of": [],
+        "found": true,
+        "has_example": true,
+        "properties": {
+          "tag_handle": {
+            "read_only": false,
+            "ref": "ObjectHandle",
+            "type": null
+          },
+          "value": {
+            "read_only": false,
+            "ref": null,
+            "type": "string"
+          }
+        },
+        "read_only_properties": [],
+        "required": []
+      },
+      "WorkflowContentDTO": {
+        "composed_of": [],
+        "found": true,
+        "has_example": true,
+        "properties": {
+          "version": {
+            "read_only": false,
+            "ref": null,
+            "type": "integer"
+          },
+          "workflow_id": {
+            "read_only": false,
+            "ref": "ObjectHandle",
+            "type": null
+          },
+          "xml": {
+            "read_only": false,
+            "ref": null,
+            "type": "string"
+          }
+        },
+        "read_only_properties": [],
+        "required": [
+          "version"
+        ]
+      },
+      "WorkflowDTO": {
+        "composed_of": [],
+        "found": true,
+        "has_example": true,
+        "properties": {
+          "actions": {
+            "read_only": false,
+            "ref": "PartialActionDTO",
+            "type": "array"
+          },
+          "content": {
+            "read_only": false,
+            "ref": "WorkflowContentDTO",
+            "type": null
+          },
+          "content_version": {
+            "read_only": false,
+            "ref": null,
+            "type": "integer"
+          },
+          "creator_id": {
+            "read_only": false,
+            "ref": "ObjectHandle",
+            "type": null
+          },
+          "description": {
+            "read_only": false,
+            "ref": null,
+            "type": "string"
+          },
+          "export_key": {
+            "read_only": false,
+            "ref": null,
+            "type": "string"
+          },
+          "last_modified_by": {
+            "read_only": false,
+            "ref": "ObjectHandle",
+            "type": null
+          },
+          "last_modified_time": {
+            "read_only": false,
+            "ref": null,
+            "type": "integer"
+          },
+          "name": {
+            "read_only": false,
+            "ref": null,
+            "type": "string"
+          },
+          "object_type": {
+            "read_only": false,
+            "ref": "ObjectHandle",
+            "type": null
+          },
+          "programmatic_name": {
+            "read_only": false,
+            "ref": null,
+            "type": "string"
+          },
+          "tags": {
+            "read_only": false,
+            "ref": "TagRefDTO",
+            "type": "array"
+          },
+          "uuid": {
+            "read_only": false,
+            "ref": null,
+            "type": "string"
+          },
+          "workflow_id": {
+            "read_only": false,
+            "ref": null,
+            "type": "integer"
+          }
+        },
+        "read_only_properties": [],
+        "required": []
+      }
+    },
+    "definitions_named_like_a_workflow": [
+      "ActionDataWorkflowInfoDTO",
+      "FutureDTOOfWorkflowDTO",
+      "ListContainerDTOOfWorkflowDTO",
+      "WorkflowContentDTO",
+      "WorkflowDTO",
+      "WorkflowInstanceDTO",
+      "WorkflowInstanceInfoDTO",
+      "WorkflowInstanceStatus",
+      "WorkflowModelProblemDTO",
+      "WorkflowStatusDTO"
+    ],
+    "paths_mentioning_workflows": {
+      "GET /orgs/{org_id}/workflows": {
+        "body_parameter_required": null,
+        "consumes": [],
+        "documented": true,
+        "parameters": {
+          "User-Agent": "header",
+          "accept": "header",
+          "accept-language": "header",
+          "handle_format": "header",
+          "object_type": "query",
+          "org_id": "path",
+          "text_content_output_format": "header",
+          "threat_hit_prop_format": "header",
+          "x-co3contexttoken": "header"
+        },
+        "request_example_present": false,
+        "request_schema": null,
+        "responses": {
+          "200": {},
+          "400": {},
+          "401": {},
+          "403": {},
+          "404": {},
+          "409": {},
+          "500": {},
+          "503": {}
+        }
+      }
+    },
+    "spec_version": "2.0"
+  },
+  "_fixture": "verified-shape",
+  "_note": "documented, not live: the /workflows operations and the WorkflowDTO family of the description published next to the reference, as names, JSON types and references; no description text is kept",
+  "_question": "docs",
+  "_request": {
+    "method": "GET",
+    "path": "/docs/rest-api/ui/swagger.json",
+    "query_keys": []
+  },
+  "_status": 200,
+  "_ticket": "P2-04",
+  "shape": null
+}

@@ -1,0 +1,238 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "attribute_names_by_element": {
+      "bpmn_di:BPMNDiagram": [
+        "id"
+      ],
+      "bpmn_di:BPMNEdge": [
+        "bpmnElement",
+        "id"
+      ],
+      "bpmn_di:BPMNPlane": [
+        "bpmnElement",
+        "id"
+      ],
+      "bpmn_di:BPMNShape": [
+        "bpmnElement",
+        "id",
+        "isMarkerVisible"
+      ],
+      "bpmn_model:association": [
+        "id",
+        "sourceRef",
+        "targetRef"
+      ],
+      "bpmn_model:conditionExpression": [
+        "language",
+        "type"
+      ],
+      "bpmn_model:definitions": [
+        "targetNamespace"
+      ],
+      "bpmn_model:endEvent": [
+        "id"
+      ],
+      "bpmn_model:exclusiveGateway": [
+        "default",
+        "id"
+      ],
+      "bpmn_model:process": [
+        "id",
+        "isExecutable",
+        "name"
+      ],
+      "bpmn_model:sequenceFlow": [
+        "id",
+        "name",
+        "sourceRef",
+        "targetRef"
+      ],
+      "bpmn_model:serviceTask": [
+        "id",
+        "name",
+        "type"
+      ],
+      "bpmn_model:startEvent": [
+        "id"
+      ],
+      "bpmn_model:textAnnotation": [
+        "id"
+      ],
+      "omg_dc:Bounds": [
+        "height",
+        "width",
+        "x",
+        "y"
+      ],
+      "omg_di:waypoint": [
+        "x",
+        "y"
+      ],
+      "vendor_ibm:function": [
+        "uuid"
+      ]
+    },
+    "content_keys": [
+      "version",
+      "workflow_id",
+      "xml"
+    ],
+    "elements": "10-99",
+    "elements_referenced_by_a_source_or_target_attribute": [
+      "bpmn_model:endEvent",
+      "bpmn_model:exclusiveGateway",
+      "bpmn_model:serviceTask",
+      "bpmn_model:startEvent",
+      "bpmn_model:textAnnotation"
+    ],
+    "elements_with_both_a_source_and_a_target_attribute": "1-9",
+    "elements_with_text_by_element": {
+      "bpmn_model:conditionExpression": "1-9",
+      "bpmn_model:documentation": "1-9",
+      "bpmn_model:incoming": "1-9",
+      "bpmn_model:outgoing": "1-9",
+      "bpmn_model:text": "1-9",
+      "vendor_ibm:function": "1-9"
+    },
+    "every_referenced_value_is_an_element_identifier": true,
+    "function_candidate_keys": {},
+    "function_candidate_value_forms": {},
+    "identifier_attribute_names_by_element": {
+      "bpmn_di:BPMNDiagram": [
+        "id"
+      ],
+      "bpmn_di:BPMNEdge": [
+        "id"
+      ],
+      "bpmn_di:BPMNPlane": [
+        "id"
+      ],
+      "bpmn_di:BPMNShape": [
+        "id"
+      ],
+      "bpmn_model:association": [
+        "id"
+      ],
+      "bpmn_model:endEvent": [
+        "id"
+      ],
+      "bpmn_model:exclusiveGateway": [
+        "id"
+      ],
+      "bpmn_model:process": [
+        "id"
+      ],
+      "bpmn_model:sequenceFlow": [
+        "id"
+      ],
+      "bpmn_model:serviceTask": [
+        "id"
+      ],
+      "bpmn_model:startEvent": [
+        "id"
+      ],
+      "bpmn_model:textAnnotation": [
+        "id"
+      ],
+      "vendor_ibm:function": [
+        "uuid"
+      ]
+    },
+    "identity_like_keys_under_function_candidates": {},
+    "json_payload_shapes_by_element": {
+      "vendor_ibm:function": {
+        "inputs": {
+          "<name>": {
+            "input_type": "str",
+            "static_input": {
+              "select_value": "str"
+            }
+          }
+        },
+        "post_processing_script": "null",
+        "post_processing_script_language": "null",
+        "pre_processing_script": "null",
+        "pre_processing_script_language": "null",
+        "result_name": "null"
+      }
+    },
+    "json_payloads_that_did_not_parse": "0",
+    "namespace_classes": {
+      "bpmn_di": [
+        "BPMNDiagram",
+        "BPMNEdge",
+        "BPMNLabel",
+        "BPMNPlane",
+        "BPMNShape"
+      ],
+      "bpmn_model": [
+        "association",
+        "conditionExpression",
+        "definitions",
+        "documentation",
+        "endEvent",
+        "exclusiveGateway",
+        "extensionElements",
+        "incoming",
+        "outgoing",
+        "process",
+        "sequenceFlow",
+        "serviceTask",
+        "startEvent",
+        "text",
+        "textAnnotation"
+      ],
+      "omg_dc": [
+        "Bounds"
+      ],
+      "omg_di": [
+        "waypoint"
+      ],
+      "vendor_ibm": [
+        "function"
+      ]
+    },
+    "parsed": true,
+    "referenced_values": "1-9",
+    "referenced_values_that_are_element_identifiers": "1-9",
+    "root": {
+      "attribute_names": [
+        "targetNamespace"
+      ],
+      "local_name": "definitions",
+      "namespace_class": "bpmn_model"
+    },
+    "source_target_attribute_names_by_element": {
+      "bpmn_model:association": [
+        "sourceRef",
+        "targetRef"
+      ],
+      "bpmn_model:sequenceFlow": [
+        "sourceRef",
+        "targetRef"
+      ]
+    },
+    "xml_bearing_property": "xml",
+    "xml_bearing_property_in_content": true,
+    "xml_is_string": true,
+    "xml_size": "<10KB"
+  },
+  "_fixture": "verified-shape",
+  "_note": "observed, offline: structural facts of one workflow's XML, taken from its collection row and analysed in memory; no text body, value, name, id, uuid or script was kept and the XML was never written",
+  "_question": "05§2",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/workflows",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-04",
+  "shape": null
+}

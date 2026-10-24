@@ -20,6 +20,7 @@ environment-like values:
 
 from __future__ import annotations
 
+import html
 import json
 import ssl
 import sys
@@ -31,6 +32,7 @@ from typing import Any
 import httpx
 import probe_00b
 import probe_p2_03
+import probe_p2_04
 import shape_request
 import task_candidate
 import task_experiment
@@ -1720,6 +1722,597 @@ def test_p2_03() -> None:
         check(refused, f"p2-03: {method} to a field list is refused by the client it uses")
 
 
+# P2-04: the workflow research. A description, two reference pages, a collection and one
+# workflow object laid out like the appliance's, hostile in every value; a workflow XML
+# with standard, vendor and unknown namespaces, an embedded JSON payload that refers to a
+# function, an embedded script and a condition expression. None of it may get out.
+WF_ID = 660042
+WF_DETAIL_PATH = "/orgs/{org_id}/workflows/{workflow_id}"
+P2_04_SWAGGER = {
+    "swagger": "2.0",
+    "paths": {
+        "/orgs/{org_id}/workflows": {
+            "get": {
+                "summary": f"Lists workflows at {HOST}",
+                "parameters": [{"name": "handle_format", "in": "query"}],
+                "responses": {"200": {"schema": {"$ref": "#/definitions/WorkflowListDTO"}}},
+            },
+            "post": {"summary": "creates", "responses": {"200": {}}},
+        },
+        WF_DETAIL_PATH: {
+            "get": {
+                "summary": f"one workflow; see {EMAIL}",
+                "parameters": [{"name": "workflow_id", "in": "path"}],
+                "responses": {"200": {"schema": {"$ref": "#/definitions/WorkflowDTO"}}},
+            },
+            "put": {"responses": {"200": {}}},
+        },
+        f"/orgs/{ORG}/workflows/{WF_ID}": {"get": {}},  # digits: never a template
+    },
+    "definitions": {
+        "WorkflowDTO": {
+            "description": f"Represents a workflow on {HOST}.",
+            "properties": {
+                "workflow_id": {"type": "integer", "description": "The ID."},
+                "programmatic_name": {"type": "string", "description": EMAIL},
+                "content": {"$ref": "#/definitions/WorkflowContentDTO"},
+                "creator_id": {"type": "integer", "readOnly": True},
+            },
+            "required": ["workflow_id"],
+        },
+        "WorkflowContentDTO": {
+            "properties": {"xml": {"type": "string"}, "workflow_id": {"type": "integer"}}
+        },
+        "WorkflowListDTO": {
+            "properties": {
+                "entities": {"type": "array", "items": {"$ref": "#/definitions/WorkflowDTO"}}
+            }
+        },
+        "TaskDTO": {"properties": {"name": {"type": "string"}}},
+    },
+}
+WORKFLOW_DTO_PAGE = (
+    "<table><tr><th>name</th><th>data type</th><th>constraints</th><th>description</th></tr>"
+    f"<tr><td>workflow_id</td><td>number</td><td></td><td>The ID on {HOST}. readonly</td></tr>"
+    "<tr><td>programmatic_name</td><td>string</td><td>required</td><td>x</td></tr>"
+    '<tr><td>content</td><td><a href="json_WorkflowContentDTO.html">WorkflowContentDTO</a>'
+    f"</td><td></td><td>for {EMAIL}</td></tr></table>"
+)
+WORKFLOW_REST_PAGE = (
+    "<ul><li>GET /orgs/{org_id}/workflows</li><li>GET " + WF_DETAIL_PATH + "</li></ul>"
+    "<h2>GET /orgs/{org_id}/workflows</h2><p>Lists the workflows.</p>"
+    "<table><caption>Response Body</caption><tr><td>application/json</td><td>"
+    '<a href="json_WorkflowListDTO.html">WorkflowListDTO</a></td><td>x</td></tr></table>'
+    "<h2>GET " + WF_DETAIL_PATH + "</h2>"
+    f"<p>Gets one workflow from https://{HOST}/rest for {EMAIL}.</p>"
+    "<table><caption>Request Parameters</caption><tr><td>workflow_id</td><td>path</td>"
+    "<td>id</td></tr></table>"
+    "<table><caption>Response Codes</caption><tr><td>200</td><td>Success</td></tr>"
+    f"<tr><td>404</td><td>Not on {PRIVATE_IP}</td></tr></table>"
+    "<table><caption>Response Body</caption><tr><td>application/json</td><td>"
+    '<a href="json_WorkflowDTO.html">WorkflowDTO</a></td><td>x</td></tr></table>'
+    f"<h2>GET /orgs/{ORG}/leaky/{WF_ID}</h2><p>curl https://{HOST}/rest</p>"
+)
+SCRIPT_BODY = f'incident.addNote("{PRIVATE_IP}")  # {SECRET}'
+FUNCTION_PAYLOAD = json.dumps(
+    {
+        "inputs": {KEY_ID: {"input_type": "text", "text": EMAIL}},
+        "post_processing_script": SCRIPT_BODY,
+        "result_name": "acme_result",
+        "function": {"uuid": KEY_ID, "name": "fn_acme_lookup", "id": 4242},
+    }
+)
+OTHER_PAYLOAD = json.dumps(
+    {"properties": {"acme_site": OTHER_IP}, "fn_acme_lookup": 1, "owner": "jdoe", "kind": "text"}
+)
+WORKFLOW_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:resilient="http://resilient.ibm.com/bpmn" xmlns:acme="https://{HOST}/schema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="https://{HOST}/x.xsd" id="{KEY_ID}" targetNamespace="https://{HOST}/tn">
+  <process id="playbook_acme_{INCIDENT_ID}" isExecutable="true" name="Payroll breach on {HOST}">
+    <startEvent id="StartEvent_1"><outgoing>SequenceFlow_1</outgoing></startEvent>
+    <serviceTask id="ServiceTask_1" name="fn_acme_lookup" resilient:type="function">
+      <extensionElements>
+        <resilient:function uuid="{KEY_ID}">{html.escape(FUNCTION_PAYLOAD)}</resilient:function>
+        <acme:thing>{html.escape(OTHER_PAYLOAD)}</acme:thing>
+        <resilient:script>{html.escape(SCRIPT_BODY)}</resilient:script>
+      </extensionElements>
+      <incoming>SequenceFlow_1</incoming><outgoing>SequenceFlow_2</outgoing>
+    </serviceTask>
+    <exclusiveGateway id="Gateway_1" name="jdoe decides"/>
+    <endEvent id="EndEvent_1"/>
+    <sequenceFlow id="SequenceFlow_1" sourceRef="StartEvent_1" targetRef="ServiceTask_1"/>
+    <sequenceFlow id="SequenceFlow_2" sourceRef="ServiceTask_1" targetRef="Gateway_1">
+      <conditionExpression xsi:type="tFormalExpression">{HOST} == 1</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="SequenceFlow_3" sourceRef="Gateway_1" targetRef="EndEvent_1"/>
+  </process>
+  <bpmndi:BPMNDiagram id="d1"><bpmndi:BPMNPlane bpmnElement="playbook_acme"/></bpmndi:BPMNDiagram>
+</definitions>
+"""
+
+
+def _p2_04_row(workflow_id: int = WF_ID, *, content: bool = True) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "workflow_id": workflow_id,
+        "uuid": KEY_ID,
+        "programmatic_name": "acme_workflow",
+        "name": f"Payroll breach on {HOST}",
+        "description": f"see https://{HOST}/x from {PRIVATE_IP}",
+        "object_type": "incident",
+        "creator_id": 7,
+        "actions": [{"id": 5, "name": f"Isolate {HOST}"}],
+    }
+    if content:
+        row["content"] = {"xml": WORKFLOW_XML, "workflow_id": workflow_id, "version": 3}
+    return row
+
+
+def p2_04_handler(
+    *, rows: list[dict[str, Any]] | None = None, status: int = 200, wrapper: bool = True
+) -> Any:
+    """The static documentation, and the collection: rows as given (one by default)."""
+    listing = [_p2_04_row()] if rows is None else rows
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.startswith("/docs/rest-api/ui/swagger"):
+            return httpx.Response(200, json=P2_04_SWAGGER)
+        if path.startswith("/docs/rest-api/json_WorkflowDTO"):
+            return httpx.Response(200, html=WORKFLOW_DTO_PAGE)
+        if path.startswith("/docs/rest-api/resource_WorkflowREST"):
+            return httpx.Response(200, html=WORKFLOW_REST_PAGE)
+        if path == f"/rest/orgs/{ORG}/workflows":
+            if status != 200:
+                return httpx.Response(status, json={"message": f"no {KEY_ID} at {HOST}"})
+            return httpx.Response(200, json={"entities": listing} if wrapper else listing)
+        return httpx.Response(404, json={"message": f"no route at {HOST}"})
+
+    return handler
+
+
+def _run_p2_04(
+    handler: Any, *steps: Any, env: ProbeEnv = ENV, out_dir: Path | None = None
+) -> tuple[list[int], str, dict[str, Any], list[Any]]:
+    seen: list[tuple[str, str, str]] = []
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path, request.url.query.decode()))
+        return handler(request)
+
+    client = new_client(transport)
+    printed: list[str] = []
+    files: dict[str, Any] = {}
+    codes: list[int] = []
+    with tempfile.TemporaryDirectory() as tmp:
+        where = out_dir or Path(tmp)
+        rec = probe_00b.Recorder(env, client, where, echo=printed.append)
+        for step in steps:
+            codes.append(step(rec))
+        probe_p2_04.finish(rec)
+        for path in sorted(where.glob("*.json")):
+            text = path.read_text(encoding="utf-8")
+            verify_clean(text, env.literals(), what=path.name)
+            files[path.name] = json.loads(text)
+    client.close()
+    return codes, " | ".join(printed), files, seen
+
+
+XML_FACT_KEYS = {
+    "parsed", "root", "namespace_classes", "elements", "attribute_names_by_element",
+    "source_target_attribute_names_by_element",
+    "elements_with_both_a_source_and_a_target_attribute",
+    "identifier_attribute_names_by_element",
+    "elements_referenced_by_a_source_or_target_attribute", "referenced_values",
+    "referenced_values_that_are_element_identifiers",
+    "every_referenced_value_is_an_element_identifier",
+    "elements_with_text_by_element", "json_payload_shapes_by_element",
+    "json_payloads_that_did_not_parse", "function_candidate_keys",
+    "identity_like_keys_under_function_candidates", "function_candidate_value_forms",
+}  # fmt: skip
+ROW_FACT_KEYS = {
+    "content_keys", "xml_bearing_property", "xml_bearing_property_in_content",
+    "xml_is_string", "xml_size",
+}  # fmt: skip
+XML_FORBIDDEN = (*FORBIDDEN, "fn_acme_lookup", "acme_result", "acme_workflow", "SequenceFlow_1",
+                 "StartEvent_1", "ServiceTask_1", "addNote", "== 1", "resilient.ibm.com",
+                 "omg.org", "tFormalExpression", "playbook_acme", str(WF_ID))  # fmt: skip
+WORKFLOW_KEYS = ["actions", "content", "creator_id", "description", "name", "object_type",
+                 "programmatic_name", "uuid", "workflow_id"]  # fmt: skip
+
+
+def test_p2_04() -> None:
+    org = f"/rest/orgs/{ORG}"
+    wf = org + "/workflows"
+    listing_query = "handle_format=names&text_content_output_format=always_text"
+    get_detail = "GET " + WF_DETAIL_PATH
+
+    # R1: one static GET; operations, the DTO family, no prose.
+    codes, text, files, seen = _run_p2_04(p2_04_handler(), probe_p2_04.swagger)
+    facts = files["p2_04_doc_swagger_workflows.json"]["_facts"]
+    ops = facts["paths_mentioning_workflows"]
+    definitions = facts["definitions"]
+    check(
+        codes == [0]
+        and seen == [("GET", "/docs/rest-api/ui/swagger.json", "")]
+        and sorted(ops)
+        == [
+            "GET /orgs/{org_id}/workflows",
+            get_detail,
+            "POST /orgs/{org_id}/workflows",
+            "PUT " + WF_DETAIL_PATH,
+        ]
+        and ops[get_detail]["parameters"] == {"workflow_id": "path"}
+        and ops[get_detail]["responses"]["200"]["ref"] == "WorkflowDTO"
+        and sorted(definitions) == ["WorkflowContentDTO", "WorkflowDTO"]
+        and definitions["WorkflowDTO"]["properties"]["content"]["ref"] == "WorkflowContentDTO"
+        and definitions["WorkflowContentDTO"]["properties"]["xml"]["type"] == "string"
+        and definitions["WorkflowDTO"]["read_only_properties"] == ["creator_id"]
+        and facts["definitions_named_like_a_workflow"]
+        == ["WorkflowContentDTO", "WorkflowDTO", "WorkflowListDTO"],
+        "p2-04 R1: the /workflows operations and the WorkflowDTO family, as names and types",
+    )
+    check(
+        not _leaks(text, files)
+        and "Represents" not in json.dumps(files)
+        and "Lists workflows" not in json.dumps(files)
+        and "leaky" not in json.dumps(files),
+        "p2-04 R1: no description, summary, digit path or connection value gets out",
+    )
+
+    # R2: two static GETs; the data type and the endpoint sections; hostile lines withheld.
+    codes, text, files, seen = _run_p2_04(
+        p2_04_handler(), lambda rec: probe_p2_04.doc_pages(rec, 1, 40)
+    )
+    dto = files["p2_04_doc_type_WorkflowDTO.json"]["_facts"]["properties"]
+    rest = files["p2_04_doc_workflow_rest.json"]["_facts"]["endpoints"]
+    check(
+        codes == [0]
+        and [s[1] for s in seen]
+        == ["/docs/rest-api/json_WorkflowDTO.html", "/docs/rest-api/resource_WorkflowREST.html"]
+        and dto["workflow_id"]
+        == {
+            "type": "number",
+            "constraints": "",
+            "documented_read_only": True,
+            "documented_create_only": False,
+        }
+        and dto["content"]["type"] == "WorkflowContentDTO"
+        and sorted(rest) == ["GET /orgs/{org_id}/workflows", get_detail]
+        and rest[get_detail]["response_body_type"] == "WorkflowDTO"
+        and rest[get_detail]["response_codes"] == [200, 404]
+        and rest[get_detail]["parameters"] == {"workflow_id": "path"},
+        "p2-04 R2: the data type and the two documented endpoint sections",
+    )
+    check(
+        "withheld" in text
+        and not _leaks(text, files)
+        and "leaky" not in json.dumps(files)
+        and sorted(files["_ledger_p2_04.json"]["documentation_pages_read"])
+        == ["json_WorkflowDTO.html", "resource_WorkflowREST.html"],
+        "p2-04 R2: hostile lines are withheld; nothing leaks; the pages are on the ledger",
+    )
+
+    # R3 denied, or answered in a container the record did not verify: stop, nothing
+    # about the answer is written.
+    for why, handler in {
+        "a 403": p2_04_handler(status=403),
+        "a bare list": p2_04_handler(wrapper=False),
+    }.items():
+        codes, text, files, seen = _run_p2_04(handler, probe_p2_04.swagger, probe_p2_04.workflows)
+        check(
+            codes == [0, probe_p2_04.EXIT_STOP]
+            and len(seen) == 2
+            and "STOPPED" in text
+            and "p2_04_workflows.json" not in files
+            and "p2_04_workflow_xml.json" not in files
+            and files["_ledger_p2_04.json"]["requests"][-1]["path"]
+            == "/rest/orgs/{org_id}/workflows"
+            and not _leaks(text, files),
+            f"p2-04 R3: {why} stops the run after the one GET; only the ledger row is kept",
+        )
+
+    # R3 empty: recorded; nothing analysed; still one GET.
+    codes, text, files, seen = _run_p2_04(
+        p2_04_handler(rows=[]), probe_p2_04.swagger, probe_p2_04.workflows
+    )
+    check(
+        codes == [0, 0]
+        and seen[1] == ("GET", wf, listing_query)
+        and len(seen) == 2
+        and files["p2_04_workflows.json"]["_facts"]
+        == {
+            "rows": "0",
+            "row_keys": [],
+            "documented_and_observed": [],
+            "documented_only": [],
+            "observed_only": [],
+        }
+        and files["p2_04_workflows.json"]["shape"] == {"entities": []}
+        and "R5 NOT RUN" in text
+        and "p2_04_workflow_xml.json" not in files,
+        "p2-04 R3: an empty collection is recorded and nothing is analysed",
+    )
+
+    # One row, no selector: R5 runs over that row, and no second request is sent.
+    codes, text, files, seen = _run_p2_04(
+        p2_04_handler(), probe_p2_04.swagger, probe_p2_04.workflows
+    )
+    row = files["p2_04_workflows.json"]
+    check(
+        codes == [0, 0]
+        and seen[1:] == [("GET", wf, listing_query)]
+        and "the only workflow" in text
+        and row["_facts"]
+        == {
+            "rows": "1-9",
+            "row_keys": WORKFLOW_KEYS,
+            "documented_and_observed": [
+                "content",
+                "creator_id",
+                "programmatic_name",
+                "workflow_id",
+            ],
+            "documented_only": [],
+            "observed_only": ["actions", "description", "name", "object_type", "uuid"],
+        }
+        and row["shape"]["entities"][0]["content"]
+        == {"version": "int", "workflow_id": "int", "xml": "str"}
+        and row["_enums"] == {"object_type": ["incident"]},
+        "p2-04 R3: the row as keys and types, against the documented WorkflowDTO; one GET",
+    )
+    xml = files["p2_04_workflow_xml.json"]["_facts"]
+    check(
+        set(xml) == XML_FACT_KEYS | ROW_FACT_KEYS
+        and xml["parsed"] is True
+        and (
+            xml["content_keys"],
+            xml["xml_bearing_property"],
+            xml["xml_is_string"],
+            xml["xml_size"],
+        )
+        == (["version", "workflow_id", "xml"], "xml", True, "<10KB")
+        and xml["root"]
+        == {
+            "namespace_class": "bpmn_model",
+            "local_name": "definitions",
+            "attribute_names": ["id", "schemaLocation", "targetNamespace"],
+        }
+        and sorted(xml["namespace_classes"]) == ["bpmn_di", "bpmn_model", "other", "vendor_ibm"]
+        and xml["namespace_classes"]["vendor_ibm"] == ["function", "script"]
+        and xml["namespace_classes"]["other"] == ["thing"]
+        and "serviceTask" in xml["namespace_classes"]["bpmn_model"]
+        and xml["attribute_names_by_element"]["vendor_ibm:function"] == ["uuid"]
+        and xml["attribute_names_by_element"]["bpmn_model:serviceTask"] == ["id", "name", "type"]
+        and xml["elements"] == "10-99",
+        "p2-04 R5: root, namespace classes, element and attribute names, buckets",
+    )
+    check(
+        xml["source_target_attribute_names_by_element"]
+        == {"bpmn_model:sequenceFlow": ["sourceRef", "targetRef"]}
+        and xml["elements_with_both_a_source_and_a_target_attribute"] == "1-9"
+        and xml["identifier_attribute_names_by_element"]["bpmn_model:startEvent"] == ["id"]
+        and xml["identifier_attribute_names_by_element"]["vendor_ibm:function"] == ["uuid"]
+        and "bpmn_model:incoming" not in xml["identifier_attribute_names_by_element"]
+        and xml["elements_referenced_by_a_source_or_target_attribute"]
+        == [
+            "bpmn_model:endEvent",
+            "bpmn_model:exclusiveGateway",
+            "bpmn_model:serviceTask",
+            "bpmn_model:startEvent",
+        ]
+        and xml["referenced_values"] == "1-9"
+        and xml["referenced_values_that_are_element_identifiers"] == "1-9"
+        and xml["every_referenced_value_is_an_element_identifier"] is True,
+        "p2-04 R5: edges by attribute name; their values are element identifiers, as a fact",
+    )
+    payloads = xml["json_payload_shapes_by_element"]
+    check(
+        payloads["vendor_ibm:function"]
+        == {
+            "function": {"id": "int", "name": "str", "uuid": "str"},
+            "inputs": {"<name>": {"input_type": "str", "text": "str"}},
+            "post_processing_script": "str",
+            "result_name": "str",
+        }
+        and payloads["other:thing"]
+        == {"<name>": "int", "kind": "str", "owner": "str", "properties": {"<name>": "str"}}
+        and xml["function_candidate_keys"]
+        == {"vendor_ibm:function.function": ["id", "name", "uuid"]}
+        and xml["identity_like_keys_under_function_candidates"]
+        == {"vendor_ibm:function.function": ["id", "name", "uuid"]}
+        and xml["function_candidate_value_forms"]
+        == {
+            "vendor_ibm:function.function": ["object"],
+            "vendor_ibm:function.function.id": ["integer"],
+            "vendor_ibm:function.function.name": ["string"],
+            "vendor_ibm:function.function.uuid": ["uuid_shaped_string"],
+        }
+        and xml["elements_with_text_by_element"]["vendor_ibm:script"] == "1-9"
+        and xml["json_payloads_that_did_not_parse"] == "0",
+        "p2-04 R5: the function reference as key names, JSON types and value forms; a value "
+        "used as a key is collapsed; the script element is counted, never read",
+    )
+    blob = text + json.dumps(files)
+    check(
+        not [bad for bad in XML_FORBIDDEN if bad in blob]
+        and WORKFLOW_XML not in blob
+        and "<definitions" not in blob
+        and SCRIPT_BODY not in blob,
+        "p2-04 R5: no XML text, script, expression, name, id, uuid, URL or value gets out",
+    )
+    check(
+        sorted(files)
+        == [
+            "_ledger_p2_04.json",
+            "p2_04_doc_swagger_workflows.json",
+            "p2_04_workflow_xml.json",
+            "p2_04_workflows.json",
+        ]
+        and files["_ledger_p2_04.json"]["refused_by_policy"] == []
+        and [r["path"] for r in files["_ledger_p2_04.json"]["requests"]]
+        == ["/docs/rest-api/ui/swagger.json", "/rest/orgs/{org_id}/workflows"],
+        "p2-04: exactly these fixtures and ledger rows, as templates; no detail route",
+    )
+
+    # Several rows: no selector stops; the owner's selector picks exactly one; a selector
+    # that matches nothing stops. The chosen id never gets out.
+    two = [_p2_04_row(WF_ID), _p2_04_row(WF_ID + 1)]
+    codes, text, files, seen = _run_p2_04(
+        p2_04_handler(rows=two), probe_p2_04.swagger, probe_p2_04.workflows
+    )
+    check(
+        codes == [0, probe_p2_04.EXIT_STOP]
+        and len(seen) == 2
+        and "explicit research workflow selector is required" in text
+        and "p2_04_workflows.json" in files
+        and "p2_04_workflow_xml.json" not in files
+        and not [bad for bad in XML_FORBIDDEN if bad in text + json.dumps(files)],
+        "p2-04 R3: several workflows and no selector: recorded, nothing analysed, stop",
+    )
+    chosen = replace(ENV, workflow_id=str(WF_ID + 1))
+    codes, text, files, seen = _run_p2_04(
+        p2_04_handler(rows=two), probe_p2_04.swagger, probe_p2_04.workflows, env=chosen
+    )
+    check(
+        codes == [0, 0]
+        and len(seen) == 2
+        and "owner-designated" in text
+        and files["p2_04_workflow_xml.json"]["_facts"]["parsed"] is True
+        and str(WF_ID + 1) not in text + json.dumps(files),
+        "p2-04 R3: the owner's selector picks one of several; its id is never written",
+    )
+    for why, value in (("an id that matches no row", str(WF_ID + 7)), ("a non-integer", "x")):
+        codes, text, files, seen = _run_p2_04(
+            p2_04_handler(rows=two), probe_p2_04.swagger, probe_p2_04.workflows,
+            env=replace(ENV, workflow_id=value),
+        )  # fmt: skip
+        check(
+            codes == [0, probe_p2_04.EXIT_STOP]
+            and len(seen) == 2
+            and "STOPPED" in text
+            and "p2_04_workflow_xml.json" not in files,
+            f"p2-04 R3: {why} as the selector stops the run",
+        )
+
+    # A row without XML under content: recorded as such; nothing parsed.
+    codes, text, files, seen = _run_p2_04(
+        p2_04_handler(rows=[_p2_04_row(content=False)]), probe_p2_04.swagger,
+        probe_p2_04.workflows,
+    )  # fmt: skip
+    check(
+        codes == [0, 0]
+        and len(seen) == 2
+        and "R5 NOT RUN" in text
+        and files["p2_04_workflow_xml.json"]["_facts"]
+        == {
+            "content_keys": [],
+            "xml_bearing_property": None,
+            "xml_bearing_property_in_content": False,
+            "xml_is_string": False,
+            "xml_size": "n/a",
+            "parsed": False,
+        },
+        "p2-04 R3: a row without XML is recorded as such and nothing is parsed",
+    )
+
+    # The ledger keeps an earlier observation of the same step when the status changed.
+    with tempfile.TemporaryDirectory() as tmp:
+        where = Path(tmp)
+        _run_p2_04(p2_04_handler(status=403), probe_p2_04.workflows, out_dir=where)
+        _, _, files, _ = _run_p2_04(p2_04_handler(), probe_p2_04.workflows, out_dir=where)
+    rows_by_step = {r["step"]: r["status"] for r in files["_ledger_p2_04.json"]["requests"]}
+    check(
+        rows_by_step == {"workflows@403": 403, "workflows": 200},
+        "p2-04: a re-run keeps the earlier answer of the same step on the ledger",
+    )
+
+    # R5 alone: hostile documents are refused unparsed, and nothing is ever fetched.
+    external = (f'<!DOCTYPE x [<!ENTITY e SYSTEM "https://{HOST}/secret">]>'
+                "<definitions>&e;</definitions>")  # fmt: skip
+    for why, document, refusal in (
+        ("a DTD with an external entity", external, "DOCTYPE or ENTITY"),
+        ("an entity declaration", f'<!ENTITY a "{HOST}"><d>&a;</d>', "DOCTYPE or ENTITY"),
+        ("an undefined entity reference", "<d>&acme;</d>", "does not predefine"),
+        ("malformed XML", "<d><e></d>", "malformed"),
+        ("a document over the size bound", "<d>" + "x" * probe_p2_04.MAX_XML_CHARS + "</d>",
+         "larger"),
+        ("more elements than the bound",
+         "<d>" + "<e/>" * (probe_p2_04.MAX_XML_NODES + 1) + "</d>", "more elements"),
+    ):  # fmt: skip
+        facts = probe_p2_04.analyse_xml(document)
+        check(
+            facts["parsed"] is False
+            and refusal in facts["refused"]
+            and set(facts) == {"parsed", "refused"}
+            and HOST not in json.dumps(facts),
+            f"p2-04 R5: {why} is refused unparsed",
+        )
+    schema_ref = (
+        f'<d xmlns="https://{HOST}/ns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+        f' xsi:schemaLocation="https://{HOST}/ns https://{HOST}/d.xsd"><e a="{EMAIL}"/></d>'
+    )
+    facts = probe_p2_04.analyse_xml(schema_ref)
+    check(
+        facts["parsed"] is True
+        and facts["root"]["namespace_class"] == "other"
+        and facts["namespace_classes"] == {"other": ["d", "e"]}
+        and facts["attribute_names_by_element"] == {"other:d": ["schemaLocation"], "other:e": ["a"]}
+        and facts["every_referenced_value_is_an_element_identifier"] is False
+        and HOST not in json.dumps(facts)
+        and EMAIL not in json.dumps(facts),
+        "p2-04 R5: a schema location and an unknown namespace are classified, never fetched",
+    )
+    classify = probe_p2_04.classify_namespace
+    check(
+        classify("http://www.omg.org/spec/BPMN/20100524/MODEL") == "bpmn_model"
+        and classify("http://www.omg.org/spec/BPMN/20100524/MODEL/") == "other"
+        and classify("http://resilient.ibm.com/bpmn") == "vendor_ibm"
+        and classify("http://ibm.com.acme.example/x") == "other"
+        and classify("urn:acme:bpmn") == "other"
+        and classify("") == "other",
+        "p2-04 R5: namespaces are recognised exactly or by the vendor host, else other",
+    )
+    forms = probe_p2_04._form_of
+    check(
+        (
+            forms(4242),
+            forms(KEY_ID),
+            forms("4242"),
+            forms("fn_x"),
+            forms({"id": 1}),
+            forms([1]),
+            forms(None),
+            forms(True),
+        )
+        == (
+            "integer",
+            "uuid_shaped_string",
+            "digits_string",
+            "string",
+            "object",
+            "array",
+            "null",
+            "bool",
+        ),
+        "p2-04 R5: a reference value is reported by its form and never by its content",
+    )
+
+    # The client it uses refuses every other method on the workflow paths.
+    for method in ("POST", "PUT", "PATCH", "DELETE"):
+        for path in (wf, f"{wf}/{WF_ID}"):
+            client = new_client(lambda _: httpx.Response(200, json={}))
+            try:
+                client.request(method, path, "t", json_body={})
+                refused = False
+            except ProbePolicyError:
+                refused = True
+            client.close()
+            check(refused, f"p2-04: {method} on a workflow path is refused by the client it uses")
+
+
 def main() -> int:
     tests = (test_policy, test_verifier, test_shape, test_full_run, test_smoke,
              test_dotenv_encodings,
@@ -1732,7 +2325,7 @@ def main() -> int:
              test_experiment_stops, test_experiment_documented_source,
              test_experiment_client_policy,
              test_00b_threading, test_shape_request, test_00b_swagger_grep,
-             test_00b_docs, test_p2_03)  # fmt: skip
+             test_00b_docs, test_p2_03, test_p2_04)  # fmt: skip
     for test in tests:
         test()
     print(f"\n{'OK' if not failures else 'FAILED'}: {len(failures)} failure(s)")

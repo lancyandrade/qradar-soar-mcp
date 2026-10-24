@@ -1,0 +1,103 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "data_type": "WorkflowDTO",
+    "enum_values": [],
+    "properties": {
+      "actions": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "array of PartialActionDTO"
+      },
+      "content": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "WorkflowContentDTO"
+      },
+      "content_version": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "number"
+      },
+      "creator_id": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "ObjectHandle"
+      },
+      "description": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "string"
+      },
+      "export_key": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "string"
+      },
+      "last_modified_by": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "ObjectHandle"
+      },
+      "last_modified_time": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "number"
+      },
+      "name": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "string"
+      },
+      "object_type": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "ObjectHandle"
+      },
+      "programmatic_name": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "string"
+      },
+      "tags": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": false,
+        "type": "array of TagRefDTO"
+      },
+      "uuid": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "string"
+      },
+      "workflow_id": {
+        "constraints": "",
+        "documented_create_only": false,
+        "documented_read_only": true,
+        "type": "number"
+      }
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "property names, JSON types and flags from the appliance's API reference",
+  "_question": "docs",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-04",
+  "shape": null
+}

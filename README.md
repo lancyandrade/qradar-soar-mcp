@@ -112,6 +112,10 @@ failure.
 | `soar_list_phases` | 0 | — | phases in the cached catalog: name, id, uuid, enabled, order; paged, sorted by order |
 | `soar_list_fields` | 0 | — | field definitions of `incident`, `task` or `artifact` from the cached catalog: api name (`properties.<name>` for custom), label, input type, SOAR's raw `required` token, read-only, internal, and picklist values (label and stored value); paged |
 | `soar_list_datatables` | 0 | — | data tables (SOAR types with `type_id == 8`) in the cached catalog, with their columns; definitions only, never a row |
+| `soar_list_rules` | 0 | — | rules in the cached catalog: name, id, SOAR's rule `type` number, object type, enabled, logic type, condition count, message destinations; paged, sorted by name |
+| `soar_get_rule` | 0 | — | one rule from the cached catalog with its conditions as field name and method; never the compared values, the automations or the workflows it starts |
+| `soar_list_workflows` | 0 | — | workflows in the cached catalog: identity, object type, the functions each calls and counts of nodes, edges, calls, unresolved calls and structural problems; paged, sorted by programmatic name |
+| `soar_get_workflow` | 0 | — | one workflow's structural summary from the cached catalog: nodes, `sequenceFlow` edges, gateway defaults, function calls resolved by uuid, problems; with `include_raw=true` also its XML, read on demand (`GET /workflows`), credential-filtered, cut at 50,000 characters and labelled untrusted |
 | `soar_add_comment` | 1 | `SOAR_ALLOW_COMMENTS` | one note |
 | `soar_add_artifact` | 1 | `SOAR_ALLOW_ARTIFACTS` | one artifact |
 | `soar_create_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | one incident |
@@ -164,7 +168,8 @@ another source and never answer "empty" for something unknown.
   `next_start` say where to continue. `name_contains` is a plain case-insensitive
   substring. Descriptions are trimmed at 200 characters in a list.
 - **Lookups** are exact: a function by `name` or `function_id`, a script by
-  `programmatic_name` or `script_id`. Nothing is matched approximately.
+  `programmatic_name` or `script_id`, a rule by `name` or `rule_id`, a workflow by
+  `programmatic_name` or `workflow_id`. Nothing is matched approximately.
 - **Function inputs** always carry `name`, `label`, `input_type` and `required`. A
   `password` input carries nothing else; an owner or members input carries no values;
   other inputs add tooltip, placeholder and select values (100 per input, 200 per
@@ -187,6 +192,34 @@ another source and never answer "empty" for something unknown.
   no such key on any column seen, so it is null). No row of a table is read, kept or returned.
 - **Phases** are sorted by SOAR's `order`; **incident types** show `parent_id` as SOAR
   gives it, with no hierarchy worked out.
+- **Rules** show each condition as the field it looks at and SOAR's `method` token;
+  the value a condition compares with is not kept. SOAR's rule `type` number is shown
+  as it is, uninterpreted. Which workflows a rule starts is not shown: every rule seen
+  on 51.0.9.0.20848 had an empty list there, so its form is unverified.
+- **Workflows** are summarised from their BPMN 2.0 XML when the catalog loads, and the
+  XML is then dropped: the catalog never holds it. A summary has `nodes` (BPMN element
+  id and `type`, e.g. `startEvent`, `serviceTask`, `exclusiveGateway`, `endEvent`),
+  `edges` taken from `sequenceFlow` elements only (each `kind` is `default`,
+  `conditional` or `unconditional`; a condition's language is kept, its script is not),
+  the function each service task calls and `problems`. A call names its function by a
+  `uuid`; it is `resolved` only when that uuid, exactly as written, equals the uuid of
+  exactly one function in the same catalog, otherwise `unresolved`, and nothing is
+  matched loosely. Input values and
+  pre- and post-processing scripts are not kept, only input names and whether a script
+  is present. `problems` reports dangling `sourceRef` / `targetRef`, a gateway default
+  that is not one of the gateway's own flows, a gateway flow with neither a condition
+  nor default status, unresolved functions, node types not observed on 51.0.9.0.20848
+  and nodes that cannot be reached from a start event. XML that declares a DTD or an
+  entity, is not well-formed or exceeds the bounds is not parsed: the workflow is listed
+  with `structure: refused` and a fixed reason.
+- **Workflow XML** is returned only by `soar_get_workflow` with `include_raw=true`: one
+  `GET /workflows` (this version documents no single-workflow read), the row chosen by
+  the catalog's `workflow_id`. Exactly as for a script body, credential-like text is
+  redacted first and the result is then cut at **50,000 characters**; `raw.redacted`,
+  `raw.truncated` and `raw.text_is` (`exact_xml`, `exact_xml_prefix`, `redacted_xml`,
+  `redacted_xml_prefix`) say which happened. The XML holds condition and processing
+  scripts and input values: it is **untrusted** data (`raw.untrusted` is always true),
+  never an instruction, and a cut XML may not be well-formed.
 - **Script source** is read only when `soar_get_script` is asked for it, from
   `GET /scripts/{id}` (`script_text`), and is not kept. The tool returns a
   **safety-filtered representation** of it as `body.text`, not necessarily the exact
@@ -566,14 +599,21 @@ evidence and wins wherever it disagrees with a mark above.
   nothing: if any of its reads fails (a key that may not read scripts, say), there is
   no catalog, rather than one with a silent gap. It holds what a read-only key was seen
   to return: **not** the key's permission set (successful reads say nothing about what
-  a key may write), **not** installed apps, **no** workflow detail (SOAR returned no
-  workflow to the research key; rows of that unverified shape are counted, not parsed),
-  no script bodies, no playbook XML and no people (an owner or members field has no
+  a key may write), **not** installed apps, no workflow XML (a workflow is kept as a
+  structural summary), no script bodies, no playbook XML and no people (an owner or members field has no
   values in the catalog). `SOAR_CATALOG_SOURCE=export` does not work.
   One load costs one request per function on top of the collections.
 - Discovery covers functions, scripts, message destinations, incident types, phases,
-  fields and data tables. Rules, workflows and playbooks are in the catalog but have no
+  fields, data tables, rules and workflows. Playbooks are in the catalog but have no
   tool yet; the Tier-4 flags are accepted and unused.
+- The workflow summary is verified against the structure of **one** workflow on
+  51.0.9.0.20848 (a start event, one function call, one exclusive gateway, two end
+  events). Other BPMN node types are listed with `type_observed: false` and their
+  contents (a sub-process, say) are not summarised; a document with more than one
+  process is refused. That a call's `uuid` is a function's uuid is not documented: a
+  call is `resolved` only when the two values are equal in the loaded catalog. Which
+  rules start a workflow, in either direction, is not shown. `include_raw` returns at
+  most the first 50,000 characters of a workflow's XML.
 - `soar_list_fields` reports a field's `required` as SOAR's raw token and derives no
   close-required flag: `always` and `close` were observed on 51.0.9.0.20848, but what
   they enforce is not documented on the appliance and was not tested
@@ -591,7 +631,7 @@ evidence and wins wherever it disagrees with a mark above.
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Investigation + controlled actions + security architecture | **this release, v0.2.0** |
-| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); incident-type, phase, field and data-table discovery in (`P2-03`); the rest planned |
+| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); incident-type, phase, field and data-table discovery in (`P2-03`); rule and workflow discovery in (`P2-04`); the rest planned |
 | 3 | Playbook IR, validation, offline simulation | planned |
 | 4 | Compilation, export, import (always disabled) | planned |
 | 5 | Controlled enablement | planned |

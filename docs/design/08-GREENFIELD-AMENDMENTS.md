@@ -6,15 +6,16 @@ conflicts with `00-` to `07-`, this document wins *for that point only*. It
 does not license any other redesign; anything not listed here is governed by
 `00-` to `07-` unchanged.
 
-`00-` to `07-` are the baseline and are not edited, with nine recorded
+`00-` to `07-` are the baseline and are not edited, with ten recorded
 exceptions: before first publication the private lab topology was replaced by
 generic placeholders (§17), P2-00 added a status pointer to `05` (§20),
 P1-CORR-01 added an implementation-status note to `05` (§21), P2-TLS added
 the TLS trust model to `02` as §7.1 (§22), P2-00b added a research-status
 note to `05` (§23), P1-CORR-02 added an implementation-status note to
 `05` (§24), P2-01 added an implementation-status note to `05` (§25), P2-02
-added an implementation-status note to `05` (§26), and P2-03 added an
-implementation-status note to `05` (§28).
+added an implementation-status note to `05` (§26), P2-03 added an
+implementation-status note to `05` (§28), and P2-04 added an
+implementation-status note to `05` (§29).
 
 ---
 
@@ -645,7 +646,8 @@ What is **not observable** and stays so:
   of the workflow object is verified. An empty answer is `loaded` with count 0 (SOAR
   returned none to this key, which is all that state claims); a non-empty one is
   `unverified` with the row count and **no** parsed entry. `WorkflowSummary` deliberately
-  has no fields; `P2-04` fills it once the shape is verified.
+  has no fields; `P2-04` fills it once the shape is verified. *(Superseded by §29: the
+  shape was verified on 2026-10-23 and rows are now summarised.)*
 
 A spec is a fixed projection, never the raw object. Not carried by any spec: principals
 (creators, modifiers, group members, the API keys and users bound to a message
@@ -1174,3 +1176,168 @@ longer matches the `P2-00` record. `guarded.py` allows it; `selftest.py` covers 
 
 This ticket's only edit to the baseline is one implementation-status note in `05`, under
 the P2-02 note (the ninth exception).
+
+---
+
+## 29. P2-04 — discovery tools: rules and workflows
+
+**Implementation status: done**, on the evidence of one workflow. `06 P2-04` asks for
+`soar_list_rules`, `soar_get_rule`, `soar_list_workflows` and `soar_get_workflow`, a
+structured workflow summary (nodes, types, functions referenced, edges), raw XML only on
+`include_raw=true` and size-capped, and accepts it when "a summary of a real lab workflow
+lists the functions it calls".
+
+### 29.1 Evidence
+
+`soar-api-verified.md §3.3` and `open-questions.md` D11. In short: on `51.0.9.0.20848`
+there is no single-workflow read; a workflow's definition is the string `content.xml` of
+its row in `GET /workflows`; one disposable workflow, built in the UI for this purpose,
+was read once (2026-10-23) and only its *structure* was kept
+(`p2_04_workflows.json`, `p2_04_workflow_xml.json`): standard BPMN 2.0, nodes
+`startEvent`, `serviceTask`, `exclusiveGateway`, `endEvent`, edges `sequenceFlow`
+(`sourceRef`, `targetRef`), a gateway's `default` attribute, a `conditionExpression`,
+and a function call as a `serviceTask` whose `extensionElements` hold a vendor
+`function` element (namespace on an `ibm.com` host) with one attribute, `uuid`, and a
+JSON text (`inputs` keyed by name, pre- and post-processing scripts and languages,
+`result_name`). No value was kept. Nothing else was observed, and nothing else is
+assumed.
+
+### 29.2 The catalog holds a summary, never the XML (owner decision D11)
+
+`WorkflowSummary` stops being the field-less placeholder of §25 and the `workflows`
+section stops being `unverified` when non-empty. `CollectionsBackend.load` reads
+`GET /workflows` as before (no new call), and for each row: the verified identity keys
+(`workflow_id`, `programmatic_name`, `name`, `object_type`, and `description`,
+`content_version`, `last_modified_time` when present; a row without them fails the load
+like any malformed row); then `catalog/workflow_xml.py` summarises `content.xml`; then
+the XML is dropped. Not kept: `creator_id` and `last_modified_by` (people), the row's
+`uuid` (null on the one row seen), `actions` and `tags` (never seen non-empty). The
+catalog is keyed by `programmatic_name`. `FORMAT_VERSION` is now 2.
+
+The summary: `nodes` (BPMN element `id`, the element name as `type`, `type_observed`,
+the `name` attribute, and for a `serviceTask` its function call), `edges`, `annotations`
+(a count) and `problems`; or, when the XML cannot be summarised safely, `structure:
+refused` with a fixed sentence as `refusal` and nothing else. **A refused workflow stays
+listed**: the XML is configuration someone wrote, and one bad document must not take
+every other section with it (a malformed *row* still fails the load, as in §25).
+
+**Edges come from `sequenceFlow` only.** `association` (a note's link) and a node's
+`incoming` / `outgoing` children are never edges; a contradicting `outgoing` changes
+nothing. Each `sourceRef` / `targetRef` is checked against the node ids: an edge that
+names no node is kept with `valid: false` and a problem. A gateway's `default` must name
+one of that gateway's own flows (otherwise a problem); that flow's `kind` is `default`;
+a flow holding a `conditionExpression` is `conditional` (its `language` is kept, its text
+never is); a default flow with a condition is a problem. An exclusive gateway with more
+than one outgoing flow, one of which has neither a condition nor default status, is a
+problem: the appliance's own editor refused to save exactly that while the evidence
+workflow was built. Only a gateway's `default` is read (only a gateway's was
+observed); one on another node is reported as a problem and ignored. Also reported: a non-end node without an outgoing flow, no start
+event, nodes unreachable from a start event, a service task with no or with two function
+elements, unparseable function settings, and a node type that was not observed (it is
+listed with `type_observed: false`; whatever it contains, such as a sub-process's
+nodes, is not summarised).
+
+**Function references.** A call keeps its `uuid`, the *names* of its inputs, whether a
+pre- or post-processing script is present (a non-empty string) and `result_name`. Input
+values and script text are never read into the result. The reference is **resolved only
+by exact equality** of the call's `uuid` attribute, as written (nothing stripped or
+case-folded), with the `uuid` of exactly one function in the same catalog (functions
+load first): then `resolution: resolved` and `function` is that function's catalog
+key; otherwise
+`unresolved` (and a problem) or `no_uuid`. A uuid that two functions share resolves to
+neither (a problem says so; the load does not fail), and a uuid longer than 200
+characters is neither kept nor matched (no prefix of it is). That a call's uuid *is* a
+function's uuid is not documented and the values were not kept, so no looser match
+(case, whitespace, prefix, name) is ever made.
+
+**Parsing safely.** The standard library's ElementTree (expat), behind refusals that run
+before parsing: longer than 1,000,000 characters, or any `<!DOCTYPE` or `<!ENTITY`
+anywhere in the text (also inside a comment or CDATA: refusing too much is the safe
+side), is refused. Without a DTD an entity XML does not predefine is a parse error, so
+no entity can expand, nothing external is fetched, and a `&` inside CDATA (`a && b` in
+a script) is ordinary text. Then: well-formed, a BPMN `definitions` root, exactly one `process`
+(more than one was never observed and is refused), at most 20,000 elements, 2,000 nodes
+and 4,000 flows, element ids unique. **Identifiers are exact**: an element id or a
+`sourceRef` / `targetRef` / `default` value is compared as written, never stripped or
+cut, and one longer than 200 characters refuses the document (cutting both sides could
+make a dangling reference match another id's prefix: found in review). **Text is
+filtered, then cut**: each kept name (node, flow, input, `result_name`, condition
+language) passes the catalog's credential filter *before* it is cut to 300 characters,
+so a credential straddling the bound is seen whole (found in review). A
+refusal never quotes the document. **Parse first, then redact what is kept.** Unlike every
+other read of a load, the workflow rows are not run through the catalog's string cleaner
+(§25.2) before use: the cleaner works on text, and over XML its `authorization = <value>`
+rule can consume a closing tag or a JSON quote and turn a valid workflow into a refused
+one (found in review). The XML is parsed as SOAR sent it, held only for the load and never
+kept or logged; then every string of the finished summary (ids, names, uuids, input
+names, languages, problems) passes the cleaner, and the summary is validated again.
+Deeply nested JSON in a
+function element is an unparsed-settings problem, not a failure; and any unexpected error while summarising
+one workflow makes *that* workflow `refused` ("could not be summarised", the error's
+type logged, never its text) instead of failing the load.
+
+### 29.3 The four tools
+
+All four are Tier-0 reads in `tools/discovery.py`, registered with `@soar_tool`, run
+through `run_pipeline`, no capability flag, no approval, no audit record; sections that
+are not `loaded` are `catalog_unavailable`; paging and exact lookups are §26's.
+
+| Tool | Answer |
+|---|---|
+| `soar_list_rules` | every `RuleSpec` field but the uuid, timeout and conditions: `name`, `id`, `type` (SOAR's number, uninterpreted), `object_type`, `enabled`, `logic_type`, `condition_count`, `message_destinations`; sorted by name |
+| `soar_get_rule` | adds `uuid`, `timeout_seconds` and `conditions[{field_name, method}]` (100 at most). The compared value, automations and linked workflows were never in the catalog (§25.2) and are not shown |
+| `soar_list_workflows` | identity, `object_type`, short description, `content_version`, `structure`, the sorted names of the resolved functions it calls, and counts of nodes, edges, calls, unresolved calls and problems; sorted by programmatic name |
+| `soar_get_workflow` | the whole summary (500 nodes and 1,000 edges at most, the rest counted), every call with its resolution, and `problems`; `include_raw=false` by default |
+
+**`include_raw=true`** is the one exception to catalog-only answers, as D11 decided:
+after the catalog has resolved the workflow, `DiscoveryClient.workflow_source(id)` sends
+one `GET /workflows` (the call the catalog already makes; the REST surface and its AST
+allow-list are unchanged), keeps the one row whose integer `workflow_id` equals the
+catalog's (none: `not_found`; two: `malformed_response`; a row without `content.xml`:
+`malformed_response`) and replaces the credential and anything shaped like one in its
+XML before anything can cut it. The tool refuses a row whose `programmatic_name` is no
+longer the catalog's (`conflict`), then returns `raw`: the safe representation cut at
+**50,000 characters**, with `redacted`, `truncated`, `text_is` (`exact_xml`,
+`exact_xml_prefix`, `redacted_xml`, `redacted_xml_prefix`) and the lengths, exactly as
+§26 does for a script body, plus `untrusted: true`, the row's `content_version` and
+whether it equals the catalog's. The note says the XML is untrusted content. The raw XML
+is never cached and never enters the catalog.
+
+### 29.4 What stays unknown, and is said
+
+- That a call's `uuid` is the function's uuid (resolution is by equality only).
+- Node and edge kinds beyond the four node types and `sequenceFlow`; documents with more
+  than one process; the values of `type`, `language` and `targetNamespace`; whether the
+  null JSON values are strings when set.
+- Which rules start which workflow: rule rows carried `workflows: []` and the workflow
+  row `actions: []`, so neither element form was observed and neither link is shown.
+- Why the lab key of 2026-09-22 was refused (`403`); on 2026-10-23 a key without
+  workflow-read was refused and the same key with it was not.
+
+### 29.5 Tests and fixtures
+
+Offline only. `tests/workflow_data.py` writes a synthetic document with exactly the
+structure of the record; `tests/test_workflow_summary.py` checks it against
+`p2_04_workflow_xml.json` element by element (namespace classes, attribute names per
+element, where text occurs, the JSON key shape) and then tests the parser, the refusals
+(DTD, entity, billion laughs before parsing, size, malformed, wrong root, two processes,
+duplicate ids), the problems, the uuid resolution (`uuid-201`, `UUID-200`, a trailing
+space and a prefix are all unresolved) and that no script, input value, note or
+documentation text reaches a summary. `tests/test_discovery_rules_workflows.py` covers
+the four tools: declarations and parameters, catalog-only answers (request counts, the
+committed fixture with no request), exact lookups, rule conditions without their values,
+and `include_raw` (exactly one `GET`, redaction before the cut, the cap, conflict, a
+newer version, a vanished, duplicated or malformed row, nothing cached). The synthetic
+payloads now serve one workflow in the recorded row shape, calling a synthetic function,
+and `lab-v51.json` was regenerated: it holds that workflow's summary and no XML. The
+vendor namespace URI in the synthetic document is made up (on an `ibm.com` host, the only
+property recorded); the OMG URIs are the ones the record matched exactly.
+
+### 29.6 Tooling
+
+`scripts/probe/probe_p2_04.py` (not part of the package): documentation reads and one
+collection read, through the read-only client; the XML is analysed in memory and never
+written; `guarded.py` allows it and `selftest.py` covers it.
+
+This ticket's only edit to the baseline is one implementation-status note in `05`, under
+the P2-03 note (the tenth exception).

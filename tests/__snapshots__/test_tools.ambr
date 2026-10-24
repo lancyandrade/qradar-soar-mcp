@@ -507,6 +507,47 @@
       }),
       'tier': 0,
     }),
+    'soar_get_rule': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_get_rule',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'name': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Name',
+          }),
+          'rule_id': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Rule Id',
+          }),
+        }),
+        'title': 'soar_get_ruleArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
     'soar_get_script': dict({
       'annotations': dict({
         'destructive_hint': False,
@@ -549,6 +590,52 @@
           }),
         }),
         'title': 'soar_get_scriptArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_get_workflow': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_get_workflow',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'include_raw': dict({
+            'default': False,
+            'title': 'Include Raw',
+            'type': 'boolean',
+          }),
+          'programmatic_name': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Programmatic Name',
+          }),
+          'workflow_id': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Workflow Id',
+          }),
+        }),
+        'title': 'soar_get_workflowArguments',
         'type': 'object',
       }),
       'tier': 0,
@@ -978,6 +1065,52 @@
       }),
       'tier': 0,
     }),
+    'soar_list_rules': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_rules',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'length': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Length',
+          }),
+          'name_contains': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Name Contains',
+          }),
+          'start': dict({
+            'default': 0,
+            'title': 'Start',
+            'type': 'integer',
+          }),
+        }),
+        'title': 'soar_list_rulesArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
     'soar_list_scripts': dict({
       'annotations': dict({
         'destructive_hint': False,
@@ -1061,6 +1194,52 @@
         'properties': dict({
         }),
         'title': 'soar_list_usersArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
+    'soar_list_workflows': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_list_workflows',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'length': dict({
+            'anyOf': list([
+              dict({
+                'type': 'integer',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Length',
+          }),
+          'name_contains': dict({
+            'anyOf': list([
+              dict({
+                'type': 'string',
+              }),
+              dict({
+                'type': 'null',
+              }),
+            ]),
+            'default': None,
+            'title': 'Name Contains',
+          }),
+          'start': dict({
+            'default': 0,
+            'title': 'Start',
+            'type': 'integer',
+          }),
+        }),
+        'title': 'soar_list_workflowsArguments',
         'type': 'object',
       }),
       'tier': 0,

@@ -1,0 +1,83 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "object_type": [
+      "incident"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "documented_and_observed": [
+      "actions",
+      "content",
+      "content_version",
+      "creator_id",
+      "description",
+      "last_modified_by",
+      "last_modified_time",
+      "name",
+      "object_type",
+      "programmatic_name",
+      "tags",
+      "uuid",
+      "workflow_id"
+    ],
+    "documented_only": [
+      "export_key"
+    ],
+    "observed_only": [],
+    "row_keys": [
+      "actions",
+      "content",
+      "content_version",
+      "creator_id",
+      "description",
+      "last_modified_by",
+      "last_modified_time",
+      "name",
+      "object_type",
+      "programmatic_name",
+      "tags",
+      "uuid",
+      "workflow_id"
+    ],
+    "rows": "1-9"
+  },
+  "_fixture": "verified-shape",
+  "_note": "observed, read-only: the workflow collection; key names, types and allow-listed tokens of its rows, never a value; the row keys against the documented WorkflowDTO",
+  "_question": "05§2",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/workflows",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-04",
+  "shape": {
+    "entities": [
+      {
+        "actions": [],
+        "content": {
+          "version": "int",
+          "workflow_id": "str",
+          "xml": "str"
+        },
+        "content_version": "int",
+        "creator_id": "str",
+        "description": "str",
+        "last_modified_by": "str",
+        "last_modified_time": "int",
+        "name": "str",
+        "object_type": "str",
+        "programmatic_name": "str",
+        "tags": [],
+        "uuid": "null",
+        "workflow_id": "int"
+      }
+    ]
+  }
+}

@@ -27,6 +27,9 @@ OPTIONAL = (
     # P2-00b: a disposable task the owner designated, inside P2_PROBE_INCIDENT_ID.
     # Used in memory only, like the incident id.
     "P2_PROBE_TASK_ID",
+    # P2-04: the one disposable workflow the owner designated for the research read.
+    # Selects a collection row in memory; never printed or recorded.
+    "P2_PROBE_WORKFLOW_ID",
 )
 
 
@@ -66,6 +69,7 @@ class ProbeEnv:
     source: str = "environment"
     soar_ca_bundle: str = field(default="", repr=False)
     task_id: str = field(default="", repr=False)
+    workflow_id: str = field(default="", repr=False)
 
     @property
     def host(self) -> str:
@@ -93,6 +97,8 @@ class ProbeEnv:
             out["chosen incident id"] = self.incident_id
         if self.task_id:
             out["chosen task id"] = self.task_id
+        if self.workflow_id:
+            out["chosen workflow id"] = self.workflow_id
         if self.ca_bundle:
             out["ca bundle path"] = self.ca_bundle
             out["ca bundle name"] = Path(self.ca_bundle).name
@@ -134,6 +140,7 @@ def load_env(*, required: bool = True) -> ProbeEnv:
         source=source,
         soar_ca_bundle=merged.get("SOAR_CA_BUNDLE") or "",
         task_id=(merged.get("P2_PROBE_TASK_ID") or "").strip(),
+        workflow_id=(merged.get("P2_PROBE_WORKFLOW_ID") or "").strip(),
     )
 
 

@@ -39,11 +39,14 @@ P2_03_TOOLS = [
     "soar_list_datatables",
     "soar_list_fields",
 ]
-PHASE_TWO_TOOLS_NOT_YET_IMPLEMENTED = {
+# P2-04 (08 §29) added these four; tests/test_discovery_rules_workflows.py covers them.
+P2_04_TOOLS = [
     "soar_list_rules",
     "soar_get_rule",
     "soar_list_workflows",
     "soar_get_workflow",
+]
+PHASE_TWO_TOOLS_NOT_YET_IMPLEMENTED = {
     "soar_list_playbooks",
     "soar_get_playbook",
 }
@@ -64,11 +67,11 @@ def test_it_is_a_tier_0_read_with_no_capability_and_no_mutation():
     assert list(inspect.signature(spec.func).parameters) == ["rt"]  # nothing to pass in
 
 
-def test_the_discovery_module_holds_the_catalog_tool_and_those_of_p2_02_and_p2_03_only():
+def test_the_discovery_module_holds_the_catalog_tool_and_those_of_p2_02_to_p2_04_only():
     assert not (set(TOOL_REGISTRY) & PHASE_TWO_TOOLS_NOT_YET_IMPLEMENTED)
     tree = ast.parse(Path(discovery_tools.__file__).read_text(encoding="utf-8"))
     functions = [n.name for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef)]
-    assert functions == [TOOL, *P2_02_TOOLS, *P2_03_TOOLS]
+    assert functions == [TOOL, *P2_02_TOOLS, *P2_03_TOOLS, *P2_04_TOOLS]
 
 
 def test_there_is_no_capability_flag_for_catalog_reads():
@@ -107,7 +110,7 @@ async def test_it_returns_compact_metadata_and_counts(fake: FakeSoar, tmp_path: 
         "datatables": 2,
         "playbooks": 2,
         "rules": 2,
-        "workflows": 0,
+        "workflows": 1,
         "groups": 2,
     }
     assert set(data["not_loaded"]) == {"api_key_permissions", "installed_apps"}
@@ -198,14 +201,15 @@ def test_the_tool_body_reaches_soar_only_through_the_runtime():
         "qradar_soar_mcp.catalog.models"
     ]
     assert "httpx" not in source
-    # P2-02: one tool reads SOAR itself, for the script body the catalog does not hold.
+    # P2-02 and P2-04: two tools read SOAR themselves, for the script body and the
+    # workflow XML the catalog does not hold.
     reaches_client = [
         fn.name
         for fn in ast.walk(tree)
         if isinstance(fn, ast.AsyncFunctionDef | ast.FunctionDef)
         and any(isinstance(n, ast.Attribute) and n.attr == "require_client" for n in ast.walk(fn))
     ]
-    assert reaches_client == ["soar_get_script"]
+    assert reaches_client == ["soar_get_script", "soar_get_workflow"]
 
 
 def test_nothing_but_the_runtime_builds_a_catalog_service():

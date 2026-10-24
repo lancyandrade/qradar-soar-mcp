@@ -16,6 +16,7 @@ said in ``Catalog.sections``; it is never filled in.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
@@ -23,6 +24,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import ValidationError
 
+from qradar_soar_mcp.catalog import workflow_xml
 from qradar_soar_mcp.catalog.models import (
     SECRET_INPUT_TYPES,
     VALUELESS_INPUT_TYPES,
@@ -44,6 +46,10 @@ from qradar_soar_mcp.catalog.models import (
     SectionStatus,
     SelectValue,
     TypeSpec,
+    WorkflowEdge,
+    WorkflowFunctionCall,
+    WorkflowNode,
+    WorkflowSummary,
 )
 from qradar_soar_mcp.client.discovery import FIELD_TYPES
 from qradar_soar_mcp.errors import SoarCatalogUnavailableError, SoarMalformedResponseError
@@ -79,10 +85,8 @@ NO_PERMISSION_SOURCE = (
     "successful reads do not show what a key may write"
 )
 NO_APP_SOURCE = "no verified read reports installed apps or their versions"
-WORKFLOW_SHAPE_UNVERIFIED = (
-    "the workflow object is unverified on 51.0.9.0.20848 (SOAR returned none to the "
-    "research key); the rows SOAR returned were counted and not parsed"
-)
+MAX_WORKFLOWS = 1_000
+SUMMARY_FAILED = "the workflow XML could not be summarised"
 
 Row = Mapping[str, Any]
 
@@ -355,6 +359,123 @@ def parse_rule(row: Row) -> RuleSpec:
     )
 
 
+def parse_workflow(
+    row: Row,
+    function_by_uuid: Mapping[str, str],
+    ambiguous_uuids: frozenset[str] = frozenset(),
+    clean: Callable[[str], str] | None = None,
+) -> WorkflowSummary:
+    """A row of ``GET /workflows`` (P2-04; 08 §29): its identity, and a structural summary
+    of ``content.xml``, the workflow's definition. The XML is not kept.
+
+    The row's keys are verified (``p2_04_workflows.json``); a row without them fails the
+    load like any malformed row. The XML is configuration someone wrote: one that cannot
+    be summarised safely keeps the workflow in the catalog as ``refused``, with a fixed
+    reason, rather than failing every other section. ``function_by_uuid`` maps the uuid of
+    each function of this catalog to its catalog key; a uuid in ``ambiguous_uuids`` is
+    shared by two functions and resolves to neither. ``clean`` is applied to each kept
+    text value before it is cut (``workflow_xml.summarise``)."""
+    section = "workflows"
+    content = row.get("content")
+    if not isinstance(content, Mapping):
+        raise _malformed(section, "'content' is missing or not an object")
+    xml = _req(content, "xml", str, section)
+    identity: dict[str, Any] = {
+        "workflow_id": _req(row, "workflow_id", int, section),
+        "programmatic_name": _req(row, "programmatic_name", str, section),
+        "name": _req(row, "name", str, section),
+        "description": _opt_str(row, "description"),
+        "object_type": _req(row, "object_type", str, section),
+        "content_version": _opt_int(row, "content_version"),
+        "last_modified_time": _opt_int(row, "last_modified_time"),
+    }
+    try:
+        graph = workflow_xml.summarise(xml, clean) if clean else workflow_xml.summarise(xml)
+    except workflow_xml.WorkflowXmlRefusedError as refused:
+        return WorkflowSummary(**identity, structure="refused", refusal=refused.reason)
+    except Exception as exc:  # one workflow never fails the whole load
+        # Type only: nothing of the document is put into a log line.
+        logger.warning("a workflow could not be summarised (%s)", type(exc).__name__)
+        return WorkflowSummary(**identity, structure="refused", refusal=SUMMARY_FAILED)
+    nodes: list[WorkflowNode] = []
+    for node in graph.nodes:
+        call = node.function
+        nodes.append(
+            WorkflowNode(
+                id=node.id,
+                type=node.type,
+                type_observed=node.type in workflow_xml.OBSERVED_NODE_TYPES,
+                name=node.name,
+                function=None
+                if call is None
+                else _function_call(call, function_by_uuid, ambiguous_uuids),
+            )
+        )
+    problems = list(graph.problems)
+    for parsed, summary in zip(graph.nodes, nodes, strict=True):
+        resolved = summary.function
+        if resolved is None or resolved.resolution != "unresolved" or resolved.uuid is None:
+            continue
+        if parsed.function is not None and not parsed.function.uuid_matchable:
+            continue  # the parser has said why it is not matched
+        if resolved.uuid in ambiguous_uuids:
+            problems.append(
+                f"service task {summary.id}: its function uuid is shared by more than one "
+                "function in this catalog"
+            )
+        else:
+            problems.append(
+                f"service task {summary.id}: its function uuid names no function in this catalog"
+            )
+    return WorkflowSummary(
+        **identity,
+        structure="parsed",
+        nodes=tuple(nodes),
+        edges=tuple(
+            WorkflowEdge(
+                id=edge.id,
+                source=edge.source,
+                target=edge.target,
+                name=edge.name,
+                kind="default"
+                if edge.default
+                else "conditional"
+                if edge.conditional
+                else "unconditional",
+                condition_language=edge.condition_language,
+                valid=edge.valid,
+            )
+            for edge in graph.edges
+        ),
+        annotations=graph.annotations,
+        problems=tuple(problems),
+    )
+
+
+def _function_call(
+    call: workflow_xml.FunctionCall,
+    function_by_uuid: Mapping[str, str],
+    ambiguous_uuids: frozenset[str],
+) -> WorkflowFunctionCall:
+    """Resolved by exact uuid equality with exactly one function of the same catalog, or
+    not at all. A uuid cut to the length bound, or shared by two functions, never is."""
+    name = (
+        function_by_uuid.get(call.uuid)
+        if call.uuid is not None and call.uuid_matchable and call.uuid not in ambiguous_uuids
+        else None
+    )
+    return WorkflowFunctionCall(
+        uuid=call.uuid,
+        resolution="no_uuid" if call.uuid is None else "resolved" if name else "unresolved",
+        function=name,
+        input_names=call.input_names,
+        has_pre_processing_script=call.has_pre_processing_script,
+        has_post_processing_script=call.has_post_processing_script,
+        result_name=call.result_name,
+        settings_parsed=call.payload_parsed,
+    )
+
+
 def parse_group(row: Row) -> GroupSpec:
     section = "groups"
     return GroupSpec(
@@ -388,6 +509,18 @@ class CollectionsBackend:
         if isinstance(value, dict):
             return {key: self._clean(item) for key, item in value.items()}
         return value
+
+    def _clean_text(self, value: str) -> str:
+        return redact(self._client.scrub(value) or "")
+
+    def _clean_summary(self, summary: WorkflowSummary) -> WorkflowSummary:
+        """The summary with every string it keeps cleaned, as every other section's
+        strings are at ingestion: ids, names, uuids, input names, languages, problems.
+        Done on the JSON form so that tuples are lists the cleaner walks, then validated
+        again as a whole."""
+        return WorkflowSummary.model_validate_json(
+            json.dumps(self._clean(summary.model_dump(mode="json")))
+        )
 
     async def _read[T](self, call: Awaitable[T]) -> T:
         return self._clean(await call)  # type: ignore[no-any-return]
@@ -447,16 +580,35 @@ class CollectionsBackend:
         loaded("rules", [(r.name, r) for r in map(parse_rule, await read(api.rules()))])
         loaded("groups", [(g.name, g) for g in map(parse_group, await read(api.groups()))])
 
-        workflows = await read(api.workflows())
-        sections["workflows"] = (
-            SectionStatus(
-                state=SectionState.UNVERIFIED,
-                count=len(workflows),
-                reason=WORKFLOW_SHAPE_UNVERIFIED,
-            )
-            if workflows
-            else SectionStatus(state=SectionState.LOADED, count=0)
+        # P2-04 (08 §29): each row is summarised and its XML dropped here, after the
+        # functions its calls are resolved against are known. Unlike every other read,
+        # the rows are NOT cleaned first: the redactor works on text, and run over XML
+        # it can eat a closing tag or a JSON quote after `authorization = <value>`,
+        # breaking a valid document. The XML is parsed as SOAR sent it (and never kept
+        # or logged); every string the summary keeps is cleaned instead (_clean_summary).
+        rows = await api.workflows()
+        if len(rows) > MAX_WORKFLOWS:
+            raise _malformed("workflows", f"more than {MAX_WORKFLOWS} workflows")
+        function_by_uuid: dict[str, str] = {}
+        shared: set[str] = set()
+        for key, spec in content["functions"].items():
+            if spec.uuid in function_by_uuid:
+                shared.add(spec.uuid)  # resolves to neither, said per call
+            function_by_uuid[spec.uuid] = key
+        ambiguous = frozenset(shared)
+        loaded(
+            "workflows",
+            [
+                (w.programmatic_name, w)
+                for w in (
+                    self._clean_summary(
+                        parse_workflow(r, function_by_uuid, ambiguous, self._clean_text)
+                    )
+                    for r in rows
+                )
+            ],
         )
+        del rows  # the XML is not kept beyond this point
         sections["api_key_permissions"] = SectionStatus(
             state=SectionState.NOT_OBSERVABLE, reason=NO_PERMISSION_SOURCE
         )

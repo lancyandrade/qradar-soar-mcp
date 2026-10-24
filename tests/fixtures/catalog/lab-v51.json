@@ -477,7 +477,7 @@
       ]
     }
   },
-  "format_version": 1,
+  "format_version": 2,
   "functions": {
     "function_200": {
       "description": "description-200",
@@ -802,12 +802,112 @@
       "state": "loaded"
     },
     "workflows": {
-      "count": 0,
+      "count": 1,
       "reason": null,
       "state": "loaded"
     }
   },
   "soar_version": "51.0.9.0.20848",
   "source": "collections",
-  "workflows": {}
+  "workflows": {
+    "workflow_1100": {
+      "annotations": 1,
+      "content_version": 1100,
+      "description": "description-1100",
+      "edges": [
+        {
+          "condition_language": null,
+          "id": "SequenceFlow_1",
+          "kind": "unconditional",
+          "name": "flow name 1",
+          "source": "StartEvent_1",
+          "target": "ServiceTask_1",
+          "valid": true
+        },
+        {
+          "condition_language": null,
+          "id": "SequenceFlow_2",
+          "kind": "unconditional",
+          "name": "flow name 2",
+          "source": "ServiceTask_1",
+          "target": "ExclusiveGateway_1",
+          "valid": true
+        },
+        {
+          "condition_language": null,
+          "id": "SequenceFlow_3",
+          "kind": "default",
+          "name": "flow name 3",
+          "source": "ExclusiveGateway_1",
+          "target": "EndEvent_1",
+          "valid": true
+        },
+        {
+          "condition_language": "language-1",
+          "id": "SequenceFlow_4",
+          "kind": "conditional",
+          "name": "flow name 4",
+          "source": "ExclusiveGateway_1",
+          "target": "EndEvent_2",
+          "valid": true
+        }
+      ],
+      "last_modified_time": 1100,
+      "name": "Workflow 1100",
+      "nodes": [
+        {
+          "function": null,
+          "id": "StartEvent_1",
+          "name": null,
+          "type": "startEvent",
+          "type_observed": true
+        },
+        {
+          "function": {
+            "function": "function_200",
+            "has_post_processing_script": false,
+            "has_pre_processing_script": false,
+            "input_names": [
+              "input_100"
+            ],
+            "resolution": "resolved",
+            "result_name": null,
+            "settings_parsed": true,
+            "uuid": "uuid-200"
+          },
+          "id": "ServiceTask_1",
+          "name": "synthetic call",
+          "type": "serviceTask",
+          "type_observed": true
+        },
+        {
+          "function": null,
+          "id": "ExclusiveGateway_1",
+          "name": null,
+          "type": "exclusiveGateway",
+          "type_observed": true
+        },
+        {
+          "function": null,
+          "id": "EndEvent_1",
+          "name": null,
+          "type": "endEvent",
+          "type_observed": true
+        },
+        {
+          "function": null,
+          "id": "EndEvent_2",
+          "name": null,
+          "type": "endEvent",
+          "type_observed": true
+        }
+      ],
+      "object_type": "incident",
+      "problems": [],
+      "programmatic_name": "workflow_1100",
+      "refusal": null,
+      "structure": "parsed",
+      "workflow_id": 1100
+    }
+  }
 }
