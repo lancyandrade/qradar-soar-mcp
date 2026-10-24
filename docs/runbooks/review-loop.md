@@ -31,7 +31,7 @@ The test job runs the offline suite with `SOAR_BASE_URL=""`, exactly like CI.
 
 | File | Role |
 |---|---|
-| [`.github/workflows/codex-review-relay.yml`](../../.github/workflows/codex-review-relay.yml) | Receives `pull_request_review` events. No permissions, no secrets; only finishes when the reviewer is the Codex bot. |
+| [`.github/workflows/codex-review-relay.yml`](../../.github/workflows/codex-review-relay.yml) | Receives `pull_request_review` events (finishes only when the reviewer is the Codex bot) and `pull_request_review_thread` resolve/unresolve events (same-repository PRs; they re-run the gate, never the fix loop). No permissions, no secrets. |
 | [`.github/workflows/review-loop.yml`](../../.github/workflows/review-loop.yml) | The fix loop: triage → claim → fix → verify → push → report. |
 | [`.github/workflows/review-gate.yml`](../../.github/workflows/review-gate.yml) | Evaluates and publishes `review-loop/merge-gate` on the PR head. |
 | [`automation/review_loop/`](../../automation/review_loop/) | Stdlib-only Python that makes every decision (identity, freshness, ledger, patch policy, gate). Read from the default branch at run time. |
@@ -241,8 +241,8 @@ its thread is resolved, by you or by Codex.
 
 ### 4.2 The gate (`review-gate.yml`)
 
-Re-evaluated on every PR update, label change, comment, CI completion and
-Codex review. It publishes `review-loop/merge-gate` on the head commit:
+Re-evaluated on every PR update, label change, owner or Codex comment, CI
+completion, Codex review, and review-thread resolve/unresolve. It publishes `review-loop/merge-gate` on the head commit:
 **success** only if all of these hold, otherwise **failure** with the reasons:
 
 1. The PR is eligible (§2).

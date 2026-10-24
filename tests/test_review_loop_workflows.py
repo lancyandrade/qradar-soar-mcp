@@ -281,3 +281,25 @@ def test_patch_checks_include_existing_file_modes():
     jobs = load("review-loop.yml")["jobs"]
     for name in ("verify", "push"):
         assert "--repo ." in yaml.safe_dump(jobs[name])
+
+
+def test_resolving_a_review_thread_re_evaluates_the_gate():
+    """Codex PR #12: thread resolution must reach the gate, or it stays red after the fix."""
+    relay = load("codex-review-relay.yml")
+    assert triggers(relay)["pull_request_review_thread"]["types"] == ["resolved", "unresolved"]
+    thread = relay["jobs"]["thread"]
+    assert "github.event_name == 'pull_request_review_thread'" in thread["if"]
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in thread["if"]
+    assert all("uses" not in s for s in thread["steps"])
+    assert "codex-review-relay" in triggers(load("review-gate.yml"))["workflow_run"]["workflows"]
+
+
+def test_thread_relays_never_start_a_fix():
+    loop = load("review-loop.yml")
+    relay_cond = (
+        "github.event.workflow_run.name == 'codex-review-relay' && "
+        "github.event.workflow_run.event == 'pull_request_review' && "
+        "github.event.workflow_run.conclusion == 'success'"
+    )
+    assert relay_cond in loop["jobs"]["triage"]["if"]
+    assert relay_cond in loop["concurrency"]["group"]

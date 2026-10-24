@@ -43,7 +43,7 @@ concurrency:
     review-loop-${{
       (
         (github.event_name == 'issue_comment' && github.event.comment.user.id == 199175422) ||
-        (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'codex-review-relay' && github.event.workflow_run.conclusion == 'success') ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'codex-review-relay' && github.event.workflow_run.event == 'pull_request_review' && github.event.workflow_run.conclusion == 'success') ||
         (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'ci' && github.event.workflow_run.conclusion == 'failure') ||
         github.event_name == 'workflow_dispatch'
       )
@@ -59,7 +59,7 @@ jobs:
     if: >-
       vars.REVIEW_LOOP_ENABLED == 'true' && (
         (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.comment.user.id == 199175422) ||
-        (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'codex-review-relay' && github.event.workflow_run.conclusion == 'success') ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'codex-review-relay' && github.event.workflow_run.event == 'pull_request_review' && github.event.workflow_run.conclusion == 'success') ||
         (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'ci' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'failure') ||
         github.event_name == 'workflow_dispatch'
       )

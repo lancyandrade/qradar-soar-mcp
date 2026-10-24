@@ -1,24 +1,37 @@
-# Relay for Codex pull-request reviews.
+# Relay for Codex pull-request reviews and review-thread changes.
 #
-# A pull_request_review run uses the workflow file from the PR's merge commit,
-# so it is never given secrets or write access here. It does nothing except
-# finish successfully when the reviewer is the Codex bot (numeric id), which
-# starts review-loop.yml and review-gate.yml through `workflow_run` - those run
-# from the default branch and re-read everything from the API.
+# These events run the workflow file from the PR's merge commit, so nothing
+# here gets secrets or write access. Each job does nothing except finish
+# successfully, which starts review-gate.yml (and, for Codex reviews,
+# review-loop.yml) through `workflow_run`. Those run from the default branch
+# and re-read everything from the API, so the payload is never trusted.
 name: codex-review-relay
 
 on:
   pull_request_review:
     types: [submitted]
+  # Resolving or reopening a Codex thread changes what the merge gate sees
+  # (codex.assess counts open Codex threads), so the gate must re-evaluate.
+  pull_request_review_thread:
+    types: [resolved, unresolved]
 
 permissions: {}
 
 jobs:
   relay:
     # 199175422 = chatgpt-codex-connector[bot] (automation/review_loop/policy.py)
-    if: github.event.review.user.id == 199175422 && github.event.review.user.type == 'Bot'
+    if: github.event_name == 'pull_request_review' && github.event.review.user.id == 199175422 && github.event.review.user.type == 'Bot'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Codex review observed
         run: echo "Codex review event relayed; downstream workflows re-read it from the API."
+
+  thread:
+    # Same-repository PRs only: fork PRs can never pass the gate anyway.
+    if: github.event_name == 'pull_request_review_thread' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Review thread change observed
+        run: echo "Review thread change relayed; the gate re-reads thread state from the API."
