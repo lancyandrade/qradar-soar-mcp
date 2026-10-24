@@ -225,3 +225,59 @@ def test_only_old_unresolved_threads_ask_a_person_instead_of_spending_an_attempt
     )
     decision = plan_loop(snap)
     assert decision.action is Action.REPORT and decision.report_key == f"old-threads:{d.HEAD}"
+
+
+# ------------------------------------------------------------------ finding age (Codex on 901fb39)
+
+
+def carried_forward_snapshot():
+    """An open Codex thread from an older commit that GitHub now shows on the head."""
+    old = d.review(d.OLD)
+    comment = d.inline(old)
+    comment["commit_id"] = d.HEAD  # GitHub moved the comment forward
+    comment["original_commit_id"] = d.OLD
+    return d.snapshot(
+        reviews=[old],
+        review_comments=[comment],
+        issue_comments=[d.codex_state(), d.codex_clean_receipt()],
+    )
+
+
+def test_carried_forward_old_thread_is_not_a_new_finding():
+    decision = plan_loop(carried_forward_snapshot())
+    assert decision.action is Action.REPORT
+    assert decision.report_key == f"old-threads:{d.HEAD}"
+
+
+def test_carried_forward_old_thread_spends_no_attempt():
+    snap = carried_forward_snapshot()
+    assert plan_loop(snap).attempt == 0
+    assert ledger.attempts_used(ledger.claims(snap.issue_comments, d.REPO, d.NUMBER)) == 0
+
+
+def test_a_finding_written_by_the_head_review_is_new():
+    snap, _rev, _inl = d.findings_snapshot(1)
+    decision = plan_loop(snap)
+    assert decision.action is Action.FIX
+    assert decision.findings[0]["on_head"] is True
+
+
+def test_owning_review_decides_over_the_comment_commit_fields():
+    """Even if both commit fields named the head, the owning review's commit wins."""
+    old = d.review(d.OLD)
+    comment = d.inline(old)
+    comment["commit_id"] = comment["original_commit_id"] = d.HEAD
+    snap = d.snapshot(
+        reviews=[old],
+        review_comments=[comment],
+        issue_comments=[d.codex_state(), d.codex_clean_receipt()],
+    )
+    assert plan_loop(snap).action is Action.REPORT
+
+
+def test_original_commit_is_used_when_the_owning_review_is_unknown():
+    from review_loop.codex import _written_on
+
+    comment = {"pull_request_review_id": 999, "commit_id": d.HEAD, "original_commit_id": d.OLD}
+    assert _written_on(comment, {}) == d.OLD
+    assert _written_on(comment, {999: d.HEAD}) == d.HEAD

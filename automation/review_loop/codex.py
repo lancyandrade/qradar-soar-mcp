@@ -155,7 +155,9 @@ def parse_state(body: Any) -> CodexState | None:
 class Finding:
     comment_id: int
     review_id: int
-    commit_id: str
+    commit_id: str  # where GitHub shows the comment now (moves forward with the PR)
+    original_commit_id: str  # the commit the comment was written on
+    on_head: bool  # written by Codex's review of the current head commit
     path: str
     line: int | None
     priority: str
@@ -168,6 +170,8 @@ class Finding:
             "comment_id": self.comment_id,
             "review_id": self.review_id,
             "commit_id": self.commit_id,
+            "original_commit_id": self.original_commit_id,
+            "on_head": self.on_head,
             "path": self.path,
             "line": self.line,
             "priority": self.priority,
@@ -177,7 +181,7 @@ class Finding:
         }
 
 
-def to_finding(comment: dict[str, Any]) -> Finding:
+def to_finding(comment: dict[str, Any], *, on_head: bool = False) -> Finding:
     raw_body = comment.get("body")
     body: str = raw_body if isinstance(raw_body, str) else ""
     badge = _BADGE.search(body)
@@ -189,6 +193,8 @@ def to_finding(comment: dict[str, Any]) -> Finding:
         comment_id=int(comment["id"]),
         review_id=int(comment["pull_request_review_id"]),
         commit_id=str(comment.get("commit_id") or ""),
+        original_commit_id=str(comment.get("original_commit_id") or ""),
+        on_head=on_head,
         path=str(comment.get("path") or ""),
         line=line,
         priority=badge.group(1) if badge else "unknown",
@@ -196,6 +202,15 @@ def to_finding(comment: dict[str, Any]) -> Finding:
         body=body[: policy.MAX_FINDING_BODY_CHARS],
         url=str(comment.get("html_url") or ""),
     )
+
+
+def _written_on(comment: dict[str, Any], review_commit: dict[Any, Any]) -> str | None:
+    """The commit a review comment was written on."""
+    owner = review_commit.get(comment.get("pull_request_review_id"))
+    if isinstance(owner, str):
+        return owner
+    original = comment.get("original_commit_id")
+    return original if isinstance(original, str) else None
 
 
 # ------------------------------------------------------------------ assessment
@@ -334,7 +349,11 @@ def assess(
     if not head_reviews and not clean_receipts:
         return Assessment(Status.INCOMPLETE, head_sha, ["Codex state is completed but no receipt"])
 
-    # --- findings: every top-level Codex inline comment whose thread is open
+    # --- findings: every top-level Codex inline comment whose thread is open.
+    # A comment's age comes from the Codex review that wrote it (or, failing
+    # that, original_commit_id) - never from commit_id, which GitHub moves
+    # forward to later revisions while the thread stays open.
+    review_commit = {r.get("id"): r.get("commit_id") for r in codex_reviews if isinstance(r, dict)}
     by_first = {t.first_comment_id: t for t in threads}
     head_review_ids = {r["id"] for r in head_reviews}
     findings: list[Finding] = []
@@ -348,7 +367,7 @@ def assess(
                 Status.INCOMPLETE, head_sha, [f"no review thread for comment {c.get('id')}"]
             )
         if not thread.is_resolved:
-            findings.append(to_finding(c))
+            findings.append(to_finding(c, on_head=_written_on(c, review_commit) == head_sha))
 
     for r in head_reviews:
         if not any(c.get("pull_request_review_id") == r["id"] for c in codex_inline):

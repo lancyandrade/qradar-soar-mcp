@@ -302,7 +302,7 @@ def plan_loop(snap: Snapshot, *, ci_failed_run_sha: str | None = None) -> LoopDe
             f"{len(codex.findings)} findings exceed the automated limit of {policy.MAX_FINDINGS}",
         )
 
-    if not any(f.commit_id == head for f in codex.findings):
+    if not any(f.on_head for f in codex.findings):
         # Codex's review of the head added nothing; what is open are threads from
         # older commits that nobody resolved. A fix attempt would only re-check
         # them, so ask a person instead of spending an attempt.
