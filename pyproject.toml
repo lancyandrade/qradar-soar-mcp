@@ -60,7 +60,7 @@ Security = "https://github.com/lancyandrade/qradar-soar-mcp/blob/main/SECURITY.m
 packages = ["src/qradar_soar_mcp"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/scripts/probe/raw", "/tests/fixtures/raw", "/.github"]
+exclude = ["/scripts/probe/raw", "/tests/fixtures/raw", "/.github", "/automation"]
 
 # ---------------------------------------------------------------------------
 # ruff
@@ -68,7 +68,7 @@ exclude = ["/scripts/probe/raw", "/tests/fixtures/raw", "/.github"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "automation"]
 # ruff formats fenced code in Markdown; the design pack (docs/design/00-…07-)
 # is a frozen baseline and must never be rewritten by a formatter.
 extend-exclude = ["*.md"]
@@ -111,8 +111,8 @@ quote-style = "double"
 python_version = "3.12"
 strict = true
 warn_unreachable = true
-mypy_path = "src"
-packages = ["qradar_soar_mcp"]
+mypy_path = "src,automation"
+packages = ["qradar_soar_mcp", "review_loop"]
 
 [[tool.mypy.overrides]]
 module = ["mcp.*"]
@@ -123,6 +123,8 @@ ignore_missing_imports = true
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# automation/ holds the CI review-loop package (not shipped in the wheel).
+pythonpath = ["automation"]
 addopts = "-ra --strict-markers"
 asyncio_mode = "auto"
 markers = [
