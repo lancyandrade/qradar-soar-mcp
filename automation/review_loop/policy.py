@@ -209,7 +209,8 @@ def path_matches(path: str, prefixes: tuple[str, ...]) -> bool:
 
 
 # Credential shapes that must never appear in anything the fix job produced
-# (patch, verdicts) - the model ran next to the Anthropic key.
+# (patch, verdicts) - the model ran in a job that can obtain short-lived
+# Anthropic credentials, so its output is scanned before it leaves.
 SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"sk-ant-[A-Za-z0-9_-]{8,}"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),

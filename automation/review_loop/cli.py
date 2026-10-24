@@ -220,11 +220,26 @@ def cmd_gate(args: argparse.Namespace) -> int:
 # ------------------------------------------------------------------ loop
 
 
-def render_prompt(head: str, attempt: int, count: int) -> str:
-    template = (Path(__file__).resolve().parent / "prompt.md").read_text(encoding="utf-8")
-    return template.format(
-        head_sha=head, attempt=attempt, max_attempts=policy.MAX_FIX_ATTEMPTS, count=count
+# The fix job hands the prompt to the action through a multi-line step output
+# whose delimiter starts with this prefix; a prompt containing it is refused.
+PROMPT_DELIMITER_PREFIX = "REVIEW_LOOP_PROMPT_"
+MAX_PROMPT_BYTES = 65536
+
+
+def render_prompt(head: str, attempt: int, count: int, template: str | None = None) -> str:
+    """The fixed prompt. Only a sha and two integers are substituted: finding
+    text never enters it (Claude reads findings.json as data)."""
+    if template is None:
+        template = (Path(__file__).resolve().parent / "prompt.md").read_text(encoding="utf-8")
+    text = template.format(
+        head_sha=_sha(head),
+        attempt=int(attempt),
+        max_attempts=policy.MAX_FIX_ATTEMPTS,
+        count=int(count),
     )
+    if PROMPT_DELIMITER_PREFIX in text or len(text.encode("utf-8")) > MAX_PROMPT_BYTES:
+        raise SystemExit("rendered prompt is not safe to hand over")
+    return text if text.endswith("\n") else text + "\n"
 
 
 def cmd_triage(args: argparse.Namespace) -> int:
@@ -253,10 +268,10 @@ def cmd_triage(args: argparse.Namespace) -> int:
             json.dumps({"head_sha": decision.head_sha, "findings": decision.findings}, indent=2),
             encoding="utf-8",
         )
-        (out / "prompt.md").write_text(
-            render_prompt(decision.head_sha, decision.attempt, len(decision.findings)),
-            encoding="utf-8",
-        )
+        prompt = render_prompt(decision.head_sha, decision.attempt, len(decision.findings))
+        data = prompt.encode("utf-8")  # exact bytes: no newline translation
+        (out / "prompt.md").write_bytes(data)
+        set_output("prompt_sha256", hashlib.sha256(data).hexdigest())
     return 0
 
 

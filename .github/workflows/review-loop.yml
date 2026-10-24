@@ -80,6 +80,7 @@ jobs:
       head_ref: ${{ steps.triage.outputs.head_ref }}
       attempt: ${{ steps.triage.outputs.attempt }}
       report_key: ${{ steps.triage.outputs.report_key }}
+      prompt_sha256: ${{ steps.triage.outputs.prompt_sha256 }}
     steps:
       - name: Check out the default branch (trusted code only)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -196,12 +197,30 @@ jobs:
           path: .review-loop/
 
       - name: Load the prompt
+        # The prompt goes to the action through a multi-line step output. A
+        # line equal to the delimiter would end the value early and let the
+        # rest set other outputs, so: (1) the file must be byte-for-byte the
+        # one triage rendered (digest from the triage job's outputs), (2) the
+        # delimiter prefix is reserved and may not appear anywhere in it, and
+        # (3) the delimiter itself is random per run.
         id: prompt
+        env:
+          PROMPT_SHA256: ${{ needs.triage.outputs.prompt_sha256 }}
         run: |
+          file=.review-loop/prompt.md
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$PROMPT_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "no prompt digest from triage"
+          [ "$(sha256sum "$file" | cut -d' ' -f1)" = "$PROMPT_SHA256" ] || fail "prompt does not match the digest triage recorded"
+          [ "$(wc -c < "$file")" -le 65536 ] || fail "prompt too large"
+          if grep -q 'REVIEW_LOOP_PROMPT_' "$file"; then fail "prompt contains the reserved delimiter prefix"; fi
+          delim="REVIEW_LOOP_PROMPT_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+          [[ "$delim" =~ ^REVIEW_LOOP_PROMPT_[0-9a-f]{32}$ ]] || fail "could not generate a delimiter"
           {
-            echo "text<<REVIEW_LOOP_PROMPT_EOF"
-            cat .review-loop/prompt.md
-            echo "REVIEW_LOOP_PROMPT_EOF"
+            echo "text<<$delim"
+            cat "$file"
+            # The value must end on its own line before the delimiter.
+            [ -z "$(tail -c 1 "$file")" ] || echo
+            echo "$delim"
           } >> "$GITHUB_OUTPUT"
 
       - name: Require federated Anthropic authentication

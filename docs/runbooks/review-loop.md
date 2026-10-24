@@ -80,8 +80,16 @@ The test job runs the offline suite with `SOAR_BASE_URL=""`, exactly like CI.
     (§2.2), checks that the branch head is still the reviewed commit and that
     this run still holds the attempt claim, and pushes without force. A moved
     branch makes the push fail.
-  - Findings are passed to Claude as a data file and the prompt says they are
-    untrusted. The model's free-text reasons are **never posted**: reports
+  - Findings are passed to Claude as a data file (`findings.json`) and the
+    prompt says they are untrusted. The prompt itself is a fixed template:
+    triage substitutes only the head SHA and two integers, never finding
+    text. It reaches the action through a multi-line step output, which is
+    guarded three ways. The fix job accepts only the exact bytes triage
+    rendered (SHA-256 passed through job outputs). The delimiter prefix
+    `REVIEW_LOOP_PROMPT_` is reserved, so a prompt containing it anywhere is
+    refused, at render time and again in the fix job. And the delimiter is
+    random per run. Even a prompt that someday included untrusted text
+    could not end the value early and set other step outputs. The model's free-text reasons are **never posted**: reports
     show only finding ids and verdict values. Other quoted text is neutralised
     (no hidden markers, no `@` mentions).
 - **Bounded.** At most **3** fix attempts per PR (one per head commit). Each
@@ -414,6 +422,41 @@ like any other PR.
   attempts you want back. This is deliberate and visible in the PR history.
 - **Re-run a decision:** Actions → `review-loop` or `review-gate` → Run
   workflow → PR number.
+
+### 5.1 Re-evaluate a PR after resolving a review thread
+
+GitHub cannot start a workflow when a review thread is resolved or reopened
+(`pull_request_review_thread` is a webhook-only event), so the gate learns
+about it in one of three ways:
+
+1. **Wait.** The scheduled fan-out runs at minutes 7, 22, 37 and 52 of every
+   hour. It dispatches one `review-gate` run per open same-repository PR, so
+   the check updates within about 15 minutes.
+2. **Comment on the PR as the owner.** Any comment works (for example
+   `re-check`); owner comments run the gate immediately.
+3. **Dispatch it yourself** (the workflow is read from `main`):
+   ```bash
+   gh workflow run review-gate.yml --repo lancyandrade/qradar-soar-mcp --ref main -f pr_number=<PR>
+   ```
+
+Confirm the result on the PR's head commit:
+
+```bash
+gh run list --repo lancyandrade/qradar-soar-mcp --workflow review-gate.yml --limit 5
+gh api repos/lancyandrade/qradar-soar-mcp/commits/<head-sha>/check-runs --jq '.check_runs[] | select(.name == "review-loop/merge-gate") | {conclusion, output: .output.title, app: .app.slug}'
+```
+
+The newest `review-loop/merge-gate` check, published by the review-loop App,
+is the one branch protection uses. A run dispatched for one PR evaluates only
+that PR, and runs for the same PR are serialised, so a dispatch cannot race
+an event-driven evaluation.
+
+What is verified offline (tests/test_review_loop_routing.py): the real `if:`
+and `concurrency:` expressions are evaluated for each event type. The
+schedule runs only `fanout`, `fanout` dispatches one run per same-repository
+PR, and each dispatched run runs only `gate` in `review-gate-pr-<n>`. Drive-by
+comments and fork events run nothing and get a group of their own. With
+`REVIEW_LOOP_GATE_ENABLED` unset, nothing runs. The live check is §8.3.
 - **Approve a sensitive change:** after reviewing it yourself, comment
   `review-loop: approve-sensitive <head sha>` (see §4.2).
 
@@ -534,7 +577,9 @@ rules are fixed.
 2. **Resolve** the Codex thread. Within about 15 minutes, a `review-gate` run
    (event `workflow_dispatch`, dispatched by the schedule's `fanout` job)
    re-publishes the gate. The gate should now pass if everything else holds.
-   Commenting anything as the owner does the same immediately.
+   To skip the wait, use §5.1 (owner comment or `gh workflow run`), and
+   check that the dispatched run's concurrency group is
+   `review-gate-pr-<PR>`.
 3. **Reopen** (unresolve) the thread. Within about 15 minutes, the gate turns
    back to **failure** with "unresolved Codex finding(s)".
 4. Check that each of these runs evaluated only that PR, and that a `fanout`
