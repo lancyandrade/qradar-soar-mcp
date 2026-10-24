@@ -349,6 +349,55 @@ def _check(args: argparse.Namespace) -> tuple[patch_policy.PatchReport, bool]:
     return report, ok
 
 
+def git_config_paths(pristine: str) -> list[str]:
+    """Every place git reads configuration, hooks or attributes from that the
+    model could have reached during the fix job."""
+    home = Path(os.environ.get("HOME") or Path.home())
+    xdg = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
+    p = Path(pristine)
+    return [
+        str(p / "config"),
+        str(p / "hooks"),
+        str(p / "info"),
+        str(p / "objects" / "info"),
+        str(home / ".gitconfig"),
+        str(xdg / "git"),
+        "/etc/gitconfig",
+    ]
+
+
+def cmd_git_manifest(args: argparse.Namespace) -> int:
+    set_output("manifest", gitcheck.config_manifest(git_config_paths(args.pristine)))
+    return 0
+
+
+def cmd_check_git_manifest(args: argparse.Namespace) -> int:
+    if not re.fullmatch(r"[0-9a-f]{64}", args.expect):
+        raise SystemExit("no manifest digest recorded before the model ran")
+    now = gitcheck.config_manifest(git_config_paths(args.pristine))
+    if now != args.expect:
+        log("git configuration, hooks or attributes changed while the model ran")
+        return 1
+    return 0
+
+
+def cmd_build_patch(args: argparse.Namespace) -> int:
+    """Build the patch with config-free git, then refuse credential-shaped output."""
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    verdicts = os.environ.get("VERDICTS", "").encode("utf-8")
+    patch = gitcheck.build_patch(args.worktree, args.objects, _sha(args.base))
+    if patch_policy.secret_hits(patch.decode("utf-8", "replace")) or patch_policy.secret_hits(
+        verdicts.decode("utf-8", "replace")
+    ):
+        log("credential-shaped value in the model output; nothing written")
+        return 1
+    (out / "patch.diff").write_bytes(patch)
+    (out / "verdicts.json").write_bytes(verdicts)
+    set_output("sha256", hashlib.sha256(patch).hexdigest())
+    return 0
+
+
 def cmd_check_patch(args: argparse.Namespace) -> int:
     _report, ok = _check(args)
     return 0 if ok else 1
@@ -506,6 +555,22 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="review_loop")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("resolve").set_defaults(func=cmd_resolve)
+
+    p = sub.add_parser("git-manifest")
+    p.add_argument("--pristine", required=True)
+    p.set_defaults(func=cmd_git_manifest)
+
+    p = sub.add_parser("check-git-manifest")
+    p.add_argument("--pristine", required=True)
+    p.add_argument("--expect", required=True)
+    p.set_defaults(func=cmd_check_git_manifest)
+
+    p = sub.add_parser("build-patch")
+    p.add_argument("--worktree", required=True)
+    p.add_argument("--objects", required=True)
+    p.add_argument("--base", required=True)
+    p.add_argument("--out", required=True)
+    p.set_defaults(func=cmd_build_patch)
 
     p = sub.add_parser("fanout")
     p.add_argument("--ref", required=True)

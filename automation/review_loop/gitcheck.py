@@ -15,8 +15,11 @@ can change what is checked.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
+import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 
 from review_loop import policy
@@ -25,10 +28,12 @@ from review_loop.patch_policy import ALLOWED_MODE, FileDiff, check_existing_mode
 HARDENED = (
     "-c", "core.hooksPath=" + os.devnull,
     "-c", "core.fsmonitor=false",
+    "-c", "core.untrackedCache=false",
     "-c", "core.symlinks=false",
     "-c", "core.protectNTFS=true",
     "-c", "core.protectHFS=true",
     "-c", "core.quotePath=true",
+    "-c", "core.attributesFile=" + os.devnull,
     "-c", "apply.whitespace=nowarn",
 )  # fmt: skip
 
@@ -36,25 +41,65 @@ HARDENED = (
 _TRANSFORMING = ("filter", "working-tree-encoding", "ident")
 _DRIVER_ATTRS = ("diff", "merge")
 
+# The git executable. The workflows pin it to /usr/bin/git, so a PATH entry
+# added by anything earlier in a job cannot substitute another program.
+GIT = os.environ.get("REVIEW_LOOP_GIT") or "git"
+
+_HOME: str | None = None
+
 
 class GitCheckError(RuntimeError):
     pass
 
 
+def _isolated_home() -> str:
+    """An empty directory used as HOME / XDG_CONFIG_HOME for every git call."""
+    global _HOME
+    if _HOME is None or not Path(_HOME).is_dir():
+        _HOME = tempfile.mkdtemp(prefix="review-loop-git-home-")
+    return _HOME
+
+
 def _env() -> dict[str, str]:
+    """No system, global or user configuration, and no GIT_* overrides.
+
+    Configuration is where git's command execution lives (filter drivers, diff
+    drivers, fsmonitor, hooksPath, pager, ssh/askpass commands), so none of it
+    may come from anywhere but the -c flags above and the repository's own
+    config. GIT_CONFIG_PARAMETERS / GIT_CONFIG_COUNT injection is removed with
+    every other GIT_* variable.
+    """
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    home = _isolated_home()
     env.update(
         GIT_CONFIG_NOSYSTEM="1",
         GIT_CONFIG_GLOBAL=os.devnull,
         GIT_TERMINAL_PROMPT="0",
         GIT_ATTR_NOSYSTEM="1",
+        HOME=home,
+        XDG_CONFIG_HOME=home,
     )
+    for name in ("PAGER", "EDITOR", "VISUAL", "SSH_ASKPASS", "LESSOPEN", "LESSCLOSE"):
+        env.pop(name, None)
     return env
+
+
+def _run(argv: list[str], *, check: bool = True) -> subprocess.CompletedProcess[bytes]:
+    proc = subprocess.run(argv, capture_output=True, env=_env(), check=False)  # noqa: S603
+    if check and proc.returncode != 0:
+        flags = {"-c", "-C"}
+        words = [
+            a
+            for i, a in enumerate(argv[1:], 1)
+            if not a.startswith("-") and argv[i - 1] not in flags
+        ]
+        raise GitCheckError(f"git {words[0] if words else '?'} failed ({proc.returncode})")
+    return proc
 
 
 def git(repo: str | Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     proc = subprocess.run(  # noqa: S603 - fixed program, argv list, no shell
-        ["git", "-C", str(repo), *HARDENED, *args],  # noqa: S607
+        [GIT, "-C", str(repo), *HARDENED, *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -64,6 +109,73 @@ def git(repo: str | Path, *args: str, check: bool = True) -> subprocess.Complete
     if check and proc.returncode != 0:
         raise GitCheckError(f"git {args[0]} failed ({proc.returncode})")
     return proc
+
+
+def build_patch(
+    worktree: str | Path, objects: str | Path, base: str, exclude: str = ".review-loop"
+) -> bytes:
+    """``git diff`` of ``worktree`` against commit ``base``, built so that nothing
+    in the work tree or around it can make git run a command.
+
+    The work tree was edited by a model, so its ``.gitattributes`` and anything
+    it could reach (``~/.gitconfig``, the checkout's ``.git/config``) are
+    untrusted. A fresh git directory is created here, after the model ran, with
+    no template (no hooks) and no configuration; it borrows only the object
+    store (content-addressed data, never executed) through ``alternates``.
+    With system, global and user configuration also disabled (``_env``), no
+    filter, diff driver, fsmonitor or hook is defined anywhere, so attributes
+    naming one have nothing to run.
+    """
+    if not (
+        isinstance(base, str) and len(base) == 40 and all(c in "0123456789abcdef" for c in base)
+    ):
+        raise GitCheckError("base must be a full commit sha")
+    with tempfile.TemporaryDirectory(prefix="review-loop-build-") as tmp:
+        holder = Path(tmp) / "repo"
+        _run([GIT, *HARDENED, "init", "-q", "--template=", str(holder)])
+        gitdir = holder / ".git"
+        (gitdir / "objects" / "info").mkdir(parents=True, exist_ok=True)
+        # Exact bytes: a CRLF from newline translation would end up in the path.
+        (gitdir / "objects" / "info" / "alternates").write_bytes(
+            (Path(objects).resolve().as_posix() + "\n").encode("utf-8")
+        )
+        g = [GIT, f"--git-dir={gitdir}", f"--work-tree={Path(worktree).resolve()}", *HARDENED]
+        _run([*g, "read-tree", base])
+        _run([*g, "add", "-A", "--", ".", f":(exclude){exclude}"])
+        diff = _run(
+            [
+                *g,
+                "diff",
+                "--cached",
+                "--binary",
+                "--no-color",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--src-prefix=a/",
+                "--dst-prefix=b/",
+                base,
+            ]
+        )
+        return diff.stdout
+
+
+def config_manifest(paths: Sequence[str | Path]) -> str:
+    """A digest over every file under ``paths`` (absent paths included as absent).
+
+    Used before and after the model runs to prove that no git configuration,
+    hook or attribute file it could have reached was created or changed.
+    """
+    h = hashlib.sha256()
+    for raw in paths:
+        root = Path(raw)
+        if not root.exists():
+            h.update(f"absent {root}\n".encode())
+            continue
+        files = [root] if root.is_file() else sorted(p for p in root.rglob("*") if p.is_file())
+        for f in files:
+            h.update(f"file {f}\n".encode())
+            h.update(hashlib.sha256(f.read_bytes()).digest())
+    return h.hexdigest()
 
 
 def numstat_paths(repo: str | Path, patch: str | Path) -> tuple[set[str], bool]:

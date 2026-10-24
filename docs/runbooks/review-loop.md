@@ -141,7 +141,59 @@ other trust relationship (another cloud, another service) for this subject.
 
 ### 2.2 Patch boundary
 
-The patch is untrusted input. It is checked by trusted code (default branch)
+**Construction (fix job).** Building the patch must not let git run anything
+the model could have planted. Git's command execution all comes from
+configuration: `filter.*.clean/smudge/process`, `diff.*.command`/`textconv`,
+`diff.external`, `core.fsmonitor`, `core.hooksPath` and hooks, `core.pager`,
+aliases. An attribute such as `filter=evil` only names a driver, so it does
+nothing unless configuration defines one. Construction is protected in five
+ways:
+
+1. Before Claude runs, the job records a digest of every git configuration,
+   hook and attribute location Claude could reach: the pristine `.git` copy's
+   `config`, `hooks/`, `info/` and `objects/info/`, plus `~/.gitconfig`,
+   `$XDG_CONFIG_HOME/git/` and `/etc/gitconfig`. The digest is a step output,
+   which Claude cannot change.
+2. Claude's file tools are denied all writes to `.git`, `.gitattributes`,
+   `.gitmodules` and `.gitconfig` at any depth, to dotfiles and dot
+   directories in `$HOME`, and to `/etc`, `/usr`, `/opt` and `/tmp`.
+3. Immediately after Claude, `GIT_CONFIG_NOSYSTEM=1` and
+   `GIT_CONFIG_GLOBAL=/dev/null` are written to `$GITHUB_ENV`. Every later
+   step and post step in the job therefore runs git without system or global
+   configuration. If the digest changed, the job deletes the workspace `.git`
+   and fails. Otherwise the workspace `.git` (which the action configured and
+   Claude could reach) is replaced with the pristine copy.
+4. The patch is built by `gitcheck.build_patch`. It uses a **new** git
+   directory, created after Claude ran, with no template (so no hooks) and no
+   configuration. It borrows only the object store, which is
+   content-addressed data and never executed. System, global and user
+   configuration are disabled, `HOME`/`XDG_CONFIG_HOME` are an empty
+   directory, and every `GIT_*` variable is removed (this also removes
+   `GIT_CONFIG_PARAMETERS` / `GIT_CONFIG_COUNT` injection). `/usr/bin/git` is
+   invoked directly. A hostile `.gitattributes` is just content: it ends up
+   in the patch, and the policy then refuses it.
+5. Only then are the patch and verdicts checked for credential-shaped values
+   and uploaded.
+
+`tests/test_review_loop_gitexec.py` plants each of these execution paths in
+`~/.gitconfig`, XDG config, the pristine copy, `GIT_CONFIG_*` variables and a
+nested `.git` file. It shows the job's former command did run the planted
+filter, and that construction and the verify/push checks now run none of
+them.
+
+**Every git operation, audited:**
+
+| Where | Operation | Protection |
+|---|---|---|
+| fix | the action's own `git config` | repository-local only; that `.git` is replaced afterwards |
+| fix | patch construction | fresh config-free git directory (above) |
+| fix | `actions/checkout` post steps | run after `GIT_CONFIG_*` isolation, against the restored pristine `.git` |
+| verify, push | `numstat`, `apply --check`, `ls-files`, `check-attr`, `apply --index`, `diff --cached`, `status` | `gitcheck`: system/global/user config off, `GIT_*` cleared, empty `HOME`, hooks, fsmonitor, symlinks and the global attributes file off, `/usr/bin/git` |
+| push | `commit`, `push` | `GIT_CONFIG_NOSYSTEM`, `GIT_CONFIG_GLOBAL=/dev/null`, hooks and fsmonitor off, `/usr/bin/git`, `--no-verify` |
+| verify | the PR's own test suite | runs PR code by design, with no secrets and a read-only token |
+| triage, claim, gate, report | checkout of `main` only | no work tree from the PR or the model |
+
+**Validation.** The patch is untrusted input. It is checked by trusted code (default branch)
 before tests run and again before the push. Each step must pass:
 
 1. **Bytes.** UTF-8 only, at most 2 MB. No carriage returns, NUL or other
@@ -530,6 +582,11 @@ merge, restore it, and note why in the PR.
   `review-gate` → Enable). Event-driven evaluation and fail-closed
   behaviour are unaffected; only the 15-minute pick-up of resolved threads
   stops.
+- **Checkout post steps.** The fix, verify and push jobs remove the
+  trusted `.review-loop/trusted` checkout before untrusted content runs.
+  The `actions/checkout` post step for that path should treat a missing
+  directory as nothing to clean up. Confirm on the first live run that it
+  only warns (§8.5).
 - **First live exercise.** The workflows only run from `main`, so the first
   real exercise happens after merge. §8 is the procedure.
 
@@ -617,4 +674,7 @@ check that:
 - the `verify` and `push` jobs log "automated patch check" with no problems;
 - the pushed commit touches exactly the files in that check;
 - it carries the `Review-Loop-Attempt` and `Review-Loop-Reviewed-Head`
-  trailers.
+  trailers;
+- the fix job's "Isolate git and verify its configuration is untouched"
+  step passed, and the checkout post steps only warned about the removed
+  trusted checkout.

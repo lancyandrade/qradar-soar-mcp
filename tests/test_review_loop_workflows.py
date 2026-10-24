@@ -296,13 +296,89 @@ def test_claude_file_tools_are_fenced_in():
         assert rule in settings
 
 
-def test_patch_is_built_with_pristine_git_metadata_and_scanned():
+def test_patch_is_built_with_config_free_git_and_scanned():
+    """Codex P1 on 6d99f55: the patch must not be built by git reading
+    model-reachable configuration (filter drivers, fsmonitor, hooks)."""
     fix = load("review-loop.yml")["jobs"]["fix"]
     (build,) = [s for s in fix["steps"] if s.get("id") == "patch"]
-    assert '--git-dir="$RUNNER_TEMP/pristine.git"' in build["run"]
-    assert "core.hooksPath=/dev/null" in build["run"]
-    assert "sk-ant-" in build["run"]
+    run = build["run"]
+    assert '/usr/bin/python3 -I "$RUNNER_TEMP/bin/automation/review_loop/cli.py" build-patch' in run
+    assert '--objects "$RUNNER_TEMP/pristine.git/objects"' in run
+    assert "git add" not in run and "git diff" not in run
+    assert build["env"]["REVIEW_LOOP_GIT"] == "/usr/bin/git"
+    assert "sk-ant-" in run
     assert build["env"]["BASH_ENV"] == "" and build["env"]["LD_PRELOAD"] == ""
+
+
+def test_git_is_isolated_and_verified_after_claude_runs():
+    fix = load("review-loop.yml")["jobs"]["fix"]
+    names = [s.get("name", "") for s in fix["steps"]]
+    claude = names.index("Claude Code")
+    iso_name = "Isolate git and verify its configuration is untouched"
+    iso = names.index(iso_name)
+    assert iso == claude + 1
+    step = fix["steps"][iso]
+    assert step["if"] == "always()"
+    run = step["run"]
+    # Every later step, including post steps, runs git without system/global config.
+    assert 'echo "GIT_CONFIG_NOSYSTEM=1"' in run and 'echo "GIT_CONFIG_GLOBAL=/dev/null"' in run
+    assert run.index("GITHUB_ENV") < run.index("check-git-manifest")
+    assert "check-git-manifest" in run and step["env"]["MANIFEST"].endswith(
+        "steps.setaside.outputs.manifest }}"
+    )
+    assert 'cp -a "$RUNNER_TEMP/pristine.git" .git' in run
+    setaside = fix["steps"][names.index("Set aside PR-controlled Claude configuration")]
+    assert setaside["id"] == "setaside" and "git-manifest" in setaside["run"]
+    assert names.index("Set aside PR-controlled Claude configuration") < claude
+    assert names.index("Build the patch (fresh, configuration-free git)") > iso
+
+
+def test_claude_cannot_write_git_configuration_or_attributes():
+    fix = load("review-loop.yml")["jobs"]["fix"]
+    (claude,) = [s for s in fix["steps"] if s.get("name") == "Claude Code"]
+    settings = claude["with"]["settings"]
+    for rule in (
+        "Edit(./**/.gitattributes)",
+        "Write(./**/.gitattributes)",
+        "Edit(./**/.git/**)",
+        "Write(./**/.git/**)",
+        "Edit(./**/.git)",
+        "Edit(./**/.gitmodules)",
+        "Edit(./**/.gitconfig)",
+        "Edit(//home/runner/.*)",
+        "Write(//home/runner/.*/**)",
+        "Edit(//etc/**)",
+        "Write(//tmp/**)",
+        "Edit(//usr/**)",
+    ):
+        assert rule in settings, rule
+
+
+def test_fix_job_holds_no_soar_credentials_or_privileged_tokens():
+    fix = load("review-loop.yml")["jobs"]["fix"]
+    text = yaml.safe_dump(fix)
+    assert "secrets." not in text
+    assert "SOAR_" not in text and "soar.example" not in text
+    assert "create-github-app-token" not in text
+    assert fix["permissions"] == {"contents": "read", "pull-requests": "read", "id-token": "write"}
+    for step in fix["steps"]:
+        if str(step.get("uses", "")).startswith("actions/checkout@"):
+            assert step["with"]["persist-credentials"] is False
+    # The workflow defines no job- or workflow-level environment either.
+    assert "env" not in fix and "env" not in load("review-loop.yml")
+
+
+def test_push_job_git_runs_without_system_or_global_config():
+    push = load("review-loop.yml")["jobs"]["push"]
+    (commit,) = [s for s in push["steps"] if s.get("id") == "commit"]
+    assert commit["env"]["GIT_CONFIG_NOSYSTEM"] == "1"
+    assert commit["env"]["GIT_CONFIG_GLOBAL"] == "/dev/null"
+    assert commit["env"]["REVIEW_LOOP_GIT"] == "/usr/bin/git"
+    run = commit["run"]
+    assert "\n          git " not in run
+    for line in run.splitlines():
+        stripped = line.strip()
+        assert not stripped.startswith("git "), stripped
 
 
 def test_patch_checks_include_existing_file_modes():
