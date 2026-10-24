@@ -1,0 +1,28 @@
+# Relay for Codex pull-request reviews.
+#
+# A pull_request_review run uses the workflow file from the PR's merge commit,
+# so it is never given secrets or write access here. It does nothing except
+# finish successfully when the reviewer is the Codex bot (numeric id), which
+# starts review-loop.yml and review-gate.yml through `workflow_run` - those run
+# from the default branch and re-read everything from the API.
+#
+# Review-thread resolution has no Actions trigger (pull_request_review_thread
+# is a webhook-only event), so review-gate.yml's scheduled fanout re-evaluates
+# open PRs instead.
+name: codex-review-relay
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions: {}
+
+jobs:
+  relay:
+    # 199175422 = chatgpt-codex-connector[bot] (automation/review_loop/policy.py)
+    if: github.event.review.user.id == 199175422 && github.event.review.user.type == 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Codex review observed
+        run: echo "Codex review event relayed; downstream workflows re-read it from the API."

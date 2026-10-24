@@ -36,6 +36,7 @@ README = (ROOT / "README.md").read_text(encoding="utf-8")
 REQUIRED_DOCS = (
     "docs/threat-model.md",
     "docs/runbooks/key-rotation.md",
+    "docs/runbooks/review-loop.md",
     "docs/open-questions.md",
     "SECURITY.md",
     "CONTRIBUTING.md",

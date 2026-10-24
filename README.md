@@ -649,6 +649,10 @@ uv run python scripts/check_no_secrets.py
 See [CONTRIBUTING.md](CONTRIBUTING.md). The design pack is in `docs/design/`;
 `08-GREENFIELD-AMENDMENTS.md` records every decision that departs from it.
 
+Pull requests can opt into an automated Codex review → Claude Code fix → CI →
+Codex re-review loop with a fail-closed merge gate. It is off unless configured
+and never merges; see [docs/runbooks/review-loop.md](docs/runbooks/review-loop.md).
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).

@@ -1,0 +1,143 @@
+# Merge gate: publishes the required check `review-loop/merge-gate` on the PR
+# head commit. It passes only when CI succeeded on that commit, Codex completed
+# a review of that exact commit with no unresolved finding, and the security
+# requirements in automation/review_loop/evaluate.py hold. Anything else -
+# including an evaluation error - is a failure.
+#
+# Security notes:
+# * Every trigger here runs the workflow file from the default branch.
+#   pull_request_target is used only to learn the PR number: no step checks
+#   out, builds or runs pull-request code.
+# * The check is written with the review-loop GitHub App's token, minted from
+#   a key held in the `review-loop` environment (deployment branch: main
+#   only). Branch protection pins the required check to that App, so a
+#   workflow on a PR branch cannot forge it.
+# * Ordering: a check is only ever published by the `gate` job, which runs in
+#   the PR's own concurrency group, so two evaluations of one PR never race.
+#   Events that do not name a PR (the schedule, a workflow_run without PRs)
+#   go to `fanout`, which only dispatches one `gate` run per PR.
+# * Resolving a review thread has no Actions trigger, so the schedule is what
+#   picks it up (or any owner comment, or a manual dispatch).
+name: review-gate
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, labeled, unlabeled, edited]
+  issue_comment:
+    types: [created, edited, deleted]
+  workflow_run:
+    workflows: [ci, codex-review-relay]
+    types: [completed]
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to re-evaluate
+        required: true
+        type: number
+
+permissions: {}
+
+# Only events that the `gate` job will act on share the per-PR group (the same
+# conditions as its `if`). Anything else - a drive-by comment, a fork PR - gets
+# a group of its own: a queued run replaces the pending run in its group, so a
+# no-op event must never displace a pending evaluation.
+concurrency:
+  group: >-
+    review-gate-${{
+      (
+        (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository) ||
+        (github.event_name == 'issue_comment' && github.event.issue.pull_request && (github.event.comment.user.id == 199175422 || github.event.comment.author_association == 'OWNER')) ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.pull_requests[0].number) ||
+        github.event_name == 'workflow_dispatch'
+      )
+      && format('pr-{0}', github.event.issue.number || github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || inputs.pr_number)
+      || format('other-{0}', github.run_id)
+    }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    # Off until configured. Once the gate is a required check, switching it off
+    # leaves the check missing, which blocks merging (fail closed).
+    # The pre-filters only ever skip, so they cannot make the gate pass; they
+    # stop outside users (fork PRs, drive-by comments) from spending the
+    # API budget the gate needs. Fork PRs can never pass the gate anyway.
+    if: >-
+      vars.REVIEW_LOOP_GATE_ENABLED == 'true' && (
+        (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository) ||
+        (github.event_name == 'issue_comment' && github.event.issue.pull_request && (github.event.comment.user.id == 199175422 || github.event.comment.author_association == 'OWNER')) ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.pull_requests[0].number) ||
+        github.event_name == 'workflow_dispatch'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: review-loop
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      actions: read
+    steps:
+      - name: Check out the default branch (trusted code only)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Require Python 3.12+
+        run: python3 -I -c 'import sys; assert sys.version_info >= (3, 12), sys.version'
+
+      - name: Resolve the pull request
+        id: resolve
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -I automation/review_loop/cli.py resolve
+
+      - name: Mint a check-writing App token
+        id: app
+        if: steps.resolve.outputs.pr != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.REVIEW_LOOP_APP_CLIENT_ID }}
+          private-key: ${{ secrets.REVIEW_LOOP_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-checks: write
+
+      - name: Evaluate and publish the gate
+        # Only the PR this run's concurrency group is keyed on.
+        if: steps.resolve.outputs.pr != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REVIEW_LOOP_APP_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ steps.resolve.outputs.pr }}
+        run: python3 -I automation/review_loop/cli.py gate --pr "$PR" --publish
+
+  fanout:
+    # The schedule, and workflow_run events that name no PR: dispatch one gate
+    # run per open same-repository PR (workflow_dispatch from GITHUB_TOKEN is
+    # allowed to start runs). No secrets, no check writes here.
+    if: >-
+      vars.REVIEW_LOOP_GATE_ENABLED == 'true' && (
+        github.event_name == 'schedule' ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name == github.repository && !github.event.workflow_run.pull_requests[0].number)
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    steps:
+      - name: Check out the default branch (trusted code only)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Dispatch one gate run per pull request
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: python3 -I automation/review_loop/cli.py fanout --ref "$DEFAULT_BRANCH"

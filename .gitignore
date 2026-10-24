@@ -48,3 +48,6 @@ Thumbs.db
 
 # Local logs
 *.log
+
+# Review-loop scratch space (findings, trusted checkouts) on CI runners
+.review-loop/
