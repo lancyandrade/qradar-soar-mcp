@@ -128,13 +128,16 @@ def report_keys(issue_comments: list[Any], repo: str, number: int) -> set[str]:
     return keys
 
 
+_ZWSP = chr(0x200B)  # zero-width space: breaks @mentions without changing what is shown
+
+
 def neutralise(text: str) -> str:
     """Make untrusted text safe to embed in an automation comment.
 
     It must not be able to forge a hidden ledger marker (``<!--``), close one
     (``-->``), or mention anyone (``@codex`` would request work).
     """
-    return text.replace("<!--", "&lt;!--").replace("-->", "--&gt;").replace("@", "@​")
+    return text.replace("<!--", "&lt;!--").replace("-->", "--&gt;").replace("@", "@" + _ZWSP)
 
 
 def report_body(key: str, kind: str, message: str) -> str:

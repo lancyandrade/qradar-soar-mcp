@@ -157,6 +157,47 @@ FIX_FORBIDDEN_PATH_PREFIXES: tuple[str, ...] = (
 )
 
 
+# File and directory names that steer tools wherever they appear, not only at
+# the root: Codex reads the nearest AGENTS.md, pytest loads every conftest.py
+# (whose hooks see the whole session), git honours nested .gitattributes.
+# Compared case-insensitively against every path component.
+SENSITIVE_NAMES = frozenset(
+    {
+        "agents.md",
+        "claude.md",
+        "claude.local.md",
+        ".claude",
+        ".claude.json",
+        ".mcp.json",
+        "conftest.py",
+        ".gitattributes",
+        ".gitignore",
+        ".gitmodules",
+        ".ripgreprc",
+        ".husky",
+        "pytest.ini",
+        "tox.ini",
+        "setup.cfg",
+        "setup.py",
+        "pyproject.toml",
+        "noxfile.py",
+        "sitecustomize.py",
+        "usercustomize.py",
+    }
+)
+SENSITIVE_NAME_PREFIXES = ("agents.", "claude.")
+SENSITIVE_SUFFIXES = (".pth",)
+
+
+def has_sensitive_name(path: str) -> bool:
+    for part in path.casefold().split("/"):
+        if part in SENSITIVE_NAMES or part.startswith(SENSITIVE_NAME_PREFIXES):
+            return True
+        if part.endswith(SENSITIVE_SUFFIXES):
+            return True
+    return False
+
+
 def path_matches(path: str, prefixes: tuple[str, ...]) -> bool:
     """Case-insensitive prefix match; a prefix ending in ``/`` also matches the bare dir."""
     folded = path.casefold()
@@ -186,6 +227,7 @@ SENSITIVE_APPROVAL = re.compile(r"(?m)^review-loop: approve-sensitive ([0-9a-f]{
 # Size bounds for an automated patch.
 MAX_PATCH_FILES = 25
 MAX_PATCH_CHANGED_LINES = 1500
+MAX_PATCH_BYTES = 2_000_000
 
 # Bounds on what the loop will read from GitHub, so a flood of comments
 # cannot make a run unbounded; hitting a bound fails closed.

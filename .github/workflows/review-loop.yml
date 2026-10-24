@@ -7,14 +7,16 @@
 #   triage  - default-branch code, read-only token. Decides from the API, never
 #             from the event payload.
 #   claim   - posts the attempt claim (GITHUB_TOKEN, pull-requests: write).
-#   fix     - Claude Code (official action) with the Anthropic key, a read-only
+#   fix     - Claude Code (official action) authenticated by workload identity
+#             federation (short-lived token, no static key), a read-only
 #             token, and only Read/Edit/Write/Glob/Grep tools: no shell, no
 #             network, so it never executes pull-request code.
 #   verify  - applies the patch and runs the test suite. Runs pull-request
 #             code, so it has no secrets and a read-only token.
 #   push    - re-checks the patch and the claim, commits and pushes with the
 #             review-loop App token (contents: write, no workflows permission),
-#             then asks Codex for a fresh review. No Anthropic key here.
+#             then (if configured) asks Codex for a fresh review. No Anthropic
+#             access here.
 #   report  - posts the outcome and, on any failure, the halted label.
 # Nothing here merges, approves, or changes branch protection.
 name: review-loop
@@ -146,6 +148,11 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      # Workload identity federation: the action exchanges this job's GitHub
+      # OIDC token (subject repo:<owner>/<repo>:environment:review-loop-claude)
+      # for a short-lived Anthropic token. No static Anthropic key exists. The
+      # action removes the OIDC request variables from the Claude process.
+      id-token: write
     outputs:
       patch_sha256: ${{ steps.patch.outputs.sha256 }}
     steps:
@@ -165,12 +172,12 @@ jobs:
       - name: Set aside PR-controlled Claude configuration
         # These files are read by Claude Code or its tools at startup (hooks,
         # MCP servers, instructions, ripgrep options). The PR's copies must not
-        # be used in a job that holds the Anthropic key. Same list as the
+        # be used in a job that can obtain Anthropic credentials. Same list as the
         # action's SENSITIVE_PATHS, plus nested CLAUDE*.md.
         run: |
           held="$RUNNER_TEMP/held"
           mkdir -p "$held"
-          find . -path ./.git -prune -o \( -name CLAUDE.md -o -name CLAUDE.local.md \) -print > "$held/list"
+          find . -path ./.git -prune -o \( -iname CLAUDE.md -o -iname CLAUDE.local.md -o -iname AGENTS.md \) -print > "$held/list"
           for p in .claude .claude.json .mcp.json .gitmodules .ripgreprc .husky; do
             if [ -e "$p" ]; then echo "./$p" >> "$held/list"; fi
           done
@@ -197,11 +204,32 @@ jobs:
             echo "REVIEW_LOOP_PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Require federated Anthropic authentication
+        # Fail closed: no static Anthropic credential may be present, and the
+        # federation identifiers must be configured on the environment.
+        env:
+          RULE: ${{ vars.REVIEW_LOOP_ANTHROPIC_FEDERATION_RULE_ID }}
+          ORG: ${{ vars.REVIEW_LOOP_ANTHROPIC_ORGANIZATION_ID }}
+          SVAC: ${{ vars.REVIEW_LOOP_ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          WRKSPC: ${{ vars.REVIEW_LOOP_ANTHROPIC_WORKSPACE_ID }}
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          [ -z "${ANTHROPIC_API_KEY:-}" ] || fail "ANTHROPIC_API_KEY must not be set; federation only"
+          [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || fail "CLAUDE_CODE_OAUTH_TOKEN must not be set"
+          [[ "$RULE" =~ ^fdrl_[A-Za-z0-9]+$ ]] || fail "REVIEW_LOOP_ANTHROPIC_FEDERATION_RULE_ID is missing or malformed"
+          [[ "$ORG" =~ ^[0-9a-fA-F-]{36}$ ]] || fail "REVIEW_LOOP_ANTHROPIC_ORGANIZATION_ID is missing or malformed"
+          [ -z "$SVAC" ] || [[ "$SVAC" =~ ^svac_[A-Za-z0-9]+$ ]] || fail "service account id malformed"
+          [ -z "$WRKSPC" ] || [[ "$WRKSPC" =~ ^wrkspc_[A-Za-z0-9]+$ ]] || fail "workspace id malformed"
+
       - name: Claude Code
         id: claude
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Federated authentication only (see the step above).
+          anthropic_federation_rule_id: ${{ vars.REVIEW_LOOP_ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ${{ vars.REVIEW_LOOP_ANTHROPIC_ORGANIZATION_ID }}
+          anthropic_service_account_id: ${{ vars.REVIEW_LOOP_ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          anthropic_workspace_id: ${{ vars.REVIEW_LOOP_ANTHROPIC_WORKSPACE_ID }}
           github_token: ${{ github.token }}
           prompt: ${{ steps.prompt.outputs.text }}
           # The run is started by a Codex event; the action refuses bot actors
@@ -239,7 +267,7 @@ jobs:
         run: |
           held="$RUNNER_TEMP/held"
           for p in .claude .claude.json .mcp.json .gitmodules .ripgreprc .husky; do rm -rf "./$p"; done
-          find . -path ./.git -prune -o \( -name CLAUDE.md -o -name CLAUDE.local.md \) -print0 | xargs -0 rm -f
+          find . -path ./.git -prune -o \( -iname CLAUDE.md -o -iname CLAUDE.local.md -o -iname AGENTS.md \) -print0 | xargs -0 rm -f
           if [ -f "$held/files.tar" ]; then tar -xf "$held/files.tar"; fi
 
       - name: Build the patch (with the pristine git metadata)
@@ -259,7 +287,7 @@ jobs:
           g add -A -- . ':(exclude).review-loop'
           g diff --cached --binary --no-color --no-ext-diff --no-textconv > "$out/patch.diff"
           # Nothing credential-shaped may leave this job (the model ran beside the key).
-          if grep -Eq 'sk-ant-[A-Za-z0-9_-]{8}|gh[pousr]_[A-Za-z0-9]{20}|github_pat_|PRIVATE KEY-----|x-access-token:' "$out/patch.diff" "$out/verdicts.json"; then
+          if grep -Eq 'sk-ant-[A-Za-z0-9_-]{8}|gh[pousr]_[A-Za-z0-9]{20}|github_pat_|PRIVATE KEY-----|x-access-token:|eyJ[A-Za-z0-9_-]{10,}[.][A-Za-z0-9_-]{10,}[.]' "$out/patch.diff" "$out/verdicts.json"; then
             rm -f "$out/patch.diff" "$out/verdicts.json"
             echo "::error::credential-shaped value in the model output; nothing uploaded"
             exit 1
@@ -308,17 +336,26 @@ jobs:
         env:
           SHA256: ${{ needs.fix.outputs.patch_sha256 }}
         run: |
-          python3 -I .review-loop/trusted/automation/review_loop/cli.py check-patch \
+          mkdir -p "$RUNNER_TEMP/bin"
+          cp -r .review-loop/trusted/automation "$RUNNER_TEMP/bin/"
+          rm -rf .review-loop
+          python3 -I "$RUNNER_TEMP/bin/automation/review_loop/cli.py" check-patch \
             --patch "$RUNNER_TEMP/patch/patch.diff" \
             --verdicts "$RUNNER_TEMP/patch/verdicts.json" \
             --findings "$RUNNER_TEMP/input/findings.json" \
             --expect-sha256 "$SHA256" \
             --repo .
-      - name: Apply the patch
+      - name: Apply the patch and check what was staged (trusted code)
         if: steps.policy.outputs.empty == 'false'
+        env:
+          SHA256: ${{ needs.fix.outputs.patch_sha256 }}
         run: |
-          rm -rf .review-loop
-          git apply --index --whitespace=nowarn "$RUNNER_TEMP/patch/patch.diff"
+          python3 -I "$RUNNER_TEMP/bin/automation/review_loop/cli.py" apply \
+            --patch "$RUNNER_TEMP/patch/patch.diff" \
+            --verdicts "$RUNNER_TEMP/patch/verdicts.json" \
+            --findings "$RUNNER_TEMP/input/findings.json" \
+            --expect-sha256 "$SHA256" \
+            --repo .
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         if: steps.policy.outputs.empty == 'false'
         with:
@@ -398,10 +435,16 @@ jobs:
           HEAD_SHA: ${{ needs.triage.outputs.head_sha }}
           BRANCH: ${{ needs.triage.outputs.head_ref }}
           ATTEMPT: ${{ needs.claim.outputs.attempt }}
+          SHA256: ${{ needs.fix.outputs.patch_sha256 }}
         run: |
           cli="$RUNNER_TEMP/bin/automation/review_loop/cli.py"
-          git apply --index --whitespace=nowarn "$RUNNER_TEMP/patch/patch.diff"
-          git -c user.name=qradar-soar-review-loop -c user.email=review-loop@users.noreply.github.com \
+          # Trusted: re-check, git apply --index, then check exactly what is staged.
+          python3 -I "$cli" apply --patch "$RUNNER_TEMP/patch/patch.diff" \
+            --verdicts "$RUNNER_TEMP/patch/verdicts.json" \
+            --findings "$RUNNER_TEMP/input/findings.json" \
+            --expect-sha256 "$SHA256" --repo .
+          git -c core.hooksPath=/dev/null -c core.fsmonitor=false \
+            -c user.name=qradar-soar-review-loop -c user.email=review-loop@users.noreply.github.com \
             commit --no-verify -q -F - <<EOF
           fix: address Codex review findings (automated attempt $ATTEMPT/3)
 
@@ -419,12 +462,16 @@ jobs:
             push --no-verify "https://github.com/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$BRANCH"
           echo "pushed_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Ask Codex for a fresh review of the new head
+        # REVIEW_LOOP_REREVIEW_MODE: manual (default; nothing is posted and the
+        # report asks a maintainer), app (the review-loop App comments; not yet
+        # verified that Codex honours it), token (REVIEW_LOOP_REQUEST_TOKEN).
         env:
-          REVIEW_LOOP_APP_TOKEN: ${{ steps.app.outputs.token }}
-          REVIEW_LOOP_REQUEST_TOKEN: ${{ secrets.REVIEW_LOOP_REQUEST_TOKEN }}
+          MODE: ${{ vars.REVIEW_LOOP_REREVIEW_MODE }}
+          REVIEW_LOOP_APP_TOKEN: ${{ vars.REVIEW_LOOP_REREVIEW_MODE == 'app' && steps.app.outputs.token || '' }}
+          REVIEW_LOOP_REQUEST_TOKEN: ${{ vars.REVIEW_LOOP_REREVIEW_MODE == 'token' && secrets.REVIEW_LOOP_REQUEST_TOKEN || '' }}
           PR: ${{ needs.triage.outputs.pr }}
           NEW_SHA: ${{ steps.commit.outputs.pushed_sha }}
-        run: python3 -I "$RUNNER_TEMP/bin/automation/review_loop/cli.py" rereview --pr "$PR" --head "$NEW_SHA"
+        run: python3 -I "$RUNNER_TEMP/bin/automation/review_loop/cli.py" rereview --pr "$PR" --head "$NEW_SHA" --mode "$MODE"
 
   report:
     needs: [triage, claim, fix, verify, push]
@@ -465,6 +512,7 @@ jobs:
           NEEDS_HUMAN: ${{ needs.verify.outputs.needs_human }}
           PUSH: ${{ needs.push.result }}
           PUSHED_SHA: ${{ needs.push.outputs.pushed_sha }}
+          MODE: ${{ vars.REVIEW_LOOP_REREVIEW_MODE }}
         run: |
           cli=automation/review_loop/cli.py
           verdicts="$RUNNER_TEMP/patch/verdicts.json"
@@ -479,6 +527,7 @@ jobs:
           elif [ "$VERIFY_EMPTY" = true ]; then outcome=no-change
           elif [ -n "$PUSHED_SHA" ] && [ "$PUSH" != success ]; then outcome=rereview-failed
           elif [ "$PUSH" != success ]; then outcome=push-refused
-          else outcome=pushed
+          elif [ "$MODE" = app ] || [ "$MODE" = token ]; then outcome=pushed
+          else outcome=pushed-manual
           fi
           python3 -I "$cli" report --pr "$PR" --outcome "$outcome" --head "$HEAD_SHA" --verdicts "$verdicts"

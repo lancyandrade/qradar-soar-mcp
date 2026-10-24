@@ -113,19 +113,47 @@ def test_jobs_that_run_pull_request_code_hold_no_secrets_or_write_access():
     assert "${{ secrets." not in yaml.safe_dump(verify)
 
 
-def test_claude_job_is_read_only_and_tool_restricted():
+def test_claude_job_is_read_only_federated_and_tool_restricted():
     fix = load("review-loop.yml")["jobs"]["fix"]
-    assert set(fix["permissions"].values()) == {"read"}
+    assert fix["permissions"] == {"contents": "read", "pull-requests": "read", "id-token": "write"}
     (claude,) = [s for s in fix["steps"] if "claude-code-action" in str(s.get("uses"))]
-    args = claude["with"]["claude_args"]
+    inputs = claude["with"]
+    args = inputs["claude_args"]
     assert '--allowedTools "Read,Edit,Write,Glob,Grep"' in args
     for tool in ("Bash", "WebFetch", "WebSearch"):
         assert tool in args.split("--disallowedTools", 1)[1]
-    assert claude["with"]["allowed_bots"] == policy.CODEX.app_slug
-    assert "disableAllHooks" in claude["with"]["settings"]
-    assert claude["with"]["github_token"] == "${{ github.token }}"
+    assert inputs["allowed_bots"] == policy.CODEX.app_slug
+    assert "disableAllHooks" in inputs["settings"]
+    assert inputs["github_token"] == "${{ github.token }}"
+    # Federation only: no static Anthropic credential anywhere.
+    assert "anthropic_api_key" not in inputs and "claude_code_oauth_token" not in inputs
+    assert inputs["anthropic_federation_rule_id"] == (
+        "${{ vars.REVIEW_LOOP_ANTHROPIC_FEDERATION_RULE_ID }}"
+    )
+    assert inputs["anthropic_organization_id"] == (
+        "${{ vars.REVIEW_LOOP_ANTHROPIC_ORGANIZATION_ID }}"
+    )
     names = [s.get("name", "") for s in fix["steps"]]
     assert names.index("Set aside PR-controlled Claude configuration") < names.index("Claude Code")
+    guard = names.index("Require federated Anthropic authentication")
+    assert guard == names.index("Claude Code") - 1
+    script = fix["steps"][guard]["run"]
+    assert "ANTHROPIC_API_KEY" in script and "CLAUDE_CODE_OAUTH_TOKEN" in script
+
+
+def test_no_static_anthropic_credential_is_referenced_anywhere():
+    for path in ALL:
+        text = path.read_text(encoding="utf-8")
+        assert "secrets.ANTHROPIC_API_KEY" not in text, path.name
+        assert "anthropic_api_key:" not in text and "claude_code_oauth_token:" not in text
+
+
+def test_only_the_fix_job_can_mint_oidc_tokens():
+    for path in ALL:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for name, job in doc["jobs"].items():
+            if (job.get("permissions") or {}).get("id-token") == "write":
+                assert (path.name, name) == ("review-loop.yml", "fix")
 
 
 def test_loop_is_off_unless_explicitly_enabled():
@@ -283,15 +311,63 @@ def test_patch_checks_include_existing_file_modes():
         assert "--repo ." in yaml.safe_dump(jobs[name])
 
 
-def test_resolving_a_review_thread_re_evaluates_the_gate():
-    """Codex PR #12: thread resolution must reach the gate, or it stays red after the fix."""
-    relay = load("codex-review-relay.yml")
-    assert triggers(relay)["pull_request_review_thread"]["types"] == ["resolved", "unresolved"]
-    thread = relay["jobs"]["thread"]
-    assert "github.event_name == 'pull_request_review_thread'" in thread["if"]
-    assert "github.event.pull_request.head.repo.full_name == github.repository" in thread["if"]
-    assert all("uses" not in s for s in thread["steps"])
-    assert "codex-review-relay" in triggers(load("review-gate.yml"))["workflow_run"]["workflows"]
+# Events GitHub Actions accepts in `on:` (docs: "Events that trigger workflows").
+# pull_request_review_thread is a webhook event only; using it made the relay
+# workflow invalid (PR #12, commit 6496494).
+ACTIONS_EVENTS = {
+    "branch_protection_rule", "check_run", "check_suite", "create", "delete", "deployment",
+    "deployment_status", "discussion", "discussion_comment", "fork", "gollum", "image_version",
+    "issue_comment", "issues", "label", "merge_group", "milestone", "page_build", "public",
+    "pull_request", "pull_request_review", "pull_request_review_comment",
+    "pull_request_target", "push", "registry_package", "release", "repository_dispatch",
+    "schedule", "status", "watch", "workflow_call", "workflow_dispatch", "workflow_run",
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("path", ALL, ids=lambda p: p.name)
+def test_every_trigger_is_a_github_actions_event(path: Path):
+    on = triggers(yaml.safe_load(path.read_text(encoding="utf-8")))
+    names = set(on) if isinstance(on, dict) else set(on if isinstance(on, list) else [on])
+    assert names <= ACTIONS_EVENTS, names - ACTIONS_EVENTS
+
+
+def test_thread_resolution_is_picked_up_by_the_scheduled_fanout():
+    gate = load("review-gate.yml")
+    on = triggers(gate)
+    assert "schedule" in on and "workflow_dispatch" in on
+    fanout = gate["jobs"]["fanout"]
+    assert fanout["permissions"] == {
+        "contents": "read",
+        "pull-requests": "read",
+        "actions": "write",
+    }
+    assert "environment" not in fanout and "secrets." not in yaml.safe_dump(fanout)
+    assert "github.event_name == 'schedule'" in fanout["if"]
+    assert "cli.py fanout" in fanout["steps"][-1]["run"]
+    # Only the gate job publishes, and only for the PR its concurrency group is keyed on.
+    gate_job = gate["jobs"]["gate"]
+    assert "github.event.workflow_run.pull_requests[0].number" in gate_job["if"]
+    assert "github.event_name == 'schedule'" not in gate_job["if"]
+    assert "format('other-{0}', github.run_id)" in gate["concurrency"]["group"]
+    assert "pull_request_review_thread" not in triggers(load("codex-review-relay.yml"))
+
+
+def test_rereview_mode_defaults_to_manual():
+    jobs = load("review-loop.yml")["jobs"]
+    step_name = "Ask Codex for a fresh review of the new head"
+    (step,) = [s for s in jobs["push"]["steps"] if s.get("name") == step_name]
+    env = step["env"]
+    assert "vars.REVIEW_LOOP_REREVIEW_MODE == 'app'" in env["REVIEW_LOOP_APP_TOKEN"]
+    assert "vars.REVIEW_LOOP_REREVIEW_MODE == 'token'" in env["REVIEW_LOOP_REQUEST_TOKEN"]
+    assert "outcome=pushed-manual" in yaml.safe_dump(jobs["report"])
+
+
+def test_verify_and_push_apply_only_through_trusted_code():
+    jobs = load("review-loop.yml")["jobs"]
+    for name in ("verify", "push"):
+        text = "".join(step.get("run", "") for step in jobs[name]["steps"])
+        assert "git apply" not in text.replace("git apply --index, then", "")
+        assert 'cli.py" apply' in text or '"$cli" apply' in text
 
 
 def test_thread_relays_never_start_a_fix():
@@ -303,3 +379,35 @@ def test_thread_relays_never_start_a_fix():
     )
     assert relay_cond in loop["jobs"]["triage"]["if"]
     assert relay_cond in loop["concurrency"]["group"]
+
+
+def test_gate_noop_events_cannot_displace_a_pending_evaluation():
+    """Second review of PR #12: any comment shared the PR's group."""
+    gate = load("review-gate.yml")
+    group = gate["concurrency"]["group"]
+    assert "format('other-{0}', github.run_id)" in group
+    cond = gate["jobs"]["gate"]["if"]
+    for clause in (
+        "github.event.pull_request.head.repo.full_name == github.repository",
+        "github.event.comment.user.id == 199175422 || "
+        "github.event.comment.author_association == 'OWNER'",
+        "github.event.workflow_run.head_repository.full_name == github.repository && "
+        "github.event.workflow_run.pull_requests[0].number",
+    ):
+        assert clause in cond and clause in group, clause
+
+
+def test_nested_agent_instructions_are_set_aside_too():
+    fix = load("review-loop.yml")["jobs"]["fix"]
+    steps = {s.get("name", ""): s for s in fix["steps"]}
+    for name in (
+        "Set aside PR-controlled Claude configuration",
+        "Restore the PR's Claude configuration",
+    ):
+        assert "-iname AGENTS.md" in steps[name]["run"]
+
+
+def test_fix_job_credential_grep_covers_jwts():
+    fix = load("review-loop.yml")["jobs"]["fix"]
+    (build,) = [s for s in fix["steps"] if s.get("id") == "patch"]
+    assert "eyJ[A-Za-z0-9_-]{10,}[.]" in build["run"]

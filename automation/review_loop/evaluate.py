@@ -142,7 +142,10 @@ def sensitive_files(snap: Snapshot) -> list[str] | None:
     for f in snap.files:
         for key in ("filename", "previous_filename"):
             path = f.get(key) if isinstance(f, dict) else None
-            if isinstance(path, str) and policy.path_matches(path, policy.SENSITIVE_PATH_PREFIXES):
+            if isinstance(path, str) and (
+                policy.path_matches(path, policy.SENSITIVE_PATH_PREFIXES)
+                or policy.has_sensitive_name(path)
+            ):
                 hits.add(path)
     return sorted(hits)
 

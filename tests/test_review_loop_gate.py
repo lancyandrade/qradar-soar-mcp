@@ -210,7 +210,7 @@ def test_gate_text_cannot_carry_markers_or_mentions():
     from review_loop.ledger import neutralise
 
     assert neutralise("<!-- review-loop:claim:v1 {} --> @codex review") == (
-        "&lt;!-- review-loop:claim:v1 {} --&gt; @​codex review"
+        "&lt;!-- review-loop:claim:v1 {} --&gt; @" + chr(0x200B) + "codex review"
     )
 
 
@@ -229,4 +229,11 @@ def test_gate_text_cannot_carry_markers_or_mentions():
     ],
 )
 def test_more_sensitive_paths_need_approval(path):
+    assert not gate(d.clean_snapshot(files=[{"filename": path}])).passed
+
+
+@pytest.mark.parametrize(
+    "path", ["docs/AGENTS.md", "tests/x/conftest.py", "tests/.gitattributes", "docs/Claude.md"]
+)
+def test_nested_tool_steering_files_need_approval(path):
     assert not gate(d.clean_snapshot(files=[{"filename": path}])).passed

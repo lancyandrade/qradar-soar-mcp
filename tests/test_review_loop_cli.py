@@ -298,6 +298,8 @@ def test_check_patch_rejects_a_swapped_artifact(fake: FakeGitHub, tmp_path: Path
         str(findings),
         "--verdicts",
         str(verdicts),
+        "--repo",
+        str(tmp_path),
     ]
     assert cli.main([*args, "--expect-sha256", digest]) == 0
     assert outputs(tmp_path)["empty"] == "true"
@@ -315,7 +317,7 @@ def test_check_patch_flags_needs_human(fake: FakeGitHub, tmp_path: Path):
     )
     rc = cli.main(
         ["check-patch", "--patch", str(tmp_path / "p.diff"), "--findings", str(tmp_path / "f.json"),
-         "--verdicts", str(tmp_path / "v.json")]
+         "--verdicts", str(tmp_path / "v.json"), "--repo", str(tmp_path)]
     )  # fmt: skip
     assert rc == 1 and outputs(tmp_path)["needs_human"] == "true"
 
@@ -348,12 +350,6 @@ def test_report_neutralises_model_text_and_halts_once(fake: FakeGitHub, tmp_path
 def test_report_for_a_successful_push_does_not_halt(fake: FakeGitHub):
     cli.main(["report", "--pr", str(d.NUMBER), "--outcome", "pushed", "--head", d.HEAD])
     assert len(fake.writes) == 1 and fake.writes[0][1].endswith("/comments")
-
-
-def test_rereview_asks_codex_for_the_new_head(fake: FakeGitHub):
-    cli.main(["rereview", "--pr", str(d.NUMBER), "--head", d.OTHER])
-    body = fake.writes[0][2]["body"]
-    assert body.startswith("@codex review") and d.OTHER in body
 
 
 def test_unknown_outcome_is_refused(fake: FakeGitHub):
@@ -456,37 +452,152 @@ def test_report_never_publishes_model_reasons(fake: FakeGitHub, tmp_path: Path):
     assert "LEAKY" not in body and "| 1 | not_a_bug |" in body
 
 
-def test_check_patch_repo_mode_check_catches_an_existing_symlink(fake, tmp_path: Path):
-    import subprocess
+# ------------------------------------------------------------------ re-review modes
 
-    repo = tmp_path / "repo"
-    (repo / "tests").mkdir(parents=True)
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    (repo / "tests" / "test_x.py").write_text("x = 1\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
-    # Record the file as a symlink in the index without needing symlink support.
-    blob = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", ":tests/test_x.py"],
-        check=True, capture_output=True, text=True,
-    ).stdout.strip()  # fmt: skip
-    subprocess.run(
-        ["git", "-C", str(repo), "update-index", "--cacheinfo", f"120000,{blob},tests/test_x.py"],
-        check=True,
+
+def test_rereview_manual_mode_posts_nothing(fake: FakeGitHub):
+    assert cli.main(["rereview", "--pr", str(d.NUMBER), "--head", d.OTHER]) == 0
+    assert cli.main(["rereview", "--pr", str(d.NUMBER), "--head", d.OTHER, "--mode", "manual"]) == 0
+    assert fake.writes == []
+
+
+def test_rereview_unknown_mode_is_manual(fake: FakeGitHub):
+    cli.main(["rereview", "--pr", str(d.NUMBER), "--head", d.OTHER, "--mode", "please"])
+    assert fake.writes == []
+
+
+def test_rereview_app_mode_uses_the_app_token(fake: FakeGitHub, monkeypatch):
+    used = []
+    monkeypatch.setattr(
+        cli, "client", lambda env="GITHUB_TOKEN": used.append(env) or GitHub(TOKEN, d.REPO, fake)
     )
-    patch = tmp_path / "p.diff"
-    patch.write_text(
-        "diff --git a/tests/test_x.py b/tests/test_x.py\n--- a/tests/test_x.py\n"
-        "+++ b/tests/test_x.py\n@@ -1 +1,2 @@\n x = 1\n+y = 2\n",
-        encoding="utf-8",
+    cli.main(["rereview", "--pr", str(d.NUMBER), "--head", d.OTHER, "--mode", "app"])
+    assert used == ["REVIEW_LOOP_APP_TOKEN"]
+    body = fake.writes[0][2]["body"]
+    assert body.startswith("@codex review") and d.OTHER in body
+
+
+def test_rereview_token_mode_uses_the_request_token(fake: FakeGitHub, monkeypatch):
+    used = []
+    monkeypatch.setattr(
+        cli, "client", lambda env="GITHUB_TOKEN": used.append(env) or GitHub(TOKEN, d.REPO, fake)
     )
-    findings = tmp_path / "f.json"
-    findings.write_text(json.dumps({"findings": [{"comment_id": 1}]}), encoding="utf-8")
-    verdicts = tmp_path / "v.json"
-    verdicts.write_text(
-        json.dumps({"findings": [{"comment_id": 1, "verdict": "fixed", "reason": "r"}]}),
-        encoding="utf-8",
-    )
-    args = ["check-patch", "--patch", str(patch), "--findings", str(findings),
-            "--verdicts", str(verdicts)]  # fmt: skip
-    assert cli.main(args) == 0
-    assert cli.main([*args, "--repo", str(repo)]) == 1
+    cli.main(["rereview", "--pr", str(d.NUMBER), "--head", d.OTHER, "--mode", "token"])
+    assert used == ["REVIEW_LOOP_REQUEST_TOKEN"]
+
+
+def test_manual_push_report_asks_a_maintainer_without_mentioning_codex(fake: FakeGitHub):
+    cli.main(["report", "--pr", str(d.NUMBER), "--outcome", "pushed-manual", "--head", d.HEAD])
+    body = fake.writes[0][2]["body"]
+    assert "codex review" in body and "@codex" not in body  # the mention is neutralised
+
+
+# ------------------------------------------------------------------ fan-out
+
+
+def test_fanout_dispatches_one_gate_run_per_same_repo_pr(fake: FakeGitHub, monkeypatch, tmp_path):
+    pulls = [
+        {"number": 3, "state": "open", "head": {"repo": {"full_name": d.REPO}}},
+        {"number": 4, "state": "open", "head": {"repo": {"full_name": "fork/qradar-soar-mcp"}}},
+        {"number": 5, "state": "closed", "head": {"repo": {"full_name": d.REPO}}},
+    ]
+
+    def transport(method, url, headers, body):
+        if method == "GET" and "/pulls?" in url:
+            return Response(200, {}, json.dumps(pulls).encode())
+        return fake(method, url, headers, body)
+
+    monkeypatch.setattr(cli, "client", lambda env="GITHUB_TOKEN": GitHub(TOKEN, d.REPO, transport))
+    event = tmp_path / "event.json"
+    event.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
+    assert cli.main(["fanout", "--ref", "main"]) == 0
+    assert [w[1] for w in fake.writes] == [
+        f"/repos/{d.REPO}/actions/workflows/review-gate.yml/dispatches"
+    ]
+    assert fake.writes[0][2] == {"ref": "main", "inputs": {"pr_number": "3"}}
+
+
+def test_fanout_for_a_workflow_run_uses_the_commit_pulls(fake: FakeGitHub, monkeypatch, tmp_path):
+    pulls = [{"number": 7, "state": "open", "head": {"repo": {"full_name": d.REPO}}}]
+
+    def transport(method, url, headers, body):
+        if method == "GET" and f"/commits/{d.HEAD}/pulls" in url:
+            return Response(200, {}, json.dumps(pulls).encode())
+        return fake(method, url, headers, body)
+
+    monkeypatch.setattr(cli, "client", lambda env="GITHUB_TOKEN": GitHub(TOKEN, d.REPO, transport))
+    event = tmp_path / "event.json"
+    event.write_text(json.dumps({"workflow_run": {"head_sha": d.HEAD}}), encoding="utf-8")
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_run")
+    cli.main(["fanout", "--ref", "main"])
+    assert fake.writes[0][2]["inputs"] == {"pr_number": "7"}
+
+
+def test_fanout_refuses_a_bad_ref(fake: FakeGitHub):
+    with pytest.raises(SystemExit):
+        cli.main(["fanout", "--ref", "main;rm -rf /"])
+
+
+# ------------------------------------------------------------------ gate fails closed
+
+
+@pytest.mark.parametrize(
+    "error", [KeyError("head"), ValueError("bad json"), TimeoutError("timed out"), TypeError("x")]
+)
+def test_any_gate_error_publishes_a_failure(fake: FakeGitHub, monkeypatch, error):
+    """Second review of PR #12: a non-HTTP error left a stale success standing."""
+    fake.issue_comments = [d.codex_state(), d.codex_clean_receipt()]
+
+    def boom(snap):
+        raise error
+
+    monkeypatch.setattr(cli, "gate", boom)
+    assert cli.main(["gate", "--pr", str(d.NUMBER), "--publish"]) == 1
+    payload = fake.writes[-1][2]
+    assert payload["conclusion"] == "failure" and payload["head_sha"] == d.HEAD
+    assert type(error).__name__ in payload["output"]["summary"]
+
+
+def test_gate_error_on_invalid_json_publishes_a_failure(fake: FakeGitHub, monkeypatch):
+    original = fake.__call__
+
+    def transport(method, url, headers, body):
+        if url.endswith(f"/pulls/{d.NUMBER}/reviews?per_page=100"):
+            return Response(200, {}, b"<html>not json</html>")
+        return original(method, url, headers, body)
+
+    monkeypatch.setattr(cli, "client", lambda env="GITHUB_TOKEN": GitHub(TOKEN, d.REPO, transport))
+    assert cli.main(["gate", "--pr", str(d.NUMBER), "--publish"]) == 1
+    assert fake.writes[-1][2]["conclusion"] == "failure"
+
+
+def test_fanout_keeps_going_after_a_failed_dispatch(fake: FakeGitHub, monkeypatch, tmp_path):
+    pulls = [
+        {"number": n, "state": "open", "head": {"repo": {"full_name": d.REPO}}} for n in (1, 2, 3)
+    ]
+    calls = []
+
+    def transport(method, url, headers, body):
+        if method == "GET" and "/pulls?" in url:
+            return Response(200, {}, json.dumps(pulls).encode())
+        if method == "POST" and url.endswith("/dispatches"):
+            pr = json.loads(body)["inputs"]["pr_number"]
+            calls.append(pr)
+            return Response(500 if pr == "2" else 204, {}, b"")
+        return fake(method, url, headers, body)
+
+    monkeypatch.setattr(cli, "client", lambda env="GITHUB_TOKEN": GitHub(TOKEN, d.REPO, transport))
+    event = tmp_path / "event.json"
+    event.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
+    assert cli.main(["fanout", "--ref", "main"]) == 1
+    assert calls == ["3", "2", "1"]  # newest first, and #1 still dispatched after #2 failed
+
+
+def test_check_patch_requires_a_repo(fake: FakeGitHub):
+    with pytest.raises(SystemExit):
+        cli.main(["check-patch", "--patch", "p", "--findings", "f", "--verdicts", "v"])

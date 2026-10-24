@@ -15,7 +15,6 @@ import hashlib
 import json
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -23,7 +22,7 @@ from typing import Any
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from review_loop import ledger, patch_policy, policy
+from review_loop import gitcheck, ledger, patch_policy, policy
 from review_loop.evaluate import Action, Snapshot, eligibility, gate, plan_loop
 from review_loop.github import GitHub, GitHubError
 from review_loop.snapshot import HeadMovedError, take
@@ -119,6 +118,55 @@ def cmd_resolve(args: argparse.Namespace) -> int:
     return 0
 
 
+MAX_FANOUT = 30
+_BRANCH = re.compile(r"[A-Za-z0-9._/-]{1,100}")
+
+
+def fanout_targets(event_name: str, event: dict[str, Any], gh: GitHub) -> list[int]:
+    """Open same-repository PRs to re-evaluate, for events that name no PR."""
+    repo = gh.repo
+    if event_name == "workflow_run":
+        sha = str((event.get("workflow_run") or {}).get("head_sha", ""))
+        if not _SHA.fullmatch(sha):
+            return []
+        pulls = gh.get(f"/repos/{repo}/commits/{sha}/pulls")
+    elif event_name == "schedule":
+        pulls = gh.paginate(f"/repos/{repo}/pulls?state=open&base={policy.BASE_BRANCH}")
+    else:
+        return []
+    nums = sorted(
+        p["number"]
+        for p in pulls
+        if isinstance(p, dict)
+        and p.get("state") == "open"
+        and isinstance(p.get("number"), int)
+        and ((p.get("head") or {}).get("repo") or {}).get("full_name") == repo
+    )
+    return sorted(nums, reverse=True)[:MAX_FANOUT]  # newest first
+
+
+def cmd_fanout(args: argparse.Namespace) -> int:
+    """Dispatch one review-gate run per PR, so each lands in its PR's concurrency group."""
+    if not _BRANCH.fullmatch(args.ref) or ".." in args.ref:
+        raise SystemExit("invalid ref")
+    gh = client()
+    event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+    nums = fanout_targets(os.environ["GITHUB_EVENT_NAME"], event, gh)
+    failed = 0
+    for n in nums:
+        try:
+            gh.request(
+                "POST",
+                f"/repos/{gh.repo}/actions/workflows/review-gate.yml/dispatches",
+                {"ref": args.ref, "inputs": {"pr_number": str(n)}},
+            )
+        except GitHubError as err:
+            failed += 1
+            log(f"dispatch for #{n} failed: {err}")
+    log(f"dispatched gate runs for {len(nums) - failed} of {len(nums)} pull request(s)")
+    return 1 if failed else 0
+
+
 # ------------------------------------------------------------------ gate
 
 
@@ -137,28 +185,36 @@ def publish_check(gh_app: GitHub, head: str, passed: bool, title: str, text: str
 
 
 def cmd_gate(args: argparse.Namespace) -> int:
+    """Evaluate and publish. Any failure to evaluate publishes a failure.
+
+    A stale success on the same head must never survive a re-evaluation that
+    could not complete, so every exception (network, JSON, unexpected payload,
+    a bug in the evaluation) ends in a published failure, or a non-zero exit
+    if even that is impossible.
+    """
     gh = client()
     app = client("REVIEW_LOOP_APP_TOKEN") if args.publish else None
     try:
         snap = take(gh, args.pr)
-    except HeadMovedError:
-        log("head moved during evaluation; the next event re-evaluates it")
+        result = gate(snap)
+        text = "\n".join(result.lines)
+        summary(f"### {policy.GATE_CHECK_NAME} for #{args.pr} @ {result.head_sha[:12]}\n{text}")
+        if app is not None:
+            publish_check(app, result.head_sha, result.passed, result.title, text)
+        set_output("passed", "true" if result.passed else "false")
         return 0
-    except GitHubError as err:
-        log(f"gate evaluation failed: {err}")
+    except HeadMovedError:
+        log("head moved during evaluation; the new head has no gate result until evaluated")
+        return 0
+    except Exception as err:  # fail closed on anything
+        reason = err if isinstance(err, GitHubError) else type(err).__name__
+        log(f"gate evaluation failed: {reason}")
         if app is not None:
             pr = gh.get(f"/repos/{gh.repo}/pulls/{args.pr}")
             publish_check(
-                app, pr["head"]["sha"], False, "Merge gate blocked", f"evaluation error: {err}"
+                app, pr["head"]["sha"], False, "Merge gate blocked", f"evaluation error: {reason}"
             )
         return 1
-    result = gate(snap)
-    text = "\n".join(result.lines)
-    summary(f"### {policy.GATE_CHECK_NAME} for #{args.pr} @ {result.head_sha[:12]}\n{text}")
-    if app is not None:
-        publish_check(app, result.head_sha, result.passed, result.title, text)
-    set_output("passed", "true" if result.passed else "false")
-    return 0
 
 
 # ------------------------------------------------------------------ loop
@@ -248,44 +304,59 @@ def _load_json(path: str) -> Any:
         return None
 
 
-def cmd_check_patch(args: argparse.Namespace) -> int:
-    text = Path(args.patch).read_text(encoding="utf-8", errors="replace")
-    report = patch_policy.check_patch(text)
+def _check(args: argparse.Namespace) -> tuple[patch_policy.PatchReport, bool]:
+    """All checks on the patch artefact. Returns the report and the overall verdict."""
+    data = Path(args.patch).read_bytes()
+    report = patch_policy.check_patch(data)
     findings = _load_json(args.findings) or {}
     ids = [
         f["comment_id"]
         for f in findings.get("findings", [])
-        if isinstance(f.get("comment_id"), int)
+        if isinstance(f, dict) and isinstance(f.get("comment_id"), int)
     ]
     verdicts = patch_policy.check_verdicts(_load_json(args.verdicts), ids, report)
-    if args.expect_sha256:
-        digest = hashlib.sha256(Path(args.patch).read_bytes()).hexdigest()
-        if digest != args.expect_sha256:
-            report.problems.append("patch does not match the digest recorded by the fix job")
-            report.ok = False
-    if args.repo and report.files:
-        listed = subprocess.run(  # noqa: S603 - fixed argv, paths already validated
-            ["git", "-C", args.repo, "ls-files", "-s", "--", *report.files],  # noqa: S607
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
-        mode_problems = patch_policy.check_existing_modes(listed)
-        if mode_problems:
-            report.problems += mode_problems
-            report.ok = False
+    if args.expect_sha256 and hashlib.sha256(data).hexdigest() != args.expect_sha256:
+        report.problems.append("patch does not match the digest recorded by the fix job")
+    if report.ok and report.files:
+        report.problems += gitcheck.pre_apply_problems(args.repo, args.patch, report.diffs)
+    report.ok = not report.problems
     lines = [f"- files: {len(report.files)}, changed lines: {report.changed_lines}"]
     lines += [f"- patch: {p}" for p in report.problems]
     lines += [f"- verdicts: {p}" for p in verdicts.problems]
     lines += [f"- finding {r['comment_id']}: {r['verdict']}" for r in verdicts.rows]
     summary("### automated patch check\n" + "\n".join(lines))
+    for line in lines:
+        log(line)
     set_output("empty", "true" if report.empty else "false")
     set_output("needs_human", "true" if verdicts.needs_human else "false")
     ok = report.ok and verdicts.ok and not verdicts.needs_human
     set_output("ok", "true" if ok else "false")
-    for line in lines:
-        log(line)
+    return report, ok
+
+
+def cmd_check_patch(args: argparse.Namespace) -> int:
+    _report, ok = _check(args)
     return 0 if ok else 1
+
+
+def cmd_apply(args: argparse.Namespace) -> int:
+    """Check, ``git apply --index``, then check exactly what was staged."""
+    if not args.repo:
+        raise SystemExit("--repo is required")
+    report, ok = _check(args)
+    if not ok or report.empty:
+        return 1
+    try:
+        gitcheck.apply(args.repo, args.patch)
+    except gitcheck.GitCheckError as err:
+        log(f"apply: {err}")
+        return 1
+    problems = gitcheck.staged_problems(args.repo, report.diffs)
+    for p in problems:
+        log(f"staged: {p}")
+    if problems:
+        summary("### staged change check\n" + "\n".join(f"- {p}" for p in problems))
+    return 1 if problems else 0
 
 
 def cmd_prepush(args: argparse.Namespace) -> int:
@@ -312,13 +383,26 @@ def cmd_prepush(args: argparse.Namespace) -> int:
     return 1 if problems else 0
 
 
+REREVIEW_MODES = ("manual", "app", "token")
+
+
+def rereview_mode(raw: str) -> str:
+    """The configured way to ask Codex for a new review; anything unknown is manual."""
+    return raw if raw in REREVIEW_MODES else "manual"
+
+
 def cmd_rereview(args: argparse.Namespace) -> int:
-    """Ask Codex to review the new head (with the request token if configured)."""
-    env = (
-        "REVIEW_LOOP_REQUEST_TOKEN"
-        if os.environ.get("REVIEW_LOOP_REQUEST_TOKEN")
-        else "REVIEW_LOOP_APP_TOKEN"
-    )
+    """Ask Codex to review the new head, as the identity the mode names.
+
+    ``app``: the review-loop App (not verified that Codex honours it).
+    ``token``: REVIEW_LOOP_REQUEST_TOKEN, a narrow token of a person Codex
+    serves. ``manual``: post nothing; the report asks a maintainer.
+    """
+    mode = rereview_mode(args.mode)
+    if mode == "manual":
+        log("re-review mode is manual: not requesting a Codex review")
+        return 0
+    env = "REVIEW_LOOP_APP_TOKEN" if mode == "app" else "REVIEW_LOOP_REQUEST_TOKEN"
     gh = client(env)
     head = _sha(args.head)
     data = json.dumps({"head": head}, sort_keys=True)
@@ -333,6 +417,12 @@ def cmd_rereview(args: argparse.Namespace) -> int:
 OUTCOMES: dict[str, tuple[str, bool]] = {
     # outcome: (message, halt)
     "pushed": ("Pushed an automated fix and asked Codex to review the new head.", False),
+    "pushed-manual": (
+        "Pushed an automated fix. Codex is not asked automatically "
+        "(REVIEW_LOOP_REREVIEW_MODE is manual): a maintainer must comment "
+        "`@codex review` on this PR to continue the loop.",
+        False,
+    ),
     "no-change": ("No code change was needed or safe; nothing was pushed.", True),
     "needs-human": ("At least one finding needs a human decision; nothing was pushed.", True),
     "claude-failed": ("The Claude Code step failed; nothing was pushed.", True),
@@ -402,6 +492,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("resolve").set_defaults(func=cmd_resolve)
 
+    p = sub.add_parser("fanout")
+    p.add_argument("--ref", required=True)
+    p.set_defaults(func=cmd_fanout)
+
     p = sub.add_parser("gate")
     p.add_argument("--pr", type=int, required=True)
     p.add_argument("--publish", action="store_true")
@@ -424,8 +518,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--findings", required=True)
     p.add_argument("--verdicts", required=True)
     p.add_argument("--expect-sha256", default="")
-    p.add_argument("--repo", default="", help="checkout the patch applies to (checks modes)")
+    p.add_argument("--repo", required=True, help="checkout the patch applies to")
     p.set_defaults(func=cmd_check_patch)
+
+    p = sub.add_parser("apply")
+    p.add_argument("--patch", required=True)
+    p.add_argument("--findings", required=True)
+    p.add_argument("--verdicts", required=True)
+    p.add_argument("--expect-sha256", default="")
+    p.add_argument("--repo", required=True)
+    p.set_defaults(func=cmd_apply)
 
     p = sub.add_parser("prepush")
     p.add_argument("--pr", type=int, required=True)
@@ -437,6 +539,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("rereview")
     p.add_argument("--pr", type=int, required=True)
     p.add_argument("--head", required=True)
+    p.add_argument("--mode", default="manual")
     p.set_defaults(func=cmd_rereview)
 
     p = sub.add_parser("report")
