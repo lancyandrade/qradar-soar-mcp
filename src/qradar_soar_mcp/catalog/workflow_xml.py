@@ -39,7 +39,7 @@ from __future__ import annotations
 import json
 import re
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
@@ -76,7 +76,9 @@ MAX_NODES = 2_000
 MAX_EDGES = 4_000
 MAX_FUNCTION_JSON_CHARS = 200_000
 MAX_INPUT_NAMES = 200
-IDENT_LIMIT = 200  # characters of an element id kept
+# An identifier (element id, reference, uuid) longer than this refuses the document:
+# graph checks compare whole identifiers, and a cut one could match another's prefix.
+IDENT_LIMIT = 200
 TEXT_LIMIT = 300  # characters of a name kept
 MAX_PROBLEMS = 50
 
@@ -123,12 +125,25 @@ class Edge:
     valid: bool = True
 
 
+def _unchanged(text: str) -> str:
+    return text
+
+
 @dataclass(slots=True)
 class Graph:
     nodes: list[Node] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
     annotations: int = 0
     problems: list[str] = field(default_factory=list)
+    # Applied to each kept text value BEFORE it is cut to its bound, so that a
+    # credential straddling the bound is seen whole by the redactor.
+    clean: Callable[[str], str] = _unchanged
+
+    def name(self, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = self.clean(value).strip()
+        return text[:TEXT_LIMIT] if text else None
 
     def problem(self, text: str) -> None:
         if len(self.problems) < MAX_PROBLEMS:
@@ -173,16 +188,16 @@ def _attr(element: ET.Element, name: str) -> str | None:
 
 
 def _ident(value: str | None) -> str | None:
-    if value is None:
+    """An identifier exactly as written: never stripped, never cut. One over
+    ``IDENT_LIMIT`` refuses the document, since comparing cut identifiers could make a
+    dangling reference look valid."""
+    if value is None or value == "":
         return None
-    value = value.strip()
-    return value[:IDENT_LIMIT] if value else None
-
-
-def _name(value: str | None) -> str | None:
-    if value is None or not value.strip():
-        return None
-    return value.strip()[:TEXT_LIMIT]
+    if len(value) > IDENT_LIMIT:
+        raise WorkflowXmlRefusedError(
+            f"an identifier in the workflow XML is longer than {IDENT_LIMIT} characters"
+        )
+    return value
 
 
 def parse(xml: str) -> ET.Element:
@@ -229,15 +244,16 @@ def _function_call(task: ET.Element, graph: Graph, node_id: str) -> FunctionCall
         return None
     element = found[0]
     raw_uuid = _attr(element, "uuid")
-    # Matched exactly as written: nothing is stripped or case-folded.
-    uuid = raw_uuid[:IDENT_LIMIT] if raw_uuid else None
-    matchable = raw_uuid is not None and len(raw_uuid) <= IDENT_LIMIT
-    if uuid is None:
+    # Matched exactly as written: nothing is stripped, case-folded or cut. One over
+    # the bound is not kept at all (never a prefix of it) and is not matched.
+    matchable = bool(raw_uuid) and len(raw_uuid or "") <= IDENT_LIMIT
+    uuid = raw_uuid if matchable else None
+    if not raw_uuid:
         graph.problem(f"service task {node_id}: its function reference has no uuid")
     elif not matchable:
         graph.problem(
             f"service task {node_id}: its function uuid is longer than {IDENT_LIMIT} "
-            "characters and is not matched"
+            "characters; it is not kept and not matched"
         )
     payload: Any = None
     text = element.text or ""
@@ -254,7 +270,7 @@ def _function_call(task: ET.Element, graph: Graph, node_id: str) -> FunctionCall
             graph.problem(f"service task {node_id}: its function settings are not a JSON object")
         return FunctionCall(uuid, (), False, False, None, False, uuid_matchable=matchable)
     inputs = payload.get(INPUTS_KEY)
-    names = sorted(_name(str(k)) or "" for k in inputs) if isinstance(inputs, Mapping) else []
+    names = sorted(graph.name(str(k)) or "" for k in inputs) if isinstance(inputs, Mapping) else []
     if len(names) > MAX_INPUT_NAMES:
         graph.problem(f"service task {node_id}: only the first {MAX_INPUT_NAMES} inputs are named")
     result = payload.get(RESULT_NAME_KEY)
@@ -263,7 +279,7 @@ def _function_call(task: ET.Element, graph: Graph, node_id: str) -> FunctionCall
         input_names=tuple(n for n in names[:MAX_INPUT_NAMES] if n),
         has_pre_processing_script=_present(payload.get(PRE_SCRIPT_KEY)),
         has_post_processing_script=_present(payload.get(POST_SCRIPT_KEY)),
-        result_name=_name(result) if isinstance(result, str) else None,
+        result_name=graph.name(result) if isinstance(result, str) else None,
         payload_parsed=True,
         uuid_matchable=matchable,
     )
@@ -274,8 +290,13 @@ def _present(value: Any) -> bool:
 
 
 # ------------------------------------------------------------------- summary
-def summarise(xml: str) -> Graph:
-    """The structural summary of one workflow's XML, or :class:`WorkflowXmlRefusedError`."""
+def summarise(xml: str, clean: Callable[[str], str] = _unchanged) -> Graph:
+    """The structural summary of one workflow's XML, or :class:`WorkflowXmlRefusedError`.
+
+    ``clean`` (the catalog's credential filter) is applied to every kept text value
+    before it is cut to its bound. Identifiers are compared exactly as written and are
+    never cut, so the graph checks see the document's real identities; they are
+    filtered whole, with everything else, when the summary is finished."""
     root = parse(xml)
     if not _is_bpmn(root, "definitions"):
         raise WorkflowXmlRefusedError("the root element is not a BPMN 2.0 definitions element")
@@ -286,7 +307,7 @@ def summarise(xml: str) -> Graph:
         # Only one process per document was observed; how SOAR would relate two is unknown.
         raise WorkflowXmlRefusedError("the workflow XML has more than one BPMN process")
     process = processes[0]
-    graph = Graph()
+    graph = Graph(clean=clean)
     seen: set[str] = set()
     flows: list[ET.Element] = []
     for element in process:
@@ -317,7 +338,7 @@ def summarise(xml: str) -> Graph:
             Node(
                 id=ident,
                 type=local,
-                name=_name(_attr(element, "name")),
+                name=graph.name(_attr(element, "name")),
                 function=_function_call(element, graph, ident) if local == "serviceTask" else None,
             )
         )
@@ -363,7 +384,7 @@ def _edges(graph: Graph, flows: list[ET.Element], process: ET.Element) -> None:
         conditions = [c for c in element if _is_bpmn(c, "conditionExpression")]
         if len(conditions) > 1:
             graph.problem(f"sequence flow {ident} has more than one condition")
-        language = _name(_attr(conditions[0], "language")) if conditions else None
+        language = graph.name(_attr(conditions[0], "language")) if conditions else None
         is_default = ident in named_defaults and defaults.get(source or "") == ident
         if is_default and conditions:
             graph.problem(f"sequence flow {ident} is a default flow and also has a condition")
@@ -372,7 +393,7 @@ def _edges(graph: Graph, flows: list[ET.Element], process: ET.Element) -> None:
                 id=ident,
                 source=source or "",
                 target=target or "",
-                name=_name(_attr(element, "name")),
+                name=graph.name(_attr(element, "name")),
                 conditional=bool(conditions),
                 condition_language=language,
                 default=is_default,

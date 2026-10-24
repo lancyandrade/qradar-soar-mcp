@@ -566,15 +566,86 @@ def test_the_uuid_is_matched_exactly_as_written(written: str):
     assert call.uuid == written and call.resolution == "unresolved"
 
 
-def test_an_overlong_uuid_is_cut_and_never_matched():
+def test_an_overlong_uuid_is_neither_kept_nor_matched():
+    """Codex review on PR #11: no prefix of an over-long uuid is kept or compared."""
     long_uuid = "u" * (workflow_xml.IDENT_LIMIT + 5)
-    xml = synthetic(long_uuid)
     cut = long_uuid[: workflow_xml.IDENT_LIMIT]
-    summary = parse_workflow(row(xml), {cut: "function_200"})
+    summary = parse_workflow(row(synthetic(long_uuid)), {cut: "function_200"})
     (call,) = summary.functions
-    assert call.uuid == cut and call.resolution == "unresolved" and call.function is None
-    assert any("longer than" in p and "not matched" in p for p in summary.problems)
-    assert not any("names no function" in p for p in summary.problems)
+    assert call.uuid is None and call.resolution == "no_uuid" and call.function is None
+    assert any("longer than" in p and "not kept and not matched" in p for p in summary.problems)
+    assert cut not in summary.model_dump_json()
+
+
+def test_cut_identifiers_never_make_a_dangling_reference_valid():
+    """Codex review on PR #11: an end event `a*200 + "1"` and a flow targeting
+    `a*200 + "2"` matched once both were cut to 200 characters. Now refused."""
+    prefix = "a" * workflow_xml.IDENT_LIMIT
+    xml = (
+        synthetic(FUNCTION_UUID)
+        .replace('<endEvent id="EndEvent_2">', f'<endEvent id="{prefix}1">')
+        .replace('targetRef="EndEvent_2"', f'targetRef="{prefix}2"')
+    )
+    with pytest.raises(WorkflowXmlRefusedError, match=r"identifier .* longer than 200"):
+        summarise(xml)
+
+
+@pytest.mark.parametrize("attribute", ["id", "sourceRef", "default"])
+def test_any_overlong_identifier_refuses_the_document(attribute: str):
+    long_id = "b" * (workflow_xml.IDENT_LIMIT + 1)
+    anchors = {
+        "id": ('id="StartEvent_1"', f'id="{long_id}"'),
+        "sourceRef": ('sourceRef="StartEvent_1"', f'sourceRef="{long_id}"'),
+        "default": ('default="SequenceFlow_3"', f'default="{long_id}"'),
+    }
+    old, new = anchors[attribute]
+    with pytest.raises(WorkflowXmlRefusedError, match="longer than"):
+        summarise(synthetic(FUNCTION_UUID).replace(old, new, 1))
+
+
+def test_identifiers_are_compared_exactly_as_written():
+    xml = synthetic(FUNCTION_UUID).replace('targetRef="EndEvent_2"', 'targetRef=" EndEvent_2"')
+    graph = summarise(xml)
+    assert edges(graph)["SequenceFlow_4"].valid is False
+
+
+SECRET = "Q" * 20 + "CONFIGURED-SECRET-XYZ"  # stands in for this server's API secret
+
+
+def scrub(text: str) -> str:
+    """An exact-secret filter, like the client's: it only knows the secret whole."""
+    return text.replace(SECRET, "[REDACTED]")
+
+
+@pytest.mark.parametrize("where", ["node", "flow", "input", "result"])
+def test_a_secret_straddling_a_length_bound_is_redacted_before_the_cut(where: str):
+    """Codex review on PR #11: a 301-character name ending in a configured secret kept
+    the secret's first characters, which no later filter recognises. The filter now
+    runs on each value before it is cut."""
+    straddling = "x" * (workflow_xml.TEXT_LIMIT - 20) + SECRET
+    xml = synthetic(FUNCTION_UUID)
+    if where == "node":
+        xml = xml.replace('name="synthetic call"', f'name="{straddling}"')
+    elif where == "flow":
+        xml = xml.replace('name="flow name 1"', f'name="{straddling}"')
+    else:
+        settings = function_settings("input_100")
+        if where == "input":
+            settings["inputs"] = {straddling: {}}
+        else:
+            settings["result_name"] = straddling
+        xml = synthetic(FUNCTION_UUID, settings=settings)
+    graph = summarise(xml, clean=scrub)
+    assert SECRET[:20] not in repr(graph)  # no prefix of the secret survives
+    unfiltered = summarise(xml)  # without the filter the cut keeps a prefix: the bug
+    assert SECRET[:20] in repr(unfiltered)
+
+
+def test_parse_workflow_passes_the_filter_through():
+    straddling = "x" * (workflow_xml.TEXT_LIMIT - 20) + SECRET
+    xml = synthetic(FUNCTION_UUID).replace('name="synthetic call"', f'name="{straddling}"')
+    summary = parse_workflow(row(xml), {}, clean=scrub)
+    assert SECRET[:20] not in summary.model_dump_json()
 
 
 def test_a_uuid_two_functions_share_resolves_to_neither():

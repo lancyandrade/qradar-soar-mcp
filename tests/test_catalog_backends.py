@@ -755,3 +755,18 @@ async def test_every_string_the_summary_keeps_is_redacted(client: SoarClient, fa
     assert workflow.structure == "parsed"
     assert REDACTED in (workflow.nodes[1].name or "")
     assert REDACTED in (workflow.edges[0].name or "")
+
+
+async def test_the_configured_secret_straddling_a_name_bound_never_reaches_the_catalog(
+    client: SoarClient, fake: FakeSoar
+):
+    """Codex review on PR #11: redaction runs on each value before it is cut."""
+    from qradar_soar_mcp.catalog.workflow_xml import TEXT_LIMIT
+    from tests.conftest import SENTINEL
+
+    straddling = "x" * (TEXT_LIMIT - 10) + SENTINEL
+    _set_workflow_xml(
+        fake, _workflow_xml(fake).replace('name="synthetic call"', f'name="{straddling}"')
+    )
+    text = (await load(client)).to_json()
+    assert SENTINEL[:10] not in text

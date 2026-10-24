@@ -363,6 +363,7 @@ def parse_workflow(
     row: Row,
     function_by_uuid: Mapping[str, str],
     ambiguous_uuids: frozenset[str] = frozenset(),
+    clean: Callable[[str], str] | None = None,
 ) -> WorkflowSummary:
     """A row of ``GET /workflows`` (P2-04; 08 §29): its identity, and a structural summary
     of ``content.xml``, the workflow's definition. The XML is not kept.
@@ -372,7 +373,8 @@ def parse_workflow(
     be summarised safely keeps the workflow in the catalog as ``refused``, with a fixed
     reason, rather than failing every other section. ``function_by_uuid`` maps the uuid of
     each function of this catalog to its catalog key; a uuid in ``ambiguous_uuids`` is
-    shared by two functions and resolves to neither."""
+    shared by two functions and resolves to neither. ``clean`` is applied to each kept
+    text value before it is cut (``workflow_xml.summarise``)."""
     section = "workflows"
     content = row.get("content")
     if not isinstance(content, Mapping):
@@ -388,7 +390,7 @@ def parse_workflow(
         "last_modified_time": _opt_int(row, "last_modified_time"),
     }
     try:
-        graph = workflow_xml.summarise(xml)
+        graph = workflow_xml.summarise(xml, clean) if clean else workflow_xml.summarise(xml)
     except workflow_xml.WorkflowXmlRefusedError as refused:
         return WorkflowSummary(**identity, structure="refused", refusal=refused.reason)
     except Exception as exc:  # one workflow never fails the whole load
@@ -508,6 +510,9 @@ class CollectionsBackend:
             return {key: self._clean(item) for key, item in value.items()}
         return value
 
+    def _clean_text(self, value: str) -> str:
+        return redact(self._client.scrub(value) or "")
+
     def _clean_summary(self, summary: WorkflowSummary) -> WorkflowSummary:
         """The summary with every string it keeps cleaned, as every other section's
         strings are at ingestion: ids, names, uuids, input names, languages, problems.
@@ -596,7 +601,9 @@ class CollectionsBackend:
             [
                 (w.programmatic_name, w)
                 for w in (
-                    self._clean_summary(parse_workflow(r, function_by_uuid, ambiguous))
+                    self._clean_summary(
+                        parse_workflow(r, function_by_uuid, ambiguous, self._clean_text)
+                    )
                     for r in rows
                 )
             ],

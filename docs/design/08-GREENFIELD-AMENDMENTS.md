@@ -1246,7 +1246,7 @@ load first): then `resolution: resolved` and `function` is that function's catal
 key; otherwise
 `unresolved` (and a problem) or `no_uuid`. A uuid that two functions share resolves to
 neither (a problem says so; the load does not fail), and a uuid longer than 200
-characters is cut for display and never matched. That a call's uuid *is* a
+characters is neither kept nor matched (no prefix of it is). That a call's uuid *is* a
 function's uuid is not documented and the values were not kept, so no looser match
 (case, whitespace, prefix, name) is ever made.
 
@@ -1257,7 +1257,13 @@ side), is refused. Without a DTD an entity XML does not predefine is a parse err
 no entity can expand, nothing external is fetched, and a `&` inside CDATA (`a && b` in
 a script) is ordinary text. Then: well-formed, a BPMN `definitions` root, exactly one `process`
 (more than one was never observed and is refused), at most 20,000 elements, 2,000 nodes
-and 4,000 flows, element ids unique. Names are cut at 300 characters and ids at 200. A
+and 4,000 flows, element ids unique. **Identifiers are exact**: an element id or a
+`sourceRef` / `targetRef` / `default` value is compared as written, never stripped or
+cut, and one longer than 200 characters refuses the document (cutting both sides could
+make a dangling reference match another id's prefix: found in review). **Text is
+filtered, then cut**: each kept name (node, flow, input, `result_name`, condition
+language) passes the catalog's credential filter *before* it is cut to 300 characters,
+so a credential straddling the bound is seen whole (found in review). A
 refusal never quotes the document. **Parse first, then redact what is kept.** Unlike every
 other read of a load, the workflow rows are not run through the catalog's string cleaner
 (§25.2) before use: the cleaner works on text, and over XML its `authorization = <value>`
