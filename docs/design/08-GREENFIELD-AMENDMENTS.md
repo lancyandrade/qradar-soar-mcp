@@ -1258,8 +1258,14 @@ no entity can expand, nothing external is fetched, and a `&` inside CDATA (`a &&
 a script) is ordinary text. Then: well-formed, a BPMN `definitions` root, exactly one `process`
 (more than one was never observed and is refused), at most 20,000 elements, 2,000 nodes
 and 4,000 flows, element ids unique. Names are cut at 300 characters and ids at 200. A
-refusal never quotes the document. The XML string had already passed the catalog's
-string cleaner (§25.2), like every other string of a load. Deeply nested JSON in a
+refusal never quotes the document. **Parse first, then redact what is kept.** Unlike every
+other read of a load, the workflow rows are not run through the catalog's string cleaner
+(§25.2) before use: the cleaner works on text, and over XML its `authorization = <value>`
+rule can consume a closing tag or a JSON quote and turn a valid workflow into a refused
+one (found in review). The XML is parsed as SOAR sent it, held only for the load and never
+kept or logged; then every string of the finished summary (ids, names, uuids, input
+names, languages, problems) passes the cleaner, and the summary is validated again.
+Deeply nested JSON in a
 function element is an unparsed-settings problem, not a failure; and any unexpected error while summarising
 one workflow makes *that* workflow `refused` ("could not be summarised", the error's
 type logged, never its text) instead of failing the load.

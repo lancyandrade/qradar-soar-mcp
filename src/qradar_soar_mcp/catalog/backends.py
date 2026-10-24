@@ -16,6 +16,7 @@ said in ``Catalog.sections``; it is never filled in.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
@@ -507,6 +508,15 @@ class CollectionsBackend:
             return {key: self._clean(item) for key, item in value.items()}
         return value
 
+    def _clean_summary(self, summary: WorkflowSummary) -> WorkflowSummary:
+        """The summary with every string it keeps cleaned, as every other section's
+        strings are at ingestion: ids, names, uuids, input names, languages, problems.
+        Done on the JSON form so that tuples are lists the cleaner walks, then validated
+        again as a whole."""
+        return WorkflowSummary.model_validate_json(
+            json.dumps(self._clean(summary.model_dump(mode="json")))
+        )
+
     async def _read[T](self, call: Awaitable[T]) -> T:
         return self._clean(await call)  # type: ignore[no-any-return]
 
@@ -566,8 +576,12 @@ class CollectionsBackend:
         loaded("groups", [(g.name, g) for g in map(parse_group, await read(api.groups()))])
 
         # P2-04 (08 §29): each row is summarised and its XML dropped here, after the
-        # functions its calls are resolved against are known.
-        rows = await read(api.workflows())
+        # functions its calls are resolved against are known. Unlike every other read,
+        # the rows are NOT cleaned first: the redactor works on text, and run over XML
+        # it can eat a closing tag or a JSON quote after `authorization = <value>`,
+        # breaking a valid document. The XML is parsed as SOAR sent it (and never kept
+        # or logged); every string the summary keeps is cleaned instead (_clean_summary).
+        rows = await api.workflows()
         if len(rows) > MAX_WORKFLOWS:
             raise _malformed("workflows", f"more than {MAX_WORKFLOWS} workflows")
         function_by_uuid: dict[str, str] = {}
@@ -581,7 +595,10 @@ class CollectionsBackend:
             "workflows",
             [
                 (w.programmatic_name, w)
-                for w in (parse_workflow(r, function_by_uuid, ambiguous) for r in rows)
+                for w in (
+                    self._clean_summary(parse_workflow(r, function_by_uuid, ambiguous))
+                    for r in rows
+                )
             ],
         )
         del rows  # the XML is not kept beyond this point

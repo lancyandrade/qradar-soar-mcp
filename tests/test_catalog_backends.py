@@ -702,3 +702,56 @@ def test_the_export_backend_cannot_send_or_fall_back_by_construction():
 
     for path in Path(qradar_soar_mcp.__file__).parent.rglob("*.py"):
         assert "configurations/" not in path.read_text(encoding="utf-8"), path.name
+
+
+# ------------------------------------------- P2-04: parse first, redact what is kept
+def _workflow_xml(fake: FakeSoar) -> str:
+    return str(fake.discovery["workflows"]["entities"][0]["content"]["xml"])
+
+
+def _set_workflow_xml(fake: FakeSoar, xml: str) -> None:
+    fake.discovery["workflows"]["entities"][0]["content"]["xml"] = xml
+
+
+async def test_a_credential_assignment_in_a_condition_does_not_break_the_summary(
+    client: SoarClient, fake: FakeSoar
+):
+    """Redacting the XML text before parsing ate the closing tag (the value pattern runs
+    to the next whitespace) and refused a
+    valid workflow. The XML is parsed as sent; only kept strings are redacted."""
+    from tests.workflow_data import CONDITION_TEXT
+
+    _set_workflow_xml(fake, _workflow_xml(fake).replace(CONDITION_TEXT, "authorization = token"))
+    workflow = (await load(client)).workflows["workflow_1100"]
+    assert workflow.structure == "parsed" and workflow.problems == ()
+    assert {e.id: e.kind for e in workflow.edges}["SequenceFlow_4"] == "conditional"
+
+
+async def test_a_credential_assignment_in_a_script_keeps_the_function_settings(
+    client: SoarClient, fake: FakeSoar
+):
+    from tests.workflow_data import function_settings, workflow_xml
+
+    uuid = fake.discovery["functions"]["entities"][0]["uuid"]
+    settings = function_settings("input_100", pre_processing_script="authorization = token")
+    _set_workflow_xml(fake, workflow_xml(uuid, settings=settings))
+    (call,) = (await load(client)).workflows["workflow_1100"].functions
+    assert call.settings_parsed is True and call.input_names == ("input_100",)
+    assert call.has_pre_processing_script is True
+    assert call.resolution == "resolved"
+
+
+async def test_every_string_the_summary_keeps_is_redacted(client: SoarClient, fake: FakeSoar):
+    from qradar_soar_mcp.logging import REDACTED
+
+    secret = "authorization=KEPT-NAME-SECRET"
+    xml = _workflow_xml(fake).replace('name="synthetic call"', f'name="call {secret}"')
+    xml = xml.replace('name="flow name 1"', f'name="flow {secret}"')
+    _set_workflow_xml(fake, xml)
+    catalog = await load(client)
+    text = catalog.to_json()
+    assert "KEPT-NAME-SECRET" not in text
+    workflow = catalog.workflows["workflow_1100"]
+    assert workflow.structure == "parsed"
+    assert REDACTED in (workflow.nodes[1].name or "")
+    assert REDACTED in (workflow.edges[0].name or "")
