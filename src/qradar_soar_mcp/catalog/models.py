@@ -360,6 +360,72 @@ class WorkflowSummary(_Spec):
         return tuple(n.function for n in self.nodes if n.function is not None)
 
 
+PlaybookActivationState = Literal["present", "absent"]
+
+
+class PlaybookDetail(_Spec):
+    """One playbook as ``GET /playbooks/{playbook_id}`` describes it (P2-05; 08 §30): the
+    catalog's identity fields, its activation conditions without their values, and a
+    structural summary of its BPMN XML built exactly as a workflow's is.
+
+    This is never part of a :class:`Catalog`: it is built when a caller asks for one
+    playbook and then dropped, and the XML it was built from is not kept.
+
+    ``activation`` is ``absent`` when the object carries no ``activation_conditions``
+    (only an automatic playbook was observed, and it had them); then ``conditions`` is
+    empty and says nothing. A condition keeps the ``field_name`` it looks at and the
+    ``method`` it compares with; the compared ``value``, ``type`` and ``evaluation_id`` are
+    not kept. ``unreadable_conditions`` counts conditions without a string field name and
+    method, which are not shown.
+
+    Function calls resolve by exact uuid equality with exactly one catalog function: on
+    51.0.9.0.20848 the call's ``uuid`` attribute was observed to equal the ``uuid`` of
+    exactly one function of ``GET /functions`` (``p2_05_playbook_xml.json``)."""
+
+    id: int
+    name: str
+    display_name: str
+    uuid: str
+    status: str
+    activation_type: str
+    object_type: str
+    type: str
+    version: int | None = None
+    has_logical_errors: bool = False
+    is_deleted: bool = False
+    is_locked: bool = False
+    description: str | None = None
+    content_version: int | None = None
+    last_modified_time: int | None = None
+    activation: PlaybookActivationState
+    logic_type: str | None = None
+    conditions: tuple[RuleCondition, ...] = ()
+    unreadable_conditions: int = 0
+    structure: WorkflowStructure
+    refusal: str | None = None
+    nodes: tuple[WorkflowNode, ...] = ()
+    edges: tuple[WorkflowEdge, ...] = ()
+    annotations: int = 0
+    problems: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if self.structure == "refused":
+            if self.refusal is None or self.nodes or self.edges or self.problems:
+                raise ValueError("a refused playbook has a refusal and no structure")
+        elif self.refusal is not None:
+            raise ValueError("a parsed playbook has no refusal")
+        if self.activation == "absent" and (
+            self.conditions or self.unreadable_conditions or self.logic_type is not None
+        ):
+            raise ValueError("a playbook without activation conditions lists none")
+        return self
+
+    @property
+    def functions(self) -> tuple[WorkflowFunctionCall, ...]:
+        return tuple(n.function for n in self.nodes if n.function is not None)
+
+
 class GroupSpec(_Spec):
     """A group, without its members."""
 

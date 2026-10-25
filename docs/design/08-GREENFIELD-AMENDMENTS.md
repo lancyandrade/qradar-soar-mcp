@@ -1341,3 +1341,115 @@ written; `guarded.py` allows it and `selftest.py` covers it.
 
 This ticket's only edit to the baseline is one implementation-status note in `05`, under
 the P2-03 note (the tenth exception).
+
+## 30. P2-05 — discovery tools: playbooks
+
+**Implementation status: done**, on the evidence of one disposable playbook. `06 P2-05`
+asks for `soar_list_playbooks` and `soar_get_playbook` ("if no collection endpoint
+exists, implement over the export backend") and accepts them when they work on the lab
+appliance, return activation type and status, trigger conditions and referenced
+functions, and document which SOAR versions they support.
+
+### 30.1 Evidence
+
+`soar-api-verified.md §3.4` and `open-questions.md` D12. On `51.0.9.0.20848` the playbook
+collection is the criteria-only `POST /playbooks/query_paged` (§25.3, no export backend
+is needed), and the single object is `GET /playbooks/{playbook_id}` (verified by `P2-00`,
+re-read by `P2-05`). The owner built one disposable playbook in the UI (an inactive
+draft, automatic activation on incidents, one condition with a synthetic never-matching
+value, one read-only function call), and `scripts/probe/probe_p2_05.py` read it with
+owner approval for each run: structure only, and only of that playbook (the probe refuses
+any object whose name is not the agreed research name). Two runs were refused with `403`
+until the key had playbook read; a refusal diagnostic showed the paged query refused too.
+The first readable run found `GET /functions` refused (`403`) until the key had function
+read; the next compared the call's `uuid` attribute, exactly as written, with every
+function's `uuid` and found **exactly one equal**. The playbook XML is the workflow's BPMN
+structure (§29.1), with the same vendor `function` element.
+
+### 30.2 What the tools are
+
+Both are Tier-0 reads in `tools/discovery.py`, registered with `@soar_tool`, run through
+`run_pipeline`, no capability flag, no approval, no audit record.
+
+| Tool | REST | Answer |
+|---|---|---|
+| `soar_list_playbooks` | none (catalog) | every `PlaybookSummary` field but the uuid, description shortened; paged, sorted by name, `name_contains` also matching the display name |
+| `soar_get_playbook` | one `GET /playbooks/{id}` | identity and status, `activation` (`state` present or absent, `logic_type`, each condition as `field_name` and `method`), `functions_called`, the structural summary (`nodes`, `edges`, `functions`, `problems`, counts) and `verified_on: 51.0.9.0.20848` |
+
+`soar_get_playbook` takes exactly one of `name` (matched exactly) and `playbook_id`; the
+catalog resolves it first, and the request carries the catalog's integer id, never the
+caller's text. Nothing of the answer is cached, and the catalog is unchanged
+(`FORMAT_VERSION` stays 2: the detail is never stored).
+
+### 30.3 What is read, what is kept
+
+- **Calls added to §4** (`client/discovery.py` only): `GET playbooks/{id}`,
+  `DiscoveryClient.playbook(playbook_id)`, which takes a positive integer and checks that
+  the object answering is the one asked for. The AST surface test pins it, keeps the
+  paged query the only `POST`, and admits no other playbook path (export, import,
+  execution, clone, change logs). It also now checks the methods of `DiscoveryClient`
+  itself: it had been inspecting the first class of the module, a result dataclass, and
+  so checked nothing (found while adding this call).
+- **Parsing** is in two pure modules with no service, backend, cache or client:
+  `catalog/bpmn.py` (the BPMN summary and exact-uuid resolution, moved verbatim from the
+  backend and shared with workflows, whose behaviour is unchanged) and
+  `catalog/playbooks.py` (`parse_playbook`, moved from the backend, and
+  `parse_playbook_detail`). `workflow_xml` names its document in problems and refusals
+  (`the playbook XML declares a DTD or an entity`); for a workflow the text is as before.
+- **Identity** is parsed as a list row is, from the object without `content`,
+  `activation_details`, people and change log, every string cleaned (§25.2). An answer
+  whose `name` or `uuid` differs from the catalog's is `conflict`.
+- **Activation conditions** keep `field_name` and `method`. `value`, `type` and
+  `evaluation_id` are never read into the result. A condition without a string field
+  name and method is counted in `unreadable_conditions`. An object without
+  `activation_details` or `activation_conditions` is `activation: absent` (only an
+  automatic playbook was observed); a mistyped one is `malformed_response`, and so is an
+  `activation_conditions` without a `conditions` list or a text `logic_type`: both were
+  present on every object seen, and reporting "no conditions" would be a guess about when
+  the playbook starts (found in review).
+- **The XML** is summarised exactly as a workflow's (§29.2: same parser, bounds,
+  refusals, problems, and parse-first-then-clean), then dropped. Unsafe or unexpected XML
+  is `structure: refused` with a fixed reason; the rest of the object is still described.
+  There is no `include_raw`: no parameter returns the XML or a condition value.
+- **Function calls** resolve by exact equality of the `uuid` attribute with the `uuid` of
+  exactly one catalog function, as for workflows; P2-05 observed that equality, which
+  P2-04 could not. A shared uuid resolves to neither; a near miss (case, whitespace,
+  prefix) is unresolved.
+- **Errors**: SOAR's `401`, `403`, `404` and `5xx` are the client's usual errors; a
+  missing or mistyped verified key is `malformed_response` naming key names only. Calls
+  are resolved against the catalog's `functions` section, so `soar_get_playbook` needs
+  it as well as `playbooks`: a section that is not `loaded` is `catalog_unavailable`
+  before anything is sent, rather than a playbook whose calls all look unresolved.
+
+### 30.4 What stays unknown, and is said
+
+Everything §3.4 lists as unknown: other node kinds, several calls, inputs with values,
+manual activation, set `type` / `evaluation_id`, other operator tokens, an enabled
+playbook's object, other SOAR versions. Node types beyond those §29 observed are listed
+with `type_observed: false`, as for workflows. Compatibility is claimed for
+`51.0.9.0.20848` only, in each tool's description and in `verified_on`.
+
+### 30.5 Tests and fixtures
+
+Offline only. `tests/playbook_data.py` writes a synthetic playbook with exactly the
+recorded structure, and `tests/test_discovery_playbooks.py` checks it against
+`p2_05_playbook_xml.json` element by element and against `p2_05_playbook.json` key by
+key, then tests the parser (exact resolution, near misses, shared uuids, refusals,
+dangling flows, every unexpected shape, absent activation, unreadable conditions,
+redaction) and the tools (declarations and parameters, catalog-only listing, exactly one
+`GET` per detail and no caching, exact lookups that send nothing, conflict, another
+object in the answer, SOAR errors, no audit record, the real collections backend, no
+write method on the fake's playbook route). Sentinels for a condition value, a
+processing script and the XML itself must never appear in a result. The fake serves
+`GET /playbooks/{id}` from that synthetic data and answers `405` to every other method.
+
+### 30.6 Tooling
+
+`scripts/probe/probe_p2_05.py` (not part of the package): `--playbook` (the designated
+playbook and the function list, the XML analysed in memory and never written) and
+`--diagnose` (the paged query and the single object, refusal facts only); `guarded.py`
+allows it and `selftest.py` covers both modes. The disposable playbook stays in the lab
+until the owner approves its deletion.
+
+This ticket's only edit to the baseline is one implementation-status note in `05`, under
+the P2-04 note (the eleventh exception).

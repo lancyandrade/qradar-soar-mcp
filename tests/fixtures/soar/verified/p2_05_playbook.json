@@ -1,0 +1,190 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": "application/json",
+  "_enums": {
+    "activation_type": [
+      "automatic"
+    ],
+    "method": [
+      "contains"
+    ],
+    "object_type": [
+      "incident"
+    ],
+    "status": [
+      "draft"
+    ]
+  },
+  "_error": null,
+  "_facts": {
+    "activation_conditions_is_object": true,
+    "activation_conditions_keys": [
+      "conditions",
+      "logic_type"
+    ],
+    "activation_details_keys": [
+      "activation_conditions"
+    ],
+    "activation_details_present": true,
+    "condition_keys": [
+      "evaluation_id",
+      "field_name",
+      "method",
+      "type",
+      "value"
+    ],
+    "conditions": "1-9",
+    "conditions_is_list": true,
+    "content_keys": [
+      "content_version",
+      "xml"
+    ],
+    "evaluation_id_forms": [
+      "null"
+    ],
+    "field_name_forms": [
+      "object_type_dotted"
+    ],
+    "logic_type": "all",
+    "methods": [
+      "contains"
+    ],
+    "object_keys": [
+      "activation_details",
+      "activation_type",
+      "content",
+      "create_date",
+      "creator_principal",
+      "deployment_id",
+      "description",
+      "display_name",
+      "field_type_handle",
+      "has_logical_errors",
+      "id",
+      "is_deleted",
+      "is_locked",
+      "last_modified_principal",
+      "last_modified_time",
+      "name",
+      "object_type",
+      "playbook_change_log_info",
+      "status",
+      "tag",
+      "tags",
+      "type",
+      "uuid",
+      "version"
+    ],
+    "research_identity": "name",
+    "type_forms": [
+      "null"
+    ],
+    "value_forms": [
+      "string"
+    ],
+    "xml_bearing_property": "xml",
+    "xml_is_string": true,
+    "xml_size": "<10KB"
+  },
+  "_fixture": "verified-shape",
+  "_note": "observed, read-only: the owner's disposable research playbook; key names, types and allow-listed tokens; activation conditions as counts, keys, operators and value forms only",
+  "_question": "P2-05",
+  "_request": {
+    "method": "GET",
+    "path": "/rest/orgs/{org_id}/playbooks/{playbook_id}",
+    "query_keys": [
+      "handle_format",
+      "text_content_output_format"
+    ]
+  },
+  "_status": 200,
+  "_ticket": "P2-05",
+  "shape": {
+    "activation_details": {
+      "activation_conditions": {
+        "conditions": [
+          {
+            "evaluation_id": "null",
+            "field_name": "str",
+            "method": "str",
+            "type": "null",
+            "value": "str"
+          }
+        ],
+        "logic_type": "str"
+      }
+    },
+    "activation_type": "str",
+    "content": {
+      "content_version": "int",
+      "xml": "str"
+    },
+    "create_date": "int",
+    "creator_principal": {
+      "display_name": "str",
+      "id": "int",
+      "name": "str",
+      "type": "str"
+    },
+    "deployment_id": "str",
+    "description": "str",
+    "display_name": "str",
+    "field_type_handle": "str",
+    "has_logical_errors": "bool",
+    "id": "int",
+    "is_deleted": "bool",
+    "is_locked": "bool",
+    "last_modified_principal": {
+      "display_name": "str",
+      "id": "int",
+      "name": "str",
+      "type": "str"
+    },
+    "last_modified_time": "int",
+    "name": "str",
+    "object_type": "str",
+    "playbook_change_log_info": {
+      "change_log_id": "int",
+      "change_log_items": [
+        {
+          "change": {
+            "new_value": "int|str",
+            "old_value?": "int",
+            "operation_type": "str",
+            "path": "str"
+          },
+          "create_date": "int",
+          "creator_principal": {
+            "display_name": "str",
+            "id": "int",
+            "name": "str",
+            "type": "str"
+          },
+          "entity_id": "int",
+          "entity_type": "str"
+        }
+      ],
+      "change_number": "int",
+      "change_number_prefix": "str",
+      "create_date": "int",
+      "modified_principal": {
+        "display_name": "str",
+        "id": "int",
+        "name": "str",
+        "type": "str"
+      }
+    },
+    "status": "str",
+    "tag": {
+      "display_name": "str",
+      "id": "int",
+      "name": "str",
+      "type": "str",
+      "uuid": "str"
+    },
+    "tags": [],
+    "type": "str",
+    "uuid": "str",
+    "version": "int"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_content_type": null,
+  "_enums": {},
+  "_error": null,
+  "_facts": {
+    "designated_playbook_get": {
+      "body_is_json_object": true,
+      "body_keys": [
+        "error_code",
+        "hints",
+        "message",
+        "success",
+        "title"
+      ],
+      "content_type": "application/json",
+      "error": null,
+      "mentions_draft": false,
+      "mentions_not_found": false,
+      "mentions_permission": true,
+      "status": 403
+    },
+    "query_paged_length_1": {
+      "body_is_json_object": true,
+      "body_keys": [
+        "error_code",
+        "hints",
+        "message",
+        "success",
+        "title"
+      ],
+      "content_type": "application/json",
+      "error": null,
+      "mentions_draft": false,
+      "mentions_not_found": false,
+      "mentions_permission": true,
+      "status": 403
+    }
+  },
+  "_fixture": "verified-shape",
+  "_note": "owner-approved diagnostic of the 403 to GET /playbooks/{playbook_id}: status, body key names and fixed booleans about what a refusal mentions; no text kept",
+  "_question": "P2-05D",
+  "_request": null,
+  "_status": null,
+  "_ticket": "P2-05",
+  "shape": null
+}

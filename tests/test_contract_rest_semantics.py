@@ -554,7 +554,16 @@ async def test_playbooks_are_listed_by_a_criteria_only_paged_post(fake: FakeSoar
 
 @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
 @pytest.mark.parametrize(
-    "path", ["/functions", "/scripts", "/scripts/400", "/types", "/groups", "/functions/200"]
+    "path",
+    [
+        "/functions",
+        "/scripts",
+        "/scripts/400",
+        "/types",
+        "/groups",
+        "/functions/200",
+        "/playbooks/1000",  # P2-05: the single playbook is a GET and nothing else
+    ],
 )
 async def test_the_discovery_collections_are_read_only(
     fake: FakeSoar, raw_client, method: str, path: str
@@ -573,7 +582,11 @@ async def test_the_discovery_collections_are_read_only(
         ("POST", "/configurations/exports"),
         ("GET", "/configurations/exports/history"),
         ("POST", "/configurations/imports"),
-        ("GET", "/playbooks/1000"),
+        # P2-05 uses GET /playbooks/{id}; nothing below a playbook, nor its export, is.
+        ("GET", "/playbooks/1000/schema"),
+        ("GET", "/playbooks/1000/manual_input_form"),
+        ("POST", "/playbooks/exports"),
+        ("POST", "/playbooks/1000/clone"),
         ("GET", "/actions/300"),
         ("GET", "/workflows/1"),
         ("POST", "/playbooks/execution/query_paged"),

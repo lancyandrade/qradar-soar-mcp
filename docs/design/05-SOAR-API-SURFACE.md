@@ -76,6 +76,14 @@
 > workflow's XML, credential-filtered, capped and labelled untrusted. A function call
 > is resolved only by exact uuid equality. See `08-GREENFIELD-AMENDMENTS.md §29`.
 
+> **Implementation status — P2-05, 2026-10-25.** `soar_list_playbooks` and
+> `soar_get_playbook` are implemented as Tier-0 reads. The §2 playbook row is resolved
+> on `51.0.9.0.20848`: listing is the criteria-only `POST /playbooks/query_paged` (no
+> export backend is needed), and one playbook is `GET /playbooks/{id}`, whose
+> `content.xml` is BPMN 2.0 with the workflow's function element. A call's `uuid` was
+> observed to equal the called function's `uuid`. Neither the XML nor any activation
+> condition value is returned. See `08-GREENFIELD-AMENDMENTS.md §30`.
+
 All paths are relative to `https://{host}/rest/orgs/{org_id}` unless noted.
 Auth: HTTP Basic with API key id/secret. Common params `handle_format=names`
 and `text_content_output_format=always_text` as already implemented.

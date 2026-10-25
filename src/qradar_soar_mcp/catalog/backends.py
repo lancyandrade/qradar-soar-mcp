@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import ValidationError
 
-from qradar_soar_mcp.catalog import workflow_xml
+from qradar_soar_mcp.catalog.bpmn import function_index, summarise_bpmn
 from qradar_soar_mcp.catalog.models import (
     SECRET_INPUT_TYPES,
     VALUELESS_INPUT_TYPES,
@@ -38,7 +38,6 @@ from qradar_soar_mcp.catalog.models import (
     GroupSpec,
     MDSpec,
     PhaseSpec,
-    PlaybookSummary,
     RuleCondition,
     RuleSpec,
     ScriptSpec,
@@ -46,11 +45,9 @@ from qradar_soar_mcp.catalog.models import (
     SectionStatus,
     SelectValue,
     TypeSpec,
-    WorkflowEdge,
-    WorkflowFunctionCall,
-    WorkflowNode,
     WorkflowSummary,
 )
+from qradar_soar_mcp.catalog.playbooks import parse_playbook
 from qradar_soar_mcp.client.discovery import FIELD_TYPES
 from qradar_soar_mcp.errors import SoarCatalogUnavailableError, SoarMalformedResponseError
 from qradar_soar_mcp.logging import redact
@@ -317,25 +314,6 @@ def parse_datatable(row: Row) -> DataTableSpec:
     )
 
 
-def parse_playbook(row: Row) -> PlaybookSummary:
-    section = "playbooks"
-    return PlaybookSummary(
-        id=_req(row, "id", int, section),
-        name=_req(row, "name", str, section),
-        display_name=_opt_str(row, "display_name") or _req(row, "name", str, section),
-        uuid=_req(row, "uuid", str, section),
-        status=_req(row, "status", str, section),
-        activation_type=_req(row, "activation_type", str, section),
-        object_type=_req(row, "object_type", str, section),
-        type=_req(row, "type", str, section),
-        version=_opt_int(row, "version"),
-        has_logical_errors=_flag(row, "has_logical_errors"),
-        is_deleted=_flag(row, "is_deleted"),
-        is_locked=_flag(row, "is_locked"),
-        description=_opt_str(row, "description"),
-    )
-
-
 def parse_rule(row: Row) -> RuleSpec:
     section = "rules"
     conditions = row.get("conditions")
@@ -389,91 +367,10 @@ def parse_workflow(
         "content_version": _opt_int(row, "content_version"),
         "last_modified_time": _opt_int(row, "last_modified_time"),
     }
-    try:
-        graph = workflow_xml.summarise(xml, clean) if clean else workflow_xml.summarise(xml)
-    except workflow_xml.WorkflowXmlRefusedError as refused:
-        return WorkflowSummary(**identity, structure="refused", refusal=refused.reason)
-    except Exception as exc:  # one workflow never fails the whole load
-        # Type only: nothing of the document is put into a log line.
-        logger.warning("a workflow could not be summarised (%s)", type(exc).__name__)
-        return WorkflowSummary(**identity, structure="refused", refusal=SUMMARY_FAILED)
-    nodes: list[WorkflowNode] = []
-    for node in graph.nodes:
-        call = node.function
-        nodes.append(
-            WorkflowNode(
-                id=node.id,
-                type=node.type,
-                type_observed=node.type in workflow_xml.OBSERVED_NODE_TYPES,
-                name=node.name,
-                function=None
-                if call is None
-                else _function_call(call, function_by_uuid, ambiguous_uuids),
-            )
-        )
-    problems = list(graph.problems)
-    for parsed, summary in zip(graph.nodes, nodes, strict=True):
-        resolved = summary.function
-        if resolved is None or resolved.resolution != "unresolved" or resolved.uuid is None:
-            continue
-        if parsed.function is not None and not parsed.function.uuid_matchable:
-            continue  # the parser has said why it is not matched
-        if resolved.uuid in ambiguous_uuids:
-            problems.append(
-                f"service task {summary.id}: its function uuid is shared by more than one "
-                "function in this catalog"
-            )
-        else:
-            problems.append(
-                f"service task {summary.id}: its function uuid names no function in this catalog"
-            )
-    return WorkflowSummary(
-        **identity,
-        structure="parsed",
-        nodes=tuple(nodes),
-        edges=tuple(
-            WorkflowEdge(
-                id=edge.id,
-                source=edge.source,
-                target=edge.target,
-                name=edge.name,
-                kind="default"
-                if edge.default
-                else "conditional"
-                if edge.conditional
-                else "unconditional",
-                condition_language=edge.condition_language,
-                valid=edge.valid,
-            )
-            for edge in graph.edges
-        ),
-        annotations=graph.annotations,
-        problems=tuple(problems),
+    structure = summarise_bpmn(
+        xml, function_by_uuid, ambiguous_uuids, clean, document="workflow", failed=SUMMARY_FAILED
     )
-
-
-def _function_call(
-    call: workflow_xml.FunctionCall,
-    function_by_uuid: Mapping[str, str],
-    ambiguous_uuids: frozenset[str],
-) -> WorkflowFunctionCall:
-    """Resolved by exact uuid equality with exactly one function of the same catalog, or
-    not at all. A uuid cut to the length bound, or shared by two functions, never is."""
-    name = (
-        function_by_uuid.get(call.uuid)
-        if call.uuid is not None and call.uuid_matchable and call.uuid not in ambiguous_uuids
-        else None
-    )
-    return WorkflowFunctionCall(
-        uuid=call.uuid,
-        resolution="no_uuid" if call.uuid is None else "resolved" if name else "unresolved",
-        function=name,
-        input_names=call.input_names,
-        has_pre_processing_script=call.has_pre_processing_script,
-        has_post_processing_script=call.has_post_processing_script,
-        result_name=call.result_name,
-        settings_parsed=call.payload_parsed,
-    )
+    return WorkflowSummary(**identity, **structure)
 
 
 def parse_group(row: Row) -> GroupSpec:
@@ -589,13 +486,7 @@ class CollectionsBackend:
         rows = await api.workflows()
         if len(rows) > MAX_WORKFLOWS:
             raise _malformed("workflows", f"more than {MAX_WORKFLOWS} workflows")
-        function_by_uuid: dict[str, str] = {}
-        shared: set[str] = set()
-        for key, spec in content["functions"].items():
-            if spec.uuid in function_by_uuid:
-                shared.add(spec.uuid)  # resolves to neither, said per call
-            function_by_uuid[spec.uuid] = key
-        ambiguous = frozenset(shared)
+        function_by_uuid, ambiguous = function_index(content["functions"])
         loaded(
             "workflows",
             [

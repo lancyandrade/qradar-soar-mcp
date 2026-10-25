@@ -558,6 +558,72 @@ keep the XML**; `soar_get_workflow` answers from that summary, and only with
 `include_raw=true` sends one `GET /workflows` for the XML of one workflow, chosen by its
 `workflow_id`, credential-filtered, capped and labelled untrusted.
 
+### 3.4 The single playbook object (`P2-05` addendum)
+
+Read-only, owner-approved, 2026-10-24 and 2026-10-25, on `51.0.9.0.20848`, against one
+**disposable research playbook** the owner had built in the UI for this purpose: an
+inactive draft, automatic activation on incidents, one activation condition with a
+synthetic never-matching value, and one function call (a read-only lookup) linked from
+the start event. It was never enabled or run. Only *structure* was kept
+(`p2_05_playbook.json`, `p2_05_playbook_xml.json`, `p2_05_diagnose.json`,
+`_ledger_p2_05.json`); no name, value, id, uuid, script or XML text.
+
+🚫 / ✅ Access:
+
+- `GET /playbooks/{playbook_id}` answered **HTTP 403** twice to the `.env` key, and a
+  refusal diagnostic then showed `POST /playbooks/query_paged` (`length` 1) refused with
+  `403` as well: both refusal bodies (`error_code`, `hints`, `message`, `success`,
+  `title`) were permission-type, neither said not-found or draft. **A key without
+  playbook-read is refused with `403` on both the query and the single object.** After the
+  owner gave the key playbook read, the object answered `200`.
+- In the same run `GET /functions` answered **`403`**: **a key without function-read is
+  refused with `403`**. After the owner gave the key function read, it answered `200`. A
+  catalog load reads both, so a key without either cannot build a catalog.
+
+✅ Observed:
+
+- **The object** has the list row's keys plus `activation_details`, `content` and
+  `field_type_handle` (24 keys, as `P2-00` recorded). `content` is
+  `{content_version: integer, xml: string}` (under 10 KB here).
+  `activation_details.activation_conditions` is `{logic_type, conditions}`; a condition
+  has `field_name`, `method`, `value`, `type` and `evaluation_id`. Here: `logic_type`
+  `all`, `method` `contains`, `field_name` of the form `incident.<field>`, `value` a
+  string, `type` and `evaluation_id` null. **`status` was the token `draft`**, beside the
+  `enabled` that `P2-00` saw.
+- **The XML is standard BPMN 2.0, the same structure as a workflow's (§3.3)**: a
+  `definitions` root (`targetNamespace`) in the OMG BPMN model namespace, matched exactly,
+  holding one `process` (`id`, `isExecutable`, `name`) with `startEvent` (`id`),
+  `serviceTask` (`id`, `name`, `type`), `endEvent` (`id`, `documentation`), `sequenceFlow`
+  (`id`, `sourceRef`, `targetRef`), `incoming` / `outgoing` children as text, an empty
+  `documentation` element, and the OMG BPMN DI / DD diagram. Every `sourceRef` /
+  `targetRef` named an element `id`; the elements so referenced were the start, the
+  service task and the end. The designer saved an `endEvent` that its canvas did not show.
+- **A function call** is the same vendor element as in a workflow: in the `serviceTask`'s
+  `extensionElements`, one element named **`function`, in a namespace on an `ibm.com`
+  host**, with **one attribute, `uuid`**, and a JSON object as its text: `inputs` (empty
+  here), the pre- and post-processing scripts and their languages (null here) and
+  `result_name` (a string). No function id or name is in the call.
+- **The call's `uuid` is the function's `uuid`.** With function read, the probe compared
+  the `uuid` attribute, exactly as written (no stripping or case-folding), with the
+  `uuid` of every row of `GET /functions`: it **equalled the `uuid` of exactly one
+  function**, and no other row's. The value was uuid-shaped. The `serviceTask`'s `name`
+  attribute equalled that function's `display_name`: a label, not a reference.
+
+❓ Unknown, still:
+
+- Any playbook but this one: manual activation, other node kinds (decisions, scripts,
+  sub-playbooks, timers, tasks), several calls, inputs with values, a `type` or
+  `evaluation_id` that is set, other `logic_type` and `method` tokens, an enabled
+  playbook's object. The record is one draft with one call.
+- What the activation condition operators mean beyond their tokens, and whether
+  `value` takes other JSON types.
+- Any SOAR version other than `51.0.9.0.20848`.
+
+Consequence for `P2-05` (implemented in `08 §30`): `soar_list_playbooks` answers from the
+catalog's paged query; `soar_get_playbook` sends one `GET /playbooks/{playbook_id}`,
+summarises the XML exactly as a workflow's, resolves calls by exact uuid equality with
+exactly one catalog function, and returns neither the XML nor any condition value.
+
 ### Confirmed
 
 - HTTP Basic with API key id/secret; both default query parameters accepted everywhere.

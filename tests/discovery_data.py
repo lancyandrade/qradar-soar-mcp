@@ -26,6 +26,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from tests.playbook_data import activation_details, playbook_xml
 from tests.workflow_data import workflow_xml
 
 VERIFIED = Path(__file__).parent / "fixtures" / "soar" / "verified"
@@ -214,4 +215,17 @@ def build_payloads(minimal: bool = False) -> dict[str, Any]:
     out["playbooks"] = _rows(
         "playbooks", playbooks["shape"]["data"][0], "playbook", playbooks["_enums"], 1000, minimal
     )
+    # P2-05: the single object of each playbook, in the shape the P2-05 read recorded: the
+    # list row's identity, plus content (the synthetic BPMN of tests/playbook_data.py,
+    # calling the first function above) and one activation condition.
+    detail_doc = verified("p2_05_playbook")
+    for row in out["playbooks"]:
+        detail = fill(detail_doc["shape"], "playbook", row["id"], minimal)
+        detail.update({k: v for k, v in row.items() if k in detail})
+        detail["content"] = {"content_version": 3, "xml": playbook_xml(listing[0]["uuid"])}
+        detail["activation_details"] = activation_details(
+            f"{detail_doc['_enums']['object_type'][0]}.field_{row['id']}",
+            detail_doc["_enums"]["method"][0],
+        )
+        out[f"playbook:{row['id']}"] = detail
     return out
