@@ -33,6 +33,7 @@ import httpx
 import probe_00b
 import probe_p2_03
 import probe_p2_04
+import probe_p2_05
 import shape_request
 import task_candidate
 import task_experiment
@@ -2313,6 +2314,459 @@ def test_p2_04() -> None:
             check(refused, f"p2-04: {method} on a workflow path is refused by the client it uses")
 
 
+# P2-05: the playbook research. One playbook object laid out like the recorded one, hostile
+# in every value, with an XML that refers to a function by uuid, by name and by id, and a
+# function list. Only locations, key names, types, tokens and buckets may get out.
+PB_ID = 551234
+FN_UUID = "a1b2c3d4-0000-4000-8000-0000000000aa"
+FN_OTHER_UUID = "a1b2c3d4-0000-4000-8000-0000000000bb"
+FN_NAME, FN_DISPLAY = "fn_acme_lookup", "Acme Lookup Tool"
+PB_PAYLOAD = json.dumps(
+    {
+        "inputs": {"acme_site": {"input_type": "text", "text": PRIVATE_IP}},
+        "pre_processing_script": SCRIPT_BODY,
+        "result_name": "acme_result",
+        "function": {"name": FN_NAME, "id": 4242},
+    }
+)
+PLAYBOOK_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:resilient="http://resilient.ibm.com/bpmn" id="{KEY_ID}">
+  <process id="playbook_acme_{INCIDENT_ID}" name="Payroll breach on {HOST}">
+    <startEvent id="StartEvent_1"/>
+    <serviceTask id="ServiceTask_1" name="{FN_DISPLAY}">
+      <extensionElements>
+        <resilient:function uuid="{FN_UUID}">{html.escape(PB_PAYLOAD)}</resilient:function>
+      </extensionElements>
+    </serviceTask>
+    <endEvent id="EndEvent_1"/>
+    <sequenceFlow id="SequenceFlow_1" sourceRef="StartEvent_1" targetRef="ServiceTask_1"/>
+    <sequenceFlow id="SequenceFlow_2" sourceRef="ServiceTask_1" targetRef="EndEvent_1"/>
+  </process>
+</definitions>
+"""
+P2_05_FUNCTIONS = [
+    {"id": 4242, "uuid": FN_UUID, "name": FN_NAME, "display_name": FN_DISPLAY,
+     "description": f"looks up {HOST}", "view_items": [], "workflows": []},
+    {"id": 4243, "uuid": FN_OTHER_UUID, "name": "fn_acme_other", "display_name": "Acme Other",
+     "description": None, "view_items": [], "workflows": []},
+]  # fmt: skip
+P2_05_FORBIDDEN = (*FORBIDDEN, str(PB_ID), FN_UUID, FN_OTHER_UUID, FN_NAME, FN_DISPLAY,
+                   "fn_acme_other", "acme_result", "addNote", "StartEvent_1", "ServiceTask_1",
+                   "playbook_acme", "acme_site", "resilient.ibm.com", "<definitions")  # fmt: skip
+
+
+def _p2_05_playbook(**over: Any) -> dict[str, Any]:
+    obj: dict[str, Any] = {
+        "id": PB_ID,
+        "name": probe_p2_05.RESEARCH_NAME,
+        "display_name": probe_p2_05.RESEARCH_DISPLAY_NAME,
+        "uuid": KEY_ID,
+        "status": "disabled",
+        "activation_type": "automatic",
+        "object_type": "incident",
+        "description": f"see https://{HOST}/x from {PRIVATE_IP}",
+        "creator_principal": {"id": 7, "name": EMAIL, "display_name": "jdoe", "type": "user"},
+        "activation_details": {
+            "activation_conditions": {
+                "logic_type": "all",
+                "conditions": [
+                    {"field_name": "incident.acme_site", "method": "equals",
+                     "value": PRIVATE_IP, "type": None, "evaluation_id": None},
+                ],
+            }
+        },
+        "content": {"content_version": 3, "xml": PLAYBOOK_XML},
+        "tags": [],
+    }  # fmt: skip
+    obj.update(over)
+    return obj
+
+
+def p2_05_handler(
+    *, obj: dict[str, Any] | None = None, status: int = 200,
+    functions: list[dict[str, Any]] | None = None, functions_status: int = 200,
+) -> Any:  # fmt: skip
+    answer = _p2_05_playbook() if obj is None else obj
+    rows = P2_05_FUNCTIONS if functions is None else functions
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == f"/rest/orgs/{ORG}/playbooks/{PB_ID}":
+            if status != 200:
+                return httpx.Response(status, json={"message": f"no {KEY_ID} at {HOST}"})
+            return httpx.Response(200, json=answer)
+        if path == f"/rest/orgs/{ORG}/functions":
+            if functions_status != 200:
+                return httpx.Response(functions_status, json={"message": f"at {HOST}"})
+            return httpx.Response(200, json={"entities": rows})
+        return httpx.Response(404, json={"message": f"no route at {HOST}"})
+
+    return handler
+
+
+P2_05_ENV = replace(ENV, playbook_id=str(PB_ID))
+
+
+def _run_p2_05(
+    handler: Any, env: ProbeEnv = P2_05_ENV
+) -> tuple[int, str, dict[str, Any], list[Any]]:
+    seen: list[tuple[str, str, str]] = []
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path, request.url.query.decode()))
+        return handler(request)
+
+    client = new_client(transport)
+    printed: list[str] = []
+    files: dict[str, Any] = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        where = Path(tmp)
+        rec = probe_00b.Recorder(env, client, where, echo=printed.append)
+        code = probe_p2_05.playbook(rec)
+        probe_p2_05.finish(rec)
+        for path in sorted(where.glob("*.json")):
+            text = path.read_text(encoding="utf-8")
+            verify_clean(text, env.literals(), what=path.name)
+            files[path.name] = json.loads(text)
+    client.close()
+    return code, " | ".join(printed), files, seen
+
+
+def _p2_05_leaks(text: str, files: dict[str, Any]) -> list[str]:
+    blob = text + json.dumps(files)
+    return [bad for bad in P2_05_FORBIDDEN if bad in blob] + (
+        ["the script"] if SCRIPT_BODY in blob else []
+    )
+
+
+def test_p2_05() -> None:
+    org = f"/rest/orgs/{ORG}"
+    query = "handle_format=names&text_content_output_format=always_text"
+    stop = probe_p2_05.EXIT_STOP
+
+    # No designated playbook, or not an integer: nothing is sent at all.
+    for why, value in (("no selector", ""), ("a non-integer", "x"), ("zero", "0")):
+        code, text, files, seen = _run_p2_05(p2_05_handler(), env=replace(ENV, playbook_id=value))
+        # (A one-character selector is a connection literal the verifier then finds in any
+        # file, so the empty ledger may itself be withheld: fail closed, nothing to lose.)
+        check(
+            code == stop
+            and seen == []
+            and "STOPPED" in text
+            and set(files) <= {"_ledger_p2_05.json"}
+            and all(f["requests"] == [] for f in files.values()),
+            f"p2-05: {why} as the playbook selector sends nothing",
+        )
+
+    # Denied, not an object, another id, or not the research playbook: one GET, then stop;
+    # nothing about the answer is written.
+    for why, handler in {
+        "a 403": p2_05_handler(status=403),
+        "another playbook": p2_05_handler(
+            obj=_p2_05_playbook(name="acme_payroll", display_name=f"Payroll on {HOST}")
+        ),
+        "another id": p2_05_handler(obj=_p2_05_playbook(id=PB_ID + 1)),
+        "a bool id": p2_05_handler(obj=_p2_05_playbook(id=True)),
+    }.items():
+        code, text, files, seen = _run_p2_05(handler)
+        check(
+            code == stop
+            and seen == [("GET", f"{org}/playbooks/{PB_ID}", query)]
+            and "STOPPED" in text
+            and sorted(files) == ["_ledger_p2_05.json"]
+            and files["_ledger_p2_05.json"]["requests"][0]["path"]
+            == "/rest/orgs/{org_id}/playbooks/{playbook_id}"
+            and not _p2_05_leaks(text, files),
+            f"p2-05 R1: {why} stops after the one GET; only the ledger row is kept",
+        )
+
+    # The research playbook: exactly two GETs, structure only.
+    code, text, files, seen = _run_p2_05(p2_05_handler())
+    check(
+        code == 0
+        and seen == [("GET", f"{org}/playbooks/{PB_ID}", query), ("GET", f"{org}/functions", query)]
+        and sorted(files)
+        == ["_ledger_p2_05.json", "p2_05_playbook.json", "p2_05_playbook_xml.json"]
+        and files["_ledger_p2_05.json"]["refused_by_policy"] == []
+        and [r["path"] for r in files["_ledger_p2_05.json"]["requests"]]
+        == ["/rest/orgs/{org_id}/playbooks/{playbook_id}", "/rest/orgs/{org_id}/functions"],
+        "p2-05: the research playbook costs exactly two GETs, recorded as templates",
+    )
+    pb = files["p2_05_playbook.json"]
+    facts = pb["_facts"]
+    check(
+        facts["research_identity"] == "name"
+        and facts["content_keys"] == ["content_version", "xml"]
+        and (facts["xml_bearing_property"], facts["xml_is_string"]) == ("xml", True)
+        and facts["activation_details_keys"] == ["activation_conditions"]
+        and facts["activation_conditions_keys"] == ["conditions", "logic_type"]
+        and facts["logic_type"] == "all"
+        and facts["conditions"] == "1-9"
+        and facts["condition_keys"] == ["evaluation_id", "field_name", "method", "type", "value"]
+        and facts["methods"] == ["equals"]
+        and facts["value_forms"] == ["string"]
+        and facts["type_forms"] == ["null"]
+        and facts["field_name_forms"] == ["object_type_dotted"]
+        and pb["_enums"]
+        == {
+            "activation_type": ["automatic"],
+            "method": ["equals"],
+            "object_type": ["incident"],
+            "status": ["disabled"],
+        }
+        and pb["shape"]["activation_details"]["activation_conditions"]["conditions"][0]["value"]
+        == "str",
+        "p2-05 R1: activation conditions as counts, keys, operators and value forms only",
+    )
+    xml = files["p2_05_playbook_xml.json"]["_facts"]
+    locations = xml["locations_holding_a_function_identity"]
+    check(
+        xml["parsed"] is True
+        and xml["function_matching"] == "run"
+        and xml["functions_listed"] == "1-9"
+        and sorted(locations)
+        == [
+            "bpmn_model:serviceTask@name",
+            "vendor_ibm:function.function.id",
+            "vendor_ibm:function.function.name",
+            "vendor_ibm:function@uuid",
+        ]
+        and locations["vendor_ibm:function@uuid"]["matched_properties"] == ["uuid"]
+        and locations["vendor_ibm:function.function.name"]["matched_properties"] == ["name"]
+        and locations["vendor_ibm:function.function.id"]["matched_properties"] == ["id"]
+        and locations["bpmn_model:serviceTask@name"]["matched_properties"] == ["display_name"]
+        and not any(v["a_value_matched_more_than_one_function"] for v in locations.values())
+        and xml["distinct_functions_referenced"] == "1-9"
+        and xml["uuid_attribute_match"] == "succeeded"
+        and xml["uuid_attribute_outcomes"] == {"matched_exactly_one": "1-9"}
+        and xml["uuid_attribute_value_forms"] == ["uuid_shaped_string"]
+        and xml["function_like_values_matching_no_function"] == {}
+        and "vendor_ibm:function" in xml["attribute_names_by_element"],
+        "p2-05 R3: where a function's uuid, name, display name and id occur, by location",
+    )
+    check(
+        not _p2_05_leaks(text, files),
+        "p2-05: no XML, script, condition value, name, id, uuid, URL or address gets out",
+    )
+
+    # A status of enabled is reported; the run still records structure.
+    code, text, files, seen = _run_p2_05(p2_05_handler(obj=_p2_05_playbook(status="enabled")))
+    check(code == 0 and "WARNING" in text and not _p2_05_leaks(text, files),
+          "p2-05: an enabled research playbook is reported as a warning")  # fmt: skip
+
+    # An XML the analyser refuses: recorded as refused, and the function list is not read.
+    hostile = _p2_05_playbook(
+        content={"content_version": 1,
+                 "xml": f'<!DOCTYPE x [<!ENTITY e SYSTEM "https://{HOST}/s">]><d>&e;</d>'}
+    )  # fmt: skip
+    code, text, files, seen = _run_p2_05(p2_05_handler(obj=hostile))
+    check(
+        code == 0
+        and len(seen) == 1
+        and files["p2_05_playbook_xml.json"]["_facts"]["parsed"] is False
+        and "R3 NOT RUN" in text
+        and not _p2_05_leaks(text, files),
+        "p2-05 R2: a refused XML is recorded as refused and nothing more is sent",
+    )
+
+    # The function list fails: the structure is kept and the matching is reported as not run.
+    code, text, files, seen = _run_p2_05(p2_05_handler(functions_status=500))
+    xml = files["p2_05_playbook_xml.json"]["_facts"]
+    check(
+        code == 0
+        and len(seen) == 2
+        and xml["parsed"] is True
+        and xml["function_matching"].startswith("not run")
+        and "locations_holding_a_function_identity" not in xml,
+        "p2-05 R3: a failed function list leaves the gap stated, not guessed",
+    )
+
+    # A display name two functions share is reported as ambiguous, never resolved.
+    twins = [P2_05_FUNCTIONS[0], {**P2_05_FUNCTIONS[1], "display_name": FN_DISPLAY}]
+    code, text, files, seen = _run_p2_05(p2_05_handler(functions=twins))
+    loc = files["p2_05_playbook_xml.json"]["_facts"]["locations_holding_a_function_identity"]
+    check(
+        loc["bpmn_model:serviceTask@name"]["a_value_matched_more_than_one_function"] is True
+        and loc["vendor_ibm:function@uuid"]["a_value_matched_more_than_one_function"] is False
+        and not _p2_05_leaks(text, files),
+        "p2-05 R3: a value two functions share is reported as matching more than one",
+    )
+
+    # A uuid two functions share: the verdict fails, ambiguous, never resolved.
+    same_uuid = [P2_05_FUNCTIONS[0], {**P2_05_FUNCTIONS[1], "uuid": FN_UUID}]
+    code, text, files, seen = _run_p2_05(p2_05_handler(functions=same_uuid))
+    xml = files["p2_05_playbook_xml.json"]["_facts"]
+    check(
+        xml["uuid_attribute_match"] == "failed"
+        and xml["uuid_attribute_outcomes"] == {"ambiguous": "1-9"}
+        and not _p2_05_leaks(text, files),
+        "p2-05 R3: a uuid two functions share fails the exact match as ambiguous",
+    )
+
+    # A case-changed uuid is not an exact match.
+    upper = _p2_05_playbook(
+        content={"content_version": 3, "xml": PLAYBOOK_XML.replace(FN_UUID, FN_UUID.upper())}
+    )
+    code, text, files, seen = _run_p2_05(p2_05_handler(obj=upper))
+    xml = files["p2_05_playbook_xml.json"]["_facts"]
+    check(
+        xml["uuid_attribute_match"] == "failed"
+        and xml["uuid_attribute_outcomes"] == {"no_match": "1-9"}
+        and not _p2_05_leaks(text, files),
+        "p2-05 R3: matching is exact equality; a case-changed uuid does not match",
+    )
+
+    # A function-like reference that matches no listed function is counted by location.
+    unknown = _p2_05_playbook(
+        content={"content_version": 3, "xml": PLAYBOOK_XML.replace(FN_UUID, KEY_ID)}
+    )
+    code, text, files, seen = _run_p2_05(p2_05_handler(obj=unknown))
+    xml = files["p2_05_playbook_xml.json"]["_facts"]
+    check(
+        "vendor_ibm:function@uuid" not in xml["locations_holding_a_function_identity"]
+        and xml["function_like_values_matching_no_function"] == {"vendor_ibm:function@uuid": "1-9"}
+        and xml["uuid_attribute_match"] == "failed"
+        and xml["uuid_attribute_outcomes"] == {"no_match": "1-9"}
+        and not _p2_05_leaks(text, files),
+        "p2-05 R3: an unresolved function reference is counted, never guessed",
+    )
+
+    # The client it uses refuses every write method on the playbook path.
+    for method in ("POST", "PUT", "PATCH", "DELETE"):
+        client = new_client(lambda _: httpx.Response(200, json={}))
+        try:
+            client.request(method, f"{org}/playbooks/{PB_ID}", "t", json_body={})
+            refused = False
+        except ProbePolicyError:
+            refused = True
+        client.close()
+        check(refused, f"p2-05: {method} on a playbook is refused by the client it uses")
+
+
+def test_p2_05_diagnose() -> None:
+    org = f"/rest/orgs/{ORG}"
+    refusal = {
+        "success": False,
+        "title": None,
+        "message": f"User {EMAIL} does not have permission to view playbook {PB_ID} on {HOST}",
+        "hints": [],
+        "error_code": "generic",
+    }
+    bodies: list[Any] = []
+
+    def handler(*, query_status: int = 200, get_status: int = 403, body: Any = refusal) -> Any:
+        def h(request: httpx.Request) -> httpx.Response:
+            if request.method == "POST":
+                bodies.append(json.loads(request.content))
+                if query_status != 200:
+                    return httpx.Response(query_status, json=body)
+                return httpx.Response(
+                    200,
+                    json={"data": [_p2_05_playbook()], "recordsTotal": 12, "recordsFiltered": 12},
+                )
+            if get_status != 200:
+                return httpx.Response(get_status, json=body)
+            return httpx.Response(200, json=_p2_05_playbook())
+
+        return h
+
+    def run(h: Any) -> tuple[int, str, dict[str, Any], list[Any]]:
+        seen: list[tuple[str, str, str]] = []
+
+        def transport(request: httpx.Request) -> httpx.Response:
+            seen.append((request.method, request.url.path, request.url.query.decode()))
+            return h(request)
+
+        client = new_client(transport)
+        printed: list[str] = []
+        files: dict[str, Any] = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            where = Path(tmp)
+            rec = probe_00b.Recorder(P2_05_ENV, client, where, echo=printed.append)
+            code = probe_p2_05.diagnose(rec)
+            probe_p2_05.finish(rec)
+            for path in sorted(where.glob("*.json")):
+                text = path.read_text(encoding="utf-8")
+                verify_clean(text, P2_05_ENV.literals(), what=path.name)
+                files[path.name] = json.loads(text)
+        client.close()
+        return code, " | ".join(printed), files, seen
+
+    # Query readable, playbook refused: two requests in order, the approved body, fixed facts.
+    code, text, files, seen = run(handler())
+    facts = files["p2_05_diagnose.json"]["_facts"]
+    check(
+        code == 0
+        and [(m, p) for m, p, _ in seen]
+        == [("POST", f"{org}/playbooks/query_paged"), ("GET", f"{org}/playbooks/{PB_ID}")]
+        and "return_level=normal" in seen[0][2]
+        and bodies == [{"filters": [], "start": 0, "length": 1}],
+        "p2-05 D: exactly the approved query body, then the one GET, in that order",
+    )
+    check(
+        facts["query_paged_length_1"]
+        == {
+            "status": 200,
+            "wrapper_keys": ["data", "recordsFiltered", "recordsTotal"],
+            "rows_returned": "1-9",
+            "records_total": "10-99",
+        }
+        and facts["designated_playbook_get"]
+        == {
+            "status": 403,
+            "error": None,
+            "content_type": "application/json",
+            "body_is_json_object": True,
+            "body_keys": ["error_code", "hints", "message", "success", "title"],
+            "mentions_permission": True,
+            "mentions_not_found": False,
+            "mentions_draft": False,
+        },
+        "p2-05 D: a readable query as buckets; a refusal as key names and fixed booleans",
+    )
+    check(
+        not _p2_05_leaks(text, files)
+        and "does not have" not in text + json.dumps(files)
+        and "Payroll" not in text + json.dumps(files),
+        "p2-05 D: no refusal text, row content, address or id gets out",
+    )
+
+    # Both refused, with a not-found message mentioning a draft: still two requests only.
+    nf = {"message": f"Unable to find draft playbook {PB_ID} at {HOST}"}
+    code, text, files, seen = run(handler(query_status=403, get_status=404, body=nf))
+    facts = files["p2_05_diagnose.json"]["_facts"]
+    check(
+        len(seen) == 2
+        and facts["query_paged_length_1"]["status"] == 403
+        and facts["designated_playbook_get"]["mentions_not_found"] is True
+        and facts["designated_playbook_get"]["mentions_draft"] is True
+        and facts["designated_playbook_get"]["mentions_permission"] is False
+        and not _p2_05_leaks(text, files),
+        "p2-05 D: a not-found refusal is told apart from a permission refusal",
+    )
+
+    # The GET now succeeds: nothing analysed, no function list read.
+    code, text, files, seen = run(handler(get_status=200))
+    facts = files["p2_05_diagnose.json"]["_facts"]
+    check(
+        len(seen) == 2
+        and facts["designated_playbook_get"] == {
+            "status": 200, "analysed": False, "note": "readable now; run --playbook"}
+        and "p2_05_playbook.json" not in files
+        and not _p2_05_leaks(text, files),
+        "p2-05 D: a readable playbook is not analysed by the diagnostic",
+    )  # fmt: skip
+
+    # A non-JSON refusal body.
+    code, text, files, seen = run(handler(body=None))
+    check(
+        files["p2_05_diagnose.json"]["_facts"]["designated_playbook_get"]["body_keys"] == []
+        and len(seen) == 2,
+        "p2-05 D: a refusal without a JSON body is recorded as such",
+    )
+
+
 def main() -> int:
     tests = (test_policy, test_verifier, test_shape, test_full_run, test_smoke,
              test_dotenv_encodings,
@@ -2325,7 +2779,7 @@ def main() -> int:
              test_experiment_stops, test_experiment_documented_source,
              test_experiment_client_policy,
              test_00b_threading, test_shape_request, test_00b_swagger_grep,
-             test_00b_docs, test_p2_03, test_p2_04)  # fmt: skip
+             test_00b_docs, test_p2_03, test_p2_04, test_p2_05, test_p2_05_diagnose)  # fmt: skip
     for test in tests:
         test()
     print(f"\n{'OK' if not failures else 'FAILED'}: {len(failures)} failure(s)")

@@ -46,10 +46,12 @@ P2_04_TOOLS = [
     "soar_list_workflows",
     "soar_get_workflow",
 ]
-PHASE_TWO_TOOLS_NOT_YET_IMPLEMENTED = {
+# P2-05 (08 §30) added these two; tests/test_discovery_playbooks.py covers them. Every
+# discovery tool of 06 Phase 2 now exists.
+P2_05_TOOLS = [
     "soar_list_playbooks",
     "soar_get_playbook",
-}
+]
 
 
 async def call(rt: Runtime) -> dict[str, Any]:
@@ -67,11 +69,11 @@ def test_it_is_a_tier_0_read_with_no_capability_and_no_mutation():
     assert list(inspect.signature(spec.func).parameters) == ["rt"]  # nothing to pass in
 
 
-def test_the_discovery_module_holds_the_catalog_tool_and_those_of_p2_02_to_p2_04_only():
-    assert not (set(TOOL_REGISTRY) & PHASE_TWO_TOOLS_NOT_YET_IMPLEMENTED)
+def test_the_discovery_module_holds_the_catalog_tool_and_those_of_p2_02_to_p2_05_only():
+    assert set(P2_05_TOOLS) <= set(TOOL_REGISTRY)
     tree = ast.parse(Path(discovery_tools.__file__).read_text(encoding="utf-8"))
     functions = [n.name for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef)]
-    assert functions == [TOOL, *P2_02_TOOLS, *P2_03_TOOLS, *P2_04_TOOLS]
+    assert functions == [TOOL, *P2_02_TOOLS, *P2_03_TOOLS, *P2_04_TOOLS, *P2_05_TOOLS]
 
 
 def test_there_is_no_capability_flag_for_catalog_reads():
@@ -196,20 +198,30 @@ def test_the_tool_body_reaches_soar_only_through_the_runtime():
         node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module
     }
     assert not [m for m in imported if m.startswith("qradar_soar_mcp.client")]
-    # The catalog's data types only: the service that loads one comes from the runtime.
-    assert [m for m in imported if m.startswith("qradar_soar_mcp.catalog")] == [
-        "qradar_soar_mcp.catalog.models"
+    # The catalog's data types and its pure parsers only (P2-05 parses the one playbook
+    # object it reads with them); the service that loads a catalog comes from the runtime,
+    # and no backend or cache is imported.
+    assert sorted(m for m in imported if m.startswith("qradar_soar_mcp.catalog")) == [
+        "qradar_soar_mcp.catalog.bpmn",
+        "qradar_soar_mcp.catalog.models",
+        "qradar_soar_mcp.catalog.playbooks",
     ]
+    for module in ("bpmn", "playbooks"):
+        parser = Path(discovery_tools.__file__).parents[1] / "catalog" / f"{module}.py"
+        parsed = ast.parse(parser.read_text(encoding="utf-8"))
+        uses = {n.module for n in ast.walk(parsed) if isinstance(n, ast.ImportFrom) and n.module}
+        assert not {u for u in uses if u.endswith((".backends", ".cache"))}, module
+        assert not [u for u in uses if u.startswith("qradar_soar_mcp.client")], module
     assert "httpx" not in source
-    # P2-02 and P2-04: two tools read SOAR themselves, for the script body and the
-    # workflow XML the catalog does not hold.
+    # P2-02, P2-04 and P2-05: three tools read SOAR themselves, for the script body,
+    # the workflow XML and the single playbook object the catalog does not hold.
     reaches_client = [
         fn.name
         for fn in ast.walk(tree)
         if isinstance(fn, ast.AsyncFunctionDef | ast.FunctionDef)
         and any(isinstance(n, ast.Attribute) and n.attr == "require_client" for n in ast.walk(fn))
     ]
-    assert reaches_client == ["soar_get_script", "soar_get_workflow"]
+    assert reaches_client == ["soar_get_script", "soar_get_workflow", "soar_get_playbook"]
 
 
 def test_nothing_but_the_runtime_builds_a_catalog_service():

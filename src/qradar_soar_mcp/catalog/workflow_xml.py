@@ -135,6 +135,8 @@ class Graph:
     edges: list[Edge] = field(default_factory=list)
     annotations: int = 0
     problems: list[str] = field(default_factory=list)
+    # What the document is called in problems and refusals: "workflow" or "playbook".
+    document: str = "workflow"
     # Applied to each kept text value BEFORE it is cut to its bound, so that a
     # credential straddling the bound is seen whole by the redactor.
     clean: Callable[[str], str] = _unchanged
@@ -187,7 +189,7 @@ def _attr(element: ET.Element, name: str) -> str | None:
     return None
 
 
-def _ident(value: str | None) -> str | None:
+def _ident(value: str | None, document: str = "workflow") -> str | None:
     """An identifier exactly as written: never stripped, never cut. One over
     ``IDENT_LIMIT`` refuses the document, since comparing cut identifiers could make a
     dangling reference look valid."""
@@ -195,12 +197,12 @@ def _ident(value: str | None) -> str | None:
         return None
     if len(value) > IDENT_LIMIT:
         raise WorkflowXmlRefusedError(
-            f"an identifier in the workflow XML is longer than {IDENT_LIMIT} characters"
+            f"an identifier in the {document} XML is longer than {IDENT_LIMIT} characters"
         )
     return value
 
 
-def parse(xml: str) -> ET.Element:
+def parse(xml: str, document: str = "workflow") -> ET.Element:
     """The root element of ``xml``, or :class:`WorkflowXmlRefusedError`.
 
     ElementTree on CPython's expat neither loads a DTD nor fetches anything; what it
@@ -211,18 +213,22 @@ def parse(xml: str) -> ET.Element:
     a ``&`` inside CDATA (``a && b`` in a script) is ordinary text.
     """
     if not isinstance(xml, str):
-        raise WorkflowXmlRefusedError("the workflow content is not text")
+        raise WorkflowXmlRefusedError(f"the {document} content is not text")
     if len(xml) > MAX_XML_CHARS:
-        raise WorkflowXmlRefusedError(f"the workflow XML is longer than {MAX_XML_CHARS} characters")
+        raise WorkflowXmlRefusedError(
+            f"the {document} XML is longer than {MAX_XML_CHARS} characters"
+        )
     if _DTD_OR_ENTITY.search(xml):
-        raise WorkflowXmlRefusedError("the workflow XML declares a DTD or an entity")
+        raise WorkflowXmlRefusedError(f"the {document} XML declares a DTD or an entity")
     try:
         root = ET.fromstring(xml)  # noqa: S314 - DTDs and entities are refused above
     except ET.ParseError:
-        raise WorkflowXmlRefusedError("the workflow XML is not well-formed") from None
+        raise WorkflowXmlRefusedError(f"the {document} XML is not well-formed") from None
     for count, _ in enumerate(root.iter(), start=1):
         if count > MAX_ELEMENTS:
-            raise WorkflowXmlRefusedError(f"the workflow XML has more than {MAX_ELEMENTS} elements")
+            raise WorkflowXmlRefusedError(
+                f"the {document} XML has more than {MAX_ELEMENTS} elements"
+            )
     return root
 
 
@@ -290,24 +296,30 @@ def _present(value: Any) -> bool:
 
 
 # ------------------------------------------------------------------- summary
-def summarise(xml: str, clean: Callable[[str], str] = _unchanged) -> Graph:
+def summarise(
+    xml: str, clean: Callable[[str], str] = _unchanged, document: str = "workflow"
+) -> Graph:
     """The structural summary of one workflow's XML, or :class:`WorkflowXmlRefusedError`.
+
+    A playbook (P2-05; 08 §30) is the same BPMN 2.0 structure on 51.0.9.0.20848, with the
+    same function element (``p2_05_playbook_xml.json``); ``document`` only names which of
+    the two the problems and refusals speak of.
 
     ``clean`` (the catalog's credential filter) is applied to every kept text value
     before it is cut to its bound. Identifiers are compared exactly as written and are
     never cut, so the graph checks see the document's real identities; they are
     filtered whole, with everything else, when the summary is finished."""
-    root = parse(xml)
+    root = parse(xml, document)
     if not _is_bpmn(root, "definitions"):
         raise WorkflowXmlRefusedError("the root element is not a BPMN 2.0 definitions element")
     processes = [child for child in root if _is_bpmn(child, "process")]
     if not processes:
-        raise WorkflowXmlRefusedError("the workflow XML has no BPMN process")
+        raise WorkflowXmlRefusedError(f"the {document} XML has no BPMN process")
     if len(processes) > 1:
         # Only one process per document was observed; how SOAR would relate two is unknown.
-        raise WorkflowXmlRefusedError("the workflow XML has more than one BPMN process")
+        raise WorkflowXmlRefusedError(f"the {document} XML has more than one BPMN process")
     process = processes[0]
-    graph = Graph(clean=clean)
+    graph = Graph(clean=clean, document=document)
     seen: set[str] = set()
     flows: list[ET.Element] = []
     for element in process:
@@ -316,15 +328,22 @@ def summarise(xml: str, clean: Callable[[str], str] = _unchanged) -> Graph:
             if local:  # not a comment
                 graph.problem("an element outside the BPMN model namespace was ignored")
             continue
+        if len(local) > IDENT_LIMIT:
+            # An element name becomes a node's ``type`` and part of problem texts; one
+            # over the identifier bound would carry unbounded author text into an answer
+            # (found in review). Refused like an over-long identifier, never cut.
+            raise WorkflowXmlRefusedError(
+                f"an element name in the {document} XML is longer than {IDENT_LIMIT} characters"
+            )
         if local in NON_FLOW_ELEMENTS:
             graph.annotations += local == "textAnnotation"
             continue
-        ident = _ident(_attr(element, "id"))
+        ident = _ident(_attr(element, "id"), document)
         if ident is None:
             graph.problem(f"a {local} element without an id was ignored")
             continue
         if ident in seen:
-            raise WorkflowXmlRefusedError("two elements of the workflow share one id")
+            raise WorkflowXmlRefusedError(f"two elements of the {document} share one id")
         seen.add(ident)
         if local == EDGE_ELEMENT:
             flows.append(element)
@@ -343,9 +362,9 @@ def summarise(xml: str, clean: Callable[[str], str] = _unchanged) -> Graph:
             )
         )
         if len(graph.nodes) > MAX_NODES:
-            raise WorkflowXmlRefusedError(f"the workflow has more than {MAX_NODES} nodes")
+            raise WorkflowXmlRefusedError(f"the {document} has more than {MAX_NODES} nodes")
     if len(flows) > MAX_EDGES:
-        raise WorkflowXmlRefusedError(f"the workflow has more than {MAX_EDGES} sequence flows")
+        raise WorkflowXmlRefusedError(f"the {document} has more than {MAX_EDGES} sequence flows")
     _edges(graph, flows, process)
     _check(graph)
     return graph
@@ -359,7 +378,8 @@ def _edges(graph: Graph, flows: list[ET.Element], process: ET.Element) -> None:
         local = _split(element.tag)[1]
         if not _is_bpmn(element) or local == EDGE_ELEMENT:
             continue
-        ident, default = _ident(_attr(element, "id")), _ident(_attr(element, "default"))
+        ident = _ident(_attr(element, "id"), graph.document)
+        default = _ident(_attr(element, "default"), graph.document)
         if ident is None or default is None or ident not in nodes:
             continue
         if local.endswith("Gateway"):
@@ -372,8 +392,9 @@ def _edges(graph: Graph, flows: list[ET.Element], process: ET.Element) -> None:
             )
     named_defaults = set(defaults.values())
     for element in flows:
-        ident = _ident(_attr(element, "id")) or ""
-        source, target = _ident(_attr(element, "sourceRef")), _ident(_attr(element, "targetRef"))
+        ident = _ident(_attr(element, "id"), graph.document) or ""
+        source = _ident(_attr(element, "sourceRef"), graph.document)
+        target = _ident(_attr(element, "targetRef"), graph.document)
         valid = True
         if source is None or source not in nodes:
             graph.problem(f"sequence flow {ident}: its source does not name a node")
@@ -427,7 +448,7 @@ def _check(graph: Graph) -> None:
             graph.problem(f"node {node.id} has no outgoing flow and is not an end event")
     starts = [ident for ident, kind in types.items() if kind == "startEvent"]
     if not starts:
-        graph.problem("the workflow has no start event")
+        graph.problem(f"the {graph.document} has no start event")
         return
     reached = set(starts)
     queue = deque(starts)

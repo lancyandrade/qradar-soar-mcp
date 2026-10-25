@@ -31,6 +31,7 @@ ALLOWED = frozenset(
         "probe_00b.py",
         "probe_p2_03.py",  # P2-03 addendum: four approved GETs, the `required` property
         "probe_p2_04.py",  # P2-04 addendum: workflow documentation, collection, one detail
+        "probe_p2_05.py",  # P2-05 addendum: one research playbook and the function list
         "probe_env.py",
         "sanitise.py",
         "selftest.py",

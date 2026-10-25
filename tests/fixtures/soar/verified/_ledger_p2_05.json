@@ -1,0 +1,111 @@
+{
+  "_appliance": "QRadar SOAR 51.0.9.0.20848",
+  "_fixture": "verified-ledger",
+  "_ticket": "P2-05",
+  "refused_by_policy": [],
+  "requests": [
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/playbooks/{playbook_id}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P2-05",
+      "size": "<100KB",
+      "status": 200,
+      "step": "playbook"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "POST",
+      "path": "/rest/orgs/{org_id}/playbooks/query_paged",
+      "query_keys": [
+        "handle_format",
+        "return_level",
+        "text_content_output_format"
+      ],
+      "question": "P2-05D",
+      "size": "<1KB",
+      "status": 403,
+      "step": "diagnose_query"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/playbooks/{playbook_id}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P2-05D",
+      "size": "<1KB",
+      "status": 403,
+      "step": "diagnose_playbook"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/playbooks/{playbook_id}",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P2-05",
+      "size": "<1KB",
+      "status": 403,
+      "step": "playbook@403"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/functions",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P2-05",
+      "size": "<100KB",
+      "status": 200,
+      "step": "functions"
+    },
+    {
+      "allow": null,
+      "content_type": "application/json",
+      "count": 1,
+      "error": null,
+      "format_headers": [],
+      "method": "GET",
+      "path": "/rest/orgs/{org_id}/functions",
+      "query_keys": [
+        "handle_format",
+        "text_content_output_format"
+      ],
+      "question": "P2-05",
+      "size": "<1KB",
+      "status": 403,
+      "step": "functions@403"
+    }
+  ]
+}

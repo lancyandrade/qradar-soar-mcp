@@ -242,14 +242,17 @@ def test_catalog_round_trips_through_json_without_loss():
 
 
 def test_the_fixture_above_really_covers_every_spec_model():
-    """Every model class of the module takes part in the round trip."""
+    """Every model class of the module that a catalog holds takes part in the round trip.
+    ``PlaybookDetail`` (P2-05; 08 §30) is the one model a catalog never holds: it is built
+    for one ``soar_get_playbook`` answer and dropped, and is tested there."""
     specs = {
         cls
         for cls in vars(models).values()
         if isinstance(cls, type)
         and issubclass(cls, BaseModel)
         and cls.__module__ == models.__name__
-    } - {models._Spec}
+    } - {models._Spec, models.PlaybookDetail}
+    assert models.PlaybookDetail not in {type(v) for v in full_catalog().playbooks.values()}
     seen: set[type] = set()
 
     def walk(value: Any) -> None:

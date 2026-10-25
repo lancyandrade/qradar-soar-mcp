@@ -21,6 +21,9 @@ Enforced by AST inspection:
   appear nowhere;
 * P2-02 (08 §26) adds exactly one call, ``GET scripts/{id}``, for the script body. The
   prohibition on writing a script is ``test_no_script_writes.py``.
+* P2-05 (08 §30) adds exactly one call, ``GET playbooks/{id}``, the single playbook object
+  verified on 51.0.9.0.20848; the playbook query stays the only POST, and no other
+  playbook path (export, import, execution, clone, change logs) appears.
 """
 
 from __future__ import annotations
@@ -72,6 +75,7 @@ DISCOVERY_CALLS = {
     ("GET", "types/task/fields"),
     ("GET", "types/artifact/fields"),
     ("POST", "playbooks/query_paged"),
+    ("GET", "playbooks/{id}"),  # P2-05 (08 §30): the single playbook, on demand
 }
 PHASE_ONE_CALLS = frozenset(ALLOWED_CALLS)
 ALLOWED_CALLS |= DISCOVERY_CALLS
@@ -340,11 +344,16 @@ def test_discovery_is_read_only_and_names_no_unverified_or_privileged_call():
             "session",
         ):
             assert word not in literal, f"discovery.py names {word!r}: {literal!r}"
-    # The GET playbook collection answers 500 on this version: listing is the POST only.
+    # The GET playbook collection answers 500 on this version: listing is the POST only,
+    # and the single object (P2-05) is a GET by id. No other playbook path exists.
     pairs, _ = _calls(only=DISCOVERY_MODULE)
     assert {(m, path) for m, path in pairs if path.startswith("playbooks")} == {
-        ("POST", "playbooks/query_paged")
+        ("POST", "playbooks/query_paged"),
+        ("GET", "playbooks/{id}"),
     }
+    for literal in strings:
+        if "\n" not in literal and literal.startswith("playbooks"):
+            assert literal in {"playbooks/query_paged", "playbooks/"}, literal
 
 
 def test_the_playbook_query_body_is_built_in_the_client_from_two_integers():
@@ -376,11 +385,23 @@ def test_the_playbook_query_body_is_built_in_the_client_from_two_integers():
 
 def test_no_discovery_method_takes_a_path_a_method_or_a_body():
     tree = ast.parse((CLIENT_DIR / DISCOVERY_MODULE).read_text(encoding="utf-8"))
-    cls = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef))
+    # The client class by name: the module also defines result dataclasses, and the
+    # first class in it is one of those, which has no methods to check.
+    cls = next(
+        n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "DiscoveryClient"
+    )
+    checked = 0
     for fn in cls.body:
         if isinstance(fn, ast.AsyncFunctionDef):
+            checked += 1
             names = {a.arg for a in (*fn.args.args, *fn.args.kwonlyargs)} - {"self"}
-            assert names <= {"function_id", "script_id", "type_name", "start", "length"}, (
-                fn.name,
-                names,
-            )
+            assert names <= {
+                "function_id",
+                "script_id",
+                "workflow_id",
+                "playbook_id",
+                "type_name",
+                "start",
+                "length",
+            }, (fn.name, names)
+    assert checked >= 15  # every read method was looked at

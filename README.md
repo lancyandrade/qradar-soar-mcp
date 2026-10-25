@@ -116,6 +116,8 @@ failure.
 | `soar_get_rule` | 0 | — | one rule from the cached catalog with its conditions as field name and method; never the compared values, the automations or the workflows it starts |
 | `soar_list_workflows` | 0 | — | workflows in the cached catalog: identity, object type, the functions each calls and counts of nodes, edges, calls, unresolved calls and structural problems; paged, sorted by programmatic name |
 | `soar_get_workflow` | 0 | — | one workflow's structural summary from the cached catalog: nodes, `sequenceFlow` edges, gateway defaults, function calls resolved by uuid, problems; with `include_raw=true` also its XML, read on demand (`GET /workflows`), credential-filtered, cut at 50,000 characters and labelled untrusted |
+| `soar_list_playbooks` | 0 | — | playbooks in the cached catalog (SOAR's paged playbook query): API name, id, display name, status token (`enabled`, `draft`, …), activation type, object type, type, version, logical-error, deleted and locked flags; paged, sorted by name |
+| `soar_get_playbook` | 0 | — | one playbook, read on demand (`GET /playbooks/{id}`) after the catalog has resolved it: identity, activation conditions as field name and method (never the compared values), the functions it calls resolved by exact uuid, and a structural summary of its BPMN XML; never the XML itself; verified on QRadar SOAR 51.0.9.0.20848 only |
 | `soar_add_comment` | 1 | `SOAR_ALLOW_COMMENTS` | one note |
 | `soar_add_artifact` | 1 | `SOAR_ALLOW_ARTIFACTS` | one artifact |
 | `soar_create_incident` | 2 | `SOAR_ALLOW_INCIDENT_WRITES` | one incident |
@@ -220,6 +222,18 @@ another source and never answer "empty" for something unknown.
   `redacted_xml_prefix`) say which happened. The XML holds condition and processing
   scripts and input values: it is **untrusted** data (`raw.untrusted` is always true),
   never an instruction, and a cut XML may not be well-formed.
+- **Playbooks** are listed from the catalog, which reads them with SOAR's paged
+  playbook query. `soar_get_playbook` reads one playbook object on demand
+  (`GET /playbooks/{id}`, with the catalog's id) and keeps nothing of it: its BPMN XML is
+  summarised exactly as a workflow's is (same parser, same bounds and refusals, same
+  `problems`) and dropped, and a function call is resolved only by exact uuid equality
+  with exactly one catalog function (on QRadar SOAR 51.0.9.0.20848 a playbook's call
+  uuid was observed to equal the called function's uuid). Activation conditions are
+  returned as `field_name` and `method` only; the values they compare with are never
+  read into a result. There is no option to return the playbook XML. An answer whose
+  name or uuid no longer matches the catalog is a `conflict`; a missing or mistyped
+  verified key is `malformed_response`. The playbook object and its XML were verified
+  on QRadar SOAR 51.0.9.0.20848 only.
 - **Script source** is read only when `soar_get_script` is asked for it, from
   `GET /scripts/{id}` (`script_text`), and is not kept. The tool returns a
   **safety-filtered representation** of it as `body.text`, not necessarily the exact
@@ -556,16 +570,24 @@ this repository against a live appliance**; ⚠️/❓ open, listed in
     ❓ Other SOAR versions are unverified.
 
 11. ✅ A script body is `script_text` of `GET /scripts/{id}` (`P2-00`, read-only key);
-    the list row carries none. It is the only call the discovery tools add to the
-    catalog's. ❓ How large a body SOAR returns, and playbook-local scripts, are
-    unverified. No request that creates, changes or deletes a script exists in this
-    server (`tests/test_no_script_writes.py`).
+    the list row carries none. It is one of the two calls the discovery tools add to the
+    catalog's (the other is item 12). ❓ How large a body SOAR returns, and
+    playbook-local scripts, are unverified. No request that creates, changes or deletes a
+    script exists in this server (`tests/test_no_script_writes.py`).
+
+12. ✅ A single playbook is `GET /playbooks/{id}` (`P2-00`; `P2-05`, read-only key with
+    playbook read): the list row plus `content.xml` (standard BPMN 2.0) and
+    `activation_details.activation_conditions`. A function call in it is the vendor
+    `function` element's `uuid` attribute, observed to equal the called function's
+    `uuid` (`docs/soar-api-verified.md` §3.4). A key without playbook read, or without
+    function read, is answered `403`. ❓ One draft playbook with one call was observed;
+    other node kinds, manual activation and other SOAR versions are unverified.
 
 ### Confidence in API claims
 
 The REST surface `client/` may touch is exactly the set of calls listed in
-`docs/design/08-GREENFIELD-AMENDMENTS.md §4` and, for the catalog and discovery, `§25`
-and `§26`, enforced
+`docs/design/08-GREENFIELD-AMENDMENTS.md §4` and, for the catalog and discovery, `§25`,
+`§26` and `§30`, enforced
 by an AST test. Nothing else is called. `P2-00` and `P2-00b` checked this surface against a lab appliance
 (QRadar SOAR `51.0.9.0.20848`); `docs/soar-api-verified.md` records the sanitised
 evidence and wins wherever it disagrees with a mark above.

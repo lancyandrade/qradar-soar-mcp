@@ -25,6 +25,13 @@ written by this server (``tests/test_no_script_writes.py``).
 ``GET /workflows`` the catalog reads, sent once when a caller asks for one workflow's raw
 XML, with that one row chosen by its integer id. Nothing here creates, changes, runs or
 removes a workflow.
+
+:meth:`DiscoveryClient.playbook` (P2-05; 08 §30) is the second read the catalog does not
+make: ``GET /playbooks/{playbook_id}``, the single playbook object, verified on
+51.0.9.0.20848 (``tests/fixtures/soar/verified/p2_05_playbook.json``): the list row plus
+``content`` (``content_version`` and the BPMN ``xml``) and ``activation_details``. It takes
+an integer and nothing else. Nothing here creates, changes, enables, runs or removes a
+playbook.
 """
 
 from __future__ import annotations
@@ -257,6 +264,25 @@ class DiscoveryClient:
     async def incident_types(self) -> dict[str, Row]:
         body = await self._c.get(self._c.org_path("incident_types"))
         return _named_map(body, "GET /incident_types")
+
+    # ---------------------------------------------------------------- playbooks
+    async def playbook(self, playbook_id: int) -> Row:
+        """One playbook object (P2-05; 08 §30), as SOAR returned it. Read-only, by id only.
+
+        The answer holds the playbook's XML and the values its activation conditions
+        compare with: the caller projects it and keeps neither, and nothing of it is put
+        into a log line or an error message here. The only check made is the one this
+        method relies on: that the object is the playbook asked for."""
+        if not isinstance(playbook_id, int) or isinstance(playbook_id, bool) or playbook_id < 1:
+            raise SoarValidationError("a playbook id is a positive integer", not_sent=True)
+        body = await self._c.get(self._c.org_path(f"playbooks/{int(playbook_id)}"))
+        where = "GET /playbooks/{id}"
+        if not isinstance(body, dict):
+            raise SoarMalformedResponseError(f"{where} did not return an object")
+        found = body.get("id")
+        if not isinstance(found, int) or isinstance(found, bool) or found != playbook_id:
+            raise SoarMalformedResponseError(f"{where} did not return the playbook asked for")
+        return body
 
     # ------------------------------------------------------------ paged query
     async def playbooks_page(self, *, start: int, length: int) -> dict[str, Any]:

@@ -182,6 +182,9 @@ EXPECTED: dict[str, dict[str, dict[str, str]]] = {
     "soar_get_rule": _READ,
     "soar_list_workflows": _READ,
     "soar_get_workflow": _READ,
+    # P2-05 (08 §30): two more Tier-0 reads; the single playbook GET is still a read.
+    "soar_list_playbooks": _READ,
+    "soar_get_playbook": _READ,
     "soar_add_comment": _COMMENTS,
     "soar_add_artifact": _ARTIFACTS,
     "soar_create_incident": _INCIDENT_WRITES,
@@ -219,6 +222,8 @@ MINIMAL_ARGS: dict[str, dict[str, Any]] = {
     "soar_get_rule": {"rule_id": 300},
     "soar_list_workflows": {},
     "soar_get_workflow": {"workflow_id": 1100},
+    "soar_list_playbooks": {},
+    "soar_get_playbook": {"playbook_id": 1000},
     "soar_add_comment": {"incident_id": 42, "text": "matrix"},
     "soar_add_artifact": {
         "incident_id": 42,

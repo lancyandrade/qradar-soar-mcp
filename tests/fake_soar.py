@@ -35,7 +35,10 @@ criteria-only body (any other body is refused with a ``fake_soar:`` message, str
 anything observed), while ``GET /playbooks`` answers 500 as the appliance did. Only GET
 exists on the other collections. There is no configuration export route. The single
 script of P2-02 (``GET /scripts/{id}``, 08 §26) is the list row plus ``script_text``; like
-the collections it answers 405 to every other method, so nothing can write a script.
+the collections it answers 405 to every other method, so nothing can write a script. The
+single playbook of P2-05 (``GET /playbooks/{id}``, 08 §30) is the list row plus
+``content`` and ``activation_details`` in the recorded shape, and likewise answers 405 to
+every other method.
 
 All state comes from synthetic fixtures in ``tests/fixtures/soar``, and the discovery
 payloads from ``tests/discovery_data.py``.
@@ -412,6 +415,8 @@ class FakeSoar:
             key = f"function:{m.group(1)}"
         elif m := re.fullmatch(r"/scripts/(\d+)", rest):
             key = f"script:{m.group(1)}"  # P2-02: the body, as ``script_text``
+        elif m := re.fullmatch(r"/playbooks/(\d+)", rest):
+            key = f"playbook:{m.group(1)}"  # P2-05: the single object; only GET exists
         elif rest == "/types/__function/fields":
             key = "function_fields"
         elif re.fullmatch(r"/types/(task|artifact)/fields", rest):
