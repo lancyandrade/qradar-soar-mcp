@@ -20,15 +20,25 @@ from qradar_soar_mcp.errors import SoarMalformedResponseError
 TEXT_LIMIT = 1_000  # as for every catalog description (backends.TEXT_LIMIT)
 PLAYBOOK_SUMMARY_FAILED = "the playbook XML could not be summarised"
 PLAYBOOK_OBJECT = "GET /playbooks/{id}"
-# The playbook object keys that are not identity: the XML, the activation conditions
-# (with the values they compare with), and people and change history.
-PLAYBOOK_NON_IDENTITY = frozenset(
+# The keys of the object that identity is parsed from: exactly what ``parse_playbook``
+# reads. An allow-list, so nothing else (the XML, the conditions and the values they
+# compare with, people, change history, tags, keys never observed) is even cleaned, and
+# arbitrarily nested JSON under some other key is never walked (found in review).
+PLAYBOOK_IDENTITY_KEYS = frozenset(
     {
-        "content",
-        "activation_details",
-        "creator_principal",
-        "last_modified_principal",
-        "playbook_change_log_info",
+        "id",
+        "name",
+        "display_name",
+        "uuid",
+        "status",
+        "activation_type",
+        "object_type",
+        "type",
+        "version",
+        "has_logical_errors",
+        "is_deleted",
+        "is_locked",
+        "description",
     }
 )
 
@@ -139,16 +149,20 @@ def parse_playbook_detail(
     ``content`` (``content_version``, ``xml``) and ``activation_details.
     activation_conditions`` (``logic_type``; ``conditions`` of ``field_name``, ``method``,
     ``value``, ``type``, ``evaluation_id``). Identity is parsed as a list row is, from the
-    object without its XML, conditions, people and change log, every string cleaned. The
+    object's identity keys only (``PLAYBOOK_IDENTITY_KEYS``), every string cleaned. The
     XML is summarised as SOAR sent it (cleaning text can break XML, 08 §29.2) and only
     what the summary keeps is cleaned. Condition values are never read.
 
     A missing or mistyped verified key is ``malformed_response``; an object without
     ``activation_details`` or ``activation_conditions`` is ``activation: absent``. XML
     that cannot be summarised safely is ``structure: refused``, never an error."""
-    identity_row = clean_tree(
-        {k: v for k, v in row.items() if k not in PLAYBOOK_NON_IDENTITY}, clean
-    )
+    # Identity values are scalars; a string is cleaned, anything else is left for the
+    # type checks of parse_playbook to refuse. Nothing is walked recursively here.
+    identity_row = {
+        k: clean(v) if isinstance(v, str) else v
+        for k, v in row.items()
+        if k in PLAYBOOK_IDENTITY_KEYS
+    }
     try:
         summary = parse_playbook(identity_row)
     except SoarMalformedResponseError:

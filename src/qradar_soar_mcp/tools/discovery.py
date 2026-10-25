@@ -735,9 +735,15 @@ async def soar_get_playbook(
     """One playbook, read-only. Give exactly one of ``name`` (the API name, matched
     exactly) and ``playbook_id``. The playbook is looked up in the server's cached catalog
     first; one the catalog does not know is not requested. Then one GET of that playbook
-    is sent to SOAR and returned as: its identity and status; ``activation`` (``state``
-    present or absent, ``logic_type``, and each condition as the ``field_name`` it looks
-    at and the ``method`` it compares with; the compared values are never shown); the
+    is sent to SOAR and returned as: its identity and status; ``activation``, an object
+    with exactly these keys: ``state`` (``present``, or ``absent`` when SOAR sent no
+    activation conditions, in which case ``conditions`` is empty and ``logic_type`` is
+    null, which says nothing about when the playbook starts), ``logic_type`` (SOAR's
+    token, e.g. ``all``), ``conditions`` (at most 100, each ``{"field_name", "method"}``:
+    the field it looks at and SOAR's operator token, e.g. ``contains``),
+    ``conditions_omitted`` (how many more there are), ``unreadable_conditions`` (how many
+    lack a text field name or method and are not shown) and ``values_shown``, always
+    false: the values a condition compares with are never read or returned; the
     ``functions_called`` (catalog function names, resolved by exact uuid equality with
     exactly one catalog function); and a structural summary of its BPMN XML as
     soar_get_workflow gives one (``nodes``, ``edges``, each call with its uuid,

@@ -328,6 +328,13 @@ def summarise(
             if local:  # not a comment
                 graph.problem("an element outside the BPMN model namespace was ignored")
             continue
+        if len(local) > IDENT_LIMIT:
+            # An element name becomes a node's ``type`` and part of problem texts; one
+            # over the identifier bound would carry unbounded author text into an answer
+            # (found in review). Refused like an over-long identifier, never cut.
+            raise WorkflowXmlRefusedError(
+                f"an element name in the {document} XML is longer than {IDENT_LIMIT} characters"
+            )
         if local in NON_FLOW_ELEMENTS:
             graph.annotations += local == "textAnnotation"
             continue

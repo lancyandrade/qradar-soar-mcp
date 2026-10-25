@@ -1396,9 +1396,11 @@ caller's text. Nothing of the answer is cached, and the catalog is unchanged
   `catalog/playbooks.py` (`parse_playbook`, moved from the backend, and
   `parse_playbook_detail`). `workflow_xml` names its document in problems and refusals
   (`the playbook XML declares a DTD or an entity`); for a workflow the text is as before.
-- **Identity** is parsed as a list row is, from the object without `content`,
-  `activation_details`, people and change log, every string cleaned (§25.2). An answer
-  whose `name` or `uuid` differs from the catalog's is `conflict`.
+- **Identity** is parsed as a list row is, from the object's identity keys only (an
+  allow-list: exactly the keys `parse_playbook` reads), each string value cleaned
+  (§25.2); no other key is read, cleaned or walked, so arbitrarily nested JSON elsewhere
+  in the object cannot exhaust recursion (found in the PR review). An answer whose
+  `name` or `uuid` differs from the catalog's is `conflict`.
 - **Activation conditions** keep `field_name` and `method`. `value`, `type` and
   `evaluation_id` are never read into the result. A condition without a string field
   name and method is counted in `unreadable_conditions`. An object without
@@ -1410,7 +1412,11 @@ caller's text. Nothing of the answer is cached, and the catalog is unchanged
 - **The XML** is summarised exactly as a workflow's (§29.2: same parser, bounds,
   refusals, problems, and parse-first-then-clean), then dropped. Unsafe or unexpected XML
   is `structure: refused` with a fixed reason; the rest of the object is still described.
-  There is no `include_raw`: no parameter returns the XML or a condition value.
+  There is no `include_raw`: no parameter returns the XML or a condition value. The PR
+  review found that an element's *name* had no bound: it becomes a node's `type` and part
+  of problem texts, so a 440,000-character tag name reached an answer whole. A process
+  child whose local name exceeds the identifier bound (200) now refuses the document,
+  for workflows as for playbooks (the parser is shared; the gap dated from §29).
 - **Function calls** resolve by exact equality of the `uuid` attribute with the `uuid` of
   exactly one catalog function, as for workflows; P2-05 observed that equality, which
   P2-04 could not. A shared uuid resolves to neither; a near miss (case, whitespace,

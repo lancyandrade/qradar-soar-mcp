@@ -27,12 +27,18 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from qradar_soar_mcp.catalog.bpmn import function_index
+from qradar_soar_mcp.catalog.models import Catalog, SectionState, SectionStatus
 from qradar_soar_mcp.catalog.playbooks import parse_playbook_detail
 from qradar_soar_mcp.errors import SoarMalformedResponseError, SoarValidationError
 from qradar_soar_mcp.logging import REDACTED, redact
 from qradar_soar_mcp.security.tiers import Tier
 from qradar_soar_mcp.tools import TOOL_REGISTRY, Runtime
-from qradar_soar_mcp.tools.projection import PLAYBOOK_VERIFIED_ON
+from qradar_soar_mcp.tools.projection import (
+    PLAYBOOK_CONDITIONS_MAX,
+    PLAYBOOK_VERIFIED_ON,
+    WORKFLOW_NODES_MAX,
+    describe_playbook,
+)
 from tests.conftest import SENTINEL
 from tests.discovery_data import build_payloads, verified
 from tests.fake_soar import FakeSoar
@@ -290,7 +296,10 @@ def test_a_dangling_flow_is_a_problem_and_kept_invalid():
         ({"uuid": 5}, "an identity key is missing"),
         ({"status": True}, "an identity key is missing"),
         ({"activation_details": []}, "'activation_details' is not an object"),
-        ({"activation_details": {"activation_conditions": "x"}}, "is not an object"),
+        (
+            {"activation_details": {"activation_conditions": "x"}},
+            "'activation_conditions' is not an object",
+        ),
         (
             {
                 "activation_details": {
@@ -467,13 +476,16 @@ async def test_a_credential_in_the_object_is_redacted(rt: Runtime, fake: FakeSoa
 
 
 async def test_the_detail_is_read_each_time_and_never_cached(rt: Runtime, fake: FakeSoar):
-    with_catalog(rt, lab_catalog())
+    # The runtime's own backend, so the catalog checked below is one this runtime built
+    # and the detail calls could have written to; not a fixed object handed in.
     await ok(rt, "soar_get_playbook", playbook_id=1000)
+    loaded = len(fake.requests)
     await ok(rt, "soar_get_playbook", playbook_id=1000)
-    assert sent(fake) == [("GET", f"{ORG}/playbooks/1000")] * 2
-    catalog = await rt.require_catalog().get()
-    text = catalog.to_json()
+    assert sent(fake)[loaded:] == [("GET", f"{ORG}/playbooks/1000")]  # read again
+    assert sent(fake)[loaded - 1] == ("GET", f"{ORG}/playbooks/1000")
+    text = (await rt.require_catalog().get()).to_json()
     assert "<definitions" not in text and CONDITION_VALUE not in text
+    assert "incident.field_1000" not in text  # the detail's condition field: never kept
 
 
 async def test_a_renamed_or_replaced_playbook_is_a_conflict(rt: Runtime, fake: FakeSoar):
@@ -518,7 +530,7 @@ async def test_soar_errors_are_reported_and_nothing_is_retried_elsewhere(
     fake.fault("GET", r"/playbooks/1000$", status=status, body={"message": f"no {SENTINEL}"})
     error = await failed(rt, "soar_get_playbook", code, playbook_id=1000)
     assert SENTINEL not in json.dumps(error)
-    assert {path for _, path in sent(fake)} == {f"{ORG}/playbooks/1000"}
+    assert sent(fake) == [("GET", f"{ORG}/playbooks/1000")]  # once, and nothing else
 
 
 async def test_the_tools_write_no_audit_record(rt: Runtime, fake: FakeSoar, tmp_path: Path):
@@ -561,3 +573,178 @@ async def test_the_fake_answers_only_get_on_a_playbook(method: str, fake: FakeSo
             json={},
         )
     assert answer.status_code == 405
+
+
+# ------------------------------------------- review of PR #13: further cases
+@pytest.mark.parametrize("tool", TOOLS)
+@pytest.mark.parametrize("state", [SectionState.UNVERIFIED, SectionState.NOT_OBSERVABLE])
+async def test_an_unestablished_playbooks_section_is_unknown_not_empty(
+    tool: str, state: SectionState, rt: Runtime, fake: FakeSoar
+):
+    with_catalog(rt, _without(lab_catalog(), "playbooks", state))
+    args = {"playbook_id": 1000} if tool == "soar_get_playbook" else {}
+    error = await failed(rt, tool, "catalog_unavailable", **args)
+    assert "playbooks" in error["message"] and str(state) in error["message"]
+    assert fake.requests == []
+
+
+async def test_without_an_established_functions_section_nothing_is_sent(
+    rt: Runtime, fake: FakeSoar
+):
+    """Calls cannot be resolved without it: an error before the GET, never a playbook
+    whose calls all look unresolved."""
+    with_catalog(rt, _without(lab_catalog(), "functions", SectionState.UNVERIFIED))
+    error = await failed(rt, "soar_get_playbook", "catalog_unavailable", playbook_id=1000)
+    assert "functions" in error["message"]
+    assert fake.requests == []
+
+
+def _without(catalog: Catalog, section: str, state: SectionState) -> Catalog:
+    doc = catalog.model_dump()
+    doc[section] = {}
+    doc["sections"][section] = SectionStatus(state=state, count=0, reason="not verified here")
+    return Catalog.model_validate(doc)
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        {"status": 200, "body": [{"id": 1000}]},  # a list, not the object
+        {"status": 200, "body": "playbook"},
+        {"status": 200, "raw_body": b"{not json"},
+    ],
+)
+async def test_an_answer_that_is_not_the_object_fails_closed(
+    fault: dict[str, Any], rt: Runtime, fake: FakeSoar
+):
+    with_catalog(rt, lab_catalog())
+    fake.fault("GET", r"/playbooks/1000$", **fault)
+    await failed(rt, "soar_get_playbook", "malformed_response", playbook_id=1000)
+    assert len(fake.requests) == 1
+
+
+@pytest.mark.parametrize("answered_id", [True, "1000", None, 1000.0])
+async def test_an_id_that_is_not_the_integer_asked_for_fails_closed(
+    answered_id: Any, rt: Runtime, fake: FakeSoar
+):
+    with_catalog(rt, lab_catalog())
+    detail_row(fake)["id"] = answered_id
+    await failed(rt, "soar_get_playbook", "malformed_response", playbook_id=1000)
+
+
+@pytest.mark.parametrize(
+    "change", [{"id": True}, {"id": "1000"}, {"id": None}, {"type": None}, {"object_type": 3}]
+)
+def test_an_identity_key_of_the_wrong_type_fails_closed(change: dict[str, Any]):
+    with pytest.raises(SoarMalformedResponseError, match="an identity key is missing"):
+        _parse(_row(**change))
+
+
+def test_display_name_falls_back_to_the_name_and_flags_are_strict():
+    detail = _parse(_row(display_name=None, is_deleted=True, is_locked="true"))
+    assert detail.display_name == detail.name == PLAYBOOK
+    assert detail.is_deleted is True and detail.is_locked is False  # only true is true
+
+
+def test_conditions_beyond_the_maximum_are_counted_not_shown():
+    row = _row()
+    items = row["activation_details"]["activation_conditions"]["conditions"]
+    items[:] = [{**items[0], "field_name": f"incident.f{i}"} for i in range(150)]
+    shown = describe_playbook(_parse(row))["activation"]
+    assert len(shown["conditions"]) == PLAYBOOK_CONDITIONS_MAX
+    assert shown["conditions_omitted"] == 150 - PLAYBOOK_CONDITIONS_MAX
+
+
+def test_nodes_and_edges_beyond_the_maximum_are_counted_not_shown():
+    extra = "".join(f'<endEvent id="End_{i}"/>' for i in range(WORKFLOW_NODES_MAX))
+    detail = _parse(
+        _row(
+            content={"content_version": 1, "xml": playbook_xml(FUNCTION_UUID, process_extra=extra)}
+        )
+    )
+    shown = describe_playbook(detail)
+    assert shown["node_count"] == WORKFLOW_NODES_MAX + 3
+    assert len(shown["nodes"]) == WORKFLOW_NODES_MAX and shown["nodes_omitted"] == 3
+
+
+def test_several_calls_are_resolved_each_and_listed_once():
+    def task(ident: str, uuid: str) -> str:
+        return (
+            f'<serviceTask id="{ident}" name="n" type="t"><extensionElements>'
+            f'<vendor:function uuid="{uuid}">{{}}</vendor:function>'
+            "</extensionElements></serviceTask>"
+        )
+
+    extra = task("Function_2", FUNCTION_UUID) + task("Function_3", "uuid-unknown")
+    shown = describe_playbook(
+        _parse(
+            _row(
+                content={
+                    "content_version": 1,
+                    "xml": playbook_xml(FUNCTION_UUID, process_extra=extra),
+                }
+            )
+        )
+    )
+    assert shown["functions_called"] == [FUNCTION]  # resolved ones, each once
+    assert shown["function_call_count"] == 3 and shown["unresolved_function_calls"] == 1
+
+
+def test_problems_and_refusals_speak_of_a_playbook():
+    no_start = playbook_xml(FUNCTION_UUID).replace(
+        '<startEvent id="Start_1"><outgoing>Flow_1</outgoing></startEvent>', ""
+    )
+    detail = _parse(_row(content={"content_version": 1, "xml": no_start}))
+    assert "the playbook has no start event" in detail.problems
+    assert "workflow" not in detail.model_dump_json()
+
+
+def test_an_unobserved_node_type_is_listed_and_said():
+    extra = '<subProcess id="Sub_1"><startEvent id="Inner_1"/></subProcess>'
+    detail = _parse(
+        _row(
+            content={"content_version": 1, "xml": playbook_xml(FUNCTION_UUID, process_extra=extra)}
+        )
+    )
+    (sub,) = [n for n in detail.nodes if n.id == "Sub_1"]
+    assert sub.type == "subProcess" and sub.type_observed is False
+    assert "Inner_1" not in {n.id for n in detail.nodes}  # its contents are not summarised
+
+
+@pytest.mark.parametrize("document", ["playbook", "workflow"])
+def test_an_over_long_element_name_is_refused_not_carried(document: str):
+    """Found in review: an element name becomes a node type and part of problem texts,
+    so one without a bound would carry unbounded author text into an answer."""
+    from qradar_soar_mcp.catalog.workflow_xml import IDENT_LIMIT, WorkflowXmlRefusedError, summarise
+
+    name = "x" * (IDENT_LIMIT + 1)
+    xml = playbook_xml(FUNCTION_UUID, process_extra=f'<{name} id="Long_1"/>')
+    with pytest.raises(WorkflowXmlRefusedError) as refused:
+        summarise(xml, document=document)
+    assert refused.value.reason == (
+        f"an element name in the {document} XML is longer than {IDENT_LIMIT} characters"
+    )
+    detail = _parse(_row(content={"content_version": 1, "xml": xml}))
+    assert detail.structure == "refused" and name not in detail.model_dump_json()
+    # At the bound it is still read.
+    ok_name = "y" * IDENT_LIMIT
+    graph = summarise(playbook_xml(FUNCTION_UUID, process_extra=f'<{ok_name} id="Long_2"/>'))
+    assert ok_name in {n.type for n in graph.nodes}
+
+
+def test_deeply_nested_json_outside_the_identity_is_never_walked():
+    """Found in review: unknown keys used to be cleaned recursively, so nesting deeper
+    than the recursion limit failed the call. Only identity keys are read now."""
+    deep: Any = []
+    for _ in range(5_000):
+        deep = [deep]
+    detail = _parse(_row(tags=deep, unknown_key={"a": deep}))
+    assert detail.name == PLAYBOOK
+
+
+def test_a_nested_value_under_an_identity_key_fails_closed_without_recursion():
+    deep: Any = []
+    for _ in range(5_000):
+        deep = [deep]
+    with pytest.raises(SoarMalformedResponseError, match="an identity key is missing"):
+        _parse(_row(name=deep))
