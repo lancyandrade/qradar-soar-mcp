@@ -317,6 +317,33 @@ async def test_hourly_cap_and_persistence_across_restart(reg, fake: FakeSoar, tm
     await restarted.aclose()
 
 
+async def test_hourly_cap_denial_writes_pending_then_one_denial(
+    reg, fake: FakeSoar, tmp_path: Path
+):
+    """08 §32.1 (P1-08 amendment): the hourly cap is the one denial written after
+    MUTATION_PENDING, so a cap refusal leaves exactly PENDING + one DENY_RATE_LIMIT,
+    sharing a request id; every other denial stays a single DECISION_DENIED."""
+    env = dict(SOAR_ALLOW_INCIDENT_WRITES="true", SOAR_MAX_TIER2_PER_HOUR="1")
+    rt = build_runtime(fake, tmp_path, **env)
+    args = {"incident_id": 42, "field_name": "description", "value": "a"}
+    assert (await run_pipeline(reg["soar_t_update"], rt, args))["ok"]
+    before = len(audit_records(tmp_path))
+    out = await run_pipeline(reg["soar_t_update"], rt, {**args, "value": "b"})
+    assert out["error"]["code"] == "DENY_RATE_LIMIT"
+    added = audit_records(tmp_path)[before:]
+    assert [(r["event"], r["decision"]) for r in added] == [
+        ("MUTATION_PENDING", "ALLOW"),
+        ("DECISION_DENIED", "DENY_RATE_LIMIT"),
+    ]
+    assert added[0]["request_id"] == added[1]["request_id"] == out["request_id"]
+    # A flag denial, by contrast, is one record and no PENDING.
+    before = len(audit_records(tmp_path))
+    denied = await run_pipeline(reg["soar_t_comment"], rt, {"incident_id": 42, "text": "x"})
+    assert denied["error"]["code"] == "DENY_DISABLED"
+    assert [r["event"] for r in audit_records(tmp_path)[before:]] == ["DECISION_DENIED"]
+    await rt.aclose()
+
+
 # ------------------------------------------------------------ mutations
 
 

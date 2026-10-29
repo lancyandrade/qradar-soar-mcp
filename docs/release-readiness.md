@@ -44,7 +44,12 @@ Evidence levels used throughout:
   None of those tests exists. Releasing needs either that work or an explicit,
   recorded owner waiver for an alpha pre-release.
 
-**Verdict:** `v0.2.0` — **CONDITIONAL GO** as an alpha: a GitHub tag + pre-release of the source code only, with no manually built binary, wheel or sdist attached (§9, §10). Build
+> **Superseded verdict (REL-05, 2026-10-29, §13):** the owner decided **not to waive** the
+> `07 §7.5` lab gate. `v0.2.0` is **NO-GO** until T4, T5 and T6 have run green and the
+> audit chain of that run verifies. The REL-01 verdict below is kept as the record of
+> that audit.
+
+**Verdict (REL-01, superseded):** `v0.2.0` — **CONDITIONAL GO** as an alpha: a GitHub tag + pre-release of the source code only, with no manually built binary, wheel or sdist attached (§9, §10). Build
 artefacts are not distributed until REL-06 and REL-04 land. *(Update: REL-06 has landed, §12;
 REL-04 is still open, so this verdict is unchanged.)* `v0.3.0` — **NO-GO**: Phase 2 is not complete.
 
@@ -336,6 +341,10 @@ describes.
 
 ## 10. Verdict
 
+**Superseded by §13 (REL-05):** `v0.2.0` is **NO-GO** until the lab gate is evidenced;
+condition (3) below was decided as "lab suite first, no waiver", and condition (4) as
+accepted.
+
 | Release | Verdict | Conditions |
 |---|---|---|
 | **`v0.2.0`** | **CONDITIONAL GO** (alpha: tag + source-code pre-release, no attached build artefacts) | (1) GitHub CI green on the tagged commit; (2) `CHANGELOG.md` with the 36-tool content and every deferral in §7 (REL-02); (3) owner records a waiver of `07 §7.5` T4–T6 for this alpha, or the lab suite is built first; (4) owner accepts the P1-15 and D4 deferrals as release scope; (5) no wheel, sdist or other build artefact is attached or published; distributing one requires REL-06 and REL-04 first (H-5; REL-06 done, §12; REL-04 open); (6) recommended before tagging: protect `main` with the CI checks required (H-3) |
@@ -489,3 +498,46 @@ gitleaks was not run locally (binary not installed); it runs in CI.
   approval, audit or redaction rule changed. No version bump, tag, release or PyPI
   upload was made.
 
+
+---
+
+## 13. REL-07 verification and REL-05 owner decisions (2026-10-29)
+
+### 13.1 REL-07 — independent verification
+
+`REL-07` re-ran every local gate on the tree of `origin/main` @ `b643f5d` (merge of PR #21)
+without trusting this document: Ruff, format, mypy `--strict`, the full offline suite
+(4 116 passed, total coverage 98.44 %, `security/` 99 %), the tree secret scanner,
+`pip-audit --strict` over the locked set, `uv lock --check` and `uv build`. All passed.
+Built from a working copy holding `.env`, `audit.jsonl`, `.claude/` and `.playwright-mcp/`,
+the sdist (51 files) and wheel (51 entries) contained none of them. An independent
+enumeration confirmed 36 registered tools, all served through `register_all` →
+`run_pipeline`, each Tier ≥ 1 tool with exactly one capability, and every Tier ≥ 1 tool
+denied under the default configuration on both transports. GitHub CI run
+`40906808686` on `b643f5d` finished green (gitleaks full history, 4 × test, pip-audit).
+gitleaks was not run locally. `main` was confirmed unprotected (no branch protection, no
+ruleset).
+
+### 13.2 Owner decisions (REL-05)
+
+Recorded in 08 §32 and `open-questions.md` D14 – D20:
+
+| Decision | Outcome |
+|---|---|
+| Lab gate `07 §7.5` (T4/T5/T6) | **Not waived** (D14). |
+| P1-15 attachment hash / text extraction deferral | Accepted for the alpha (D15); still not implemented. |
+| D4: invocation refuses, approval broker unreachable | Accepted for the alpha (D16); still not implemented. |
+| REL-03 branch protection | Prepared for review, not applied (D17): [`runbooks/branch-protection.md`](runbooks/branch-protection.md). |
+| Release format | Source-only pre-release, after every mandatory gate (D18). |
+| SEC-14 artefact hygiene | Exclude, retain audit evidence, human-only cleanup (D19): [`runbooks/artifact-hygiene.md`](runbooks/artifact-hygiene.md). |
+| P1-08 hourly-cap audit deviation | Recorded as an AC amendment, 08 §32.1, and pinned by a test. |
+| T6 while invocation refuses | **Open** (D20). |
+
+### 13.3 Verdict
+
+| Release | Verdict | What is missing |
+|---|---|---|
+| **`v0.2.0`** | **NO-GO** | T4 green against the lab; T5 green in a disposable organisation (org 301); T6 green against a mock AppHost (and D20 decided); `qradar-soar-audit verify` clean over that run; a human read of the `security/` diff (07 §7.5). Recommended before tagging: REL-03 applied. The lab work is planned in [`lab-validation-plan.md`](lab-validation-plan.md) (LAB-01). |
+| **`v0.3.0`** | **NO-GO** | unchanged (§10) |
+
+No tag, release, version change or repository setting is made by this change.

@@ -1529,3 +1529,54 @@ switch off in lab mode, `soar_invoke_action` is still a `DENY_UNSUPPORTED` denia
 no SOAR traffic; the mutating-tool set and tool count are pinned and no Tier-4 tool
 exists. `tests/test_config.py` and `tests/test_permissions.py` set `SOAR_LAB_MODE=true`
 where they turn a switch off.
+
+## 32. REL-05 — owner release decisions for `v0.2.0` (2026-10-29)
+
+Decided by the owner on **2026-10-29**, after the `REL-07` release verification found
+every technical gate green and two owner decisions missing. Recorded as open-question
+entries D14 – D19 ([`open-questions.md`](../open-questions.md) C). Documentation only:
+no tool, REST call, permission, approval rule, default or package content changed by
+this section.
+
+| # | Decision | Scope |
+|---|---|---|
+| D14 | The `07 §7.5` lab gate is **not waived**. T4 (lab read-only), T5 (org 301, mutating) and T6 (mock AppHost, destructive) must each run green, and `qradar-soar-audit verify` must be clean over the run, before `v0.2.0` is published. | `v0.2.0` and every later release. `v0.2.0` stays **NO-GO** until that evidence exists |
+| D15 | The `P1-15` attachment hash and opt-in text extraction deferral (§9) is **accepted** for the `v0.2.0` alpha. | `v0.2.0` alpha only; the release documents must say it is not implemented |
+| D16 | The `D4` limitation is **accepted** for the `v0.2.0` alpha: `soar_invoke_action` refuses every call (`DENY_UNSUPPORTED`, §21), so the approval broker (`P1-10`) is implemented and tested offline but reachable by no tool. | `v0.2.0` alpha only; the release documents must say both |
+| D17 | `main` branch protection (`REL-03`) is approved **in principle**; the configuration is prepared for review and applied only by the owner. | repository settings; see [`docs/runbooks/branch-protection.md`](../runbooks/branch-protection.md) |
+| D18 | Release scope: a **source-only GitHub pre-release** (tag + GitHub's own source archives; no wheel, sdist or PyPI upload), and only after every mandatory gate has passed. | `v0.2.0` |
+| D19 | `SEC-14`: sensitive development artefacts are excluded from git and packages, audit evidence is retained, and stale artefacts are cleaned only by a human, never automatically. | repository hygiene; see [`docs/runbooks/artifact-hygiene.md`](../runbooks/artifact-hygiene.md) |
+
+Consequences:
+
+- The `REL-01` verdict "CONDITIONAL GO" (release-readiness §10) is superseded: with the
+  lab gate kept, `v0.2.0` is **NO-GO** until T4, T5 and T6 have run green. Accepting
+  D15/D16 changes no code: the deferred features are still not implemented and must not
+  be described as implemented.
+- Running T5 needs a disposable organisation (07 §7.2, org 301) and T6 a mock AppHost
+  (07 §7.1). Neither exists yet. T5/T6 also cover paths this release cannot execute:
+  every Tier-3 step of 07 §7.4 ends in `DENY_UNSUPPORTED` while D16 stands, so T6 can
+  only show the refusal (and zero calls at the mock AppHost) until invocation is
+  implemented. How that affects the gate is an open owner question (D20).
+
+### 32.1 `P1-08` amendment — the hourly-cap denial writes two records
+
+`06 P1-08` asks that "every denial [produce] exactly one" audit record. One denial
+deliberately produces two: the hourly cap (`SOAR_MAX_TIER2_PER_HOUR`,
+`SOAR_MAX_TIER3_PER_HOUR`). The pipeline writes `MUTATION_PENDING` (step 9) **before**
+it takes a slot from the hourly window, then writes `DECISION_DENIED` with
+`DENY_RATE_LIMIT` if no slot is free (`tools/registry.py`, `run_pipeline`;
+`security/limits.py`, `CAP_REFUSAL`).
+
+Why: the cap is rebuilt from the audit log at start-up (`P1-07`), and a write whose
+terminal record was lost (crash, full disk) must still count after a restart (P1-14
+fix in the changelog). That needs the `PENDING` record to exist before the slot is
+taken. The `DENY_RATE_LIMIT` record that follows settles that `PENDING`, so a refused
+write never consumes budget on replay (`Limits.from_audit_log`).
+
+Amended AC: every mutation produces exactly two records (`MUTATION_PENDING` +
+`MUTATION_COMMITTED`/`MUTATION_FAILED`); every denial produces exactly one
+`DECISION_DENIED` record, **except** an hourly-cap denial, which produces
+`MUTATION_PENDING` + `DECISION_DENIED` (`DENY_RATE_LIMIT`). No other denial is written
+after `MUTATION_PENDING`. Pinned by
+`tests/test_registry.py::test_hourly_cap_denial_writes_pending_then_one_denial`.

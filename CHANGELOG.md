@@ -188,9 +188,10 @@ Corrections made during development, before any release:
   fetched.
 - **Tier-1/2 mutations are offline-contract-tested, not live-validated**, except the
   task-status change. That change has no protection against a concurrent edit.
-- **No T4/T5/T6 lab tests exist.** The lab markers are registered, but no lab test,
-  mock AppHost or lab audit verification has been run. Live evidence comes from one-off
-  research runs.
+- **T4/T5/T6 lab validation has not run.** Opt-in, guarded T4 read-only tests are
+  scaffolded under `tests/lab/` (LAB-01) and skip unless explicitly enabled; no T5 or T6
+  test and no mock AppHost exist, and no lab audit verification has been run. Live
+  evidence comes from one-off research runs.
 - The `export` catalog backend is selectable but always unavailable.
   `soar_describe_incident_fields` still derives `close_required` from an unverified
   reading (D10 open).
@@ -200,14 +201,21 @@ Corrections made during development, before any release:
 
 ### Release prerequisites (not yet met)
 
-The release-readiness audit gives `v0.2.0` a **conditional go** as an alpha
-([docs/release-readiness.md §10](docs/release-readiness.md#10-verdict)). Open items:
+`v0.2.0` is **NO-GO** until the lab gate is evidenced
+([docs/release-readiness.md §13.3](docs/release-readiness.md#133-verdict)). Owner decisions
+of 2026-10-29 (REL-05, [08 §32](docs/design/08-GREENFIELD-AMENDMENTS.md#32-rel-05--owner-release-decisions-for-v020-2026-10-29)):
 
+- **T4/T5/T6 have not been waived.** The `07 §7.5` lab gate must pass first: T4 green
+  against the lab, T5 green in a disposable organisation, T6 green against a mock
+  AppHost, and `qradar-soar-audit verify` clean over the run. No waiver has been
+  recorded, and none will be for this alpha.
+- The P1-15 attachment-processing deferral and the D4 limitation (invocation refuses,
+  approval broker unreachable) are **accepted as alpha scope**. Neither feature is
+  implemented.
 - GitHub CI green on the commit to be tagged.
-- An owner decision on the `07 §7.5` lab gate: either waive T4–T6 for this alpha or
-  complete the lab testing first. No waiver has been recorded.
-- Owner acceptance of the P1-15 and invocation (D4) deferrals as release scope.
 - **REL-04** (tag-triggered CI release build) is open. Until it lands, no wheel, sdist
   or other build artefact is attached to a release or published, and nothing is
   uploaded to PyPI.
-- Recommended before tagging: protect `main` with required CI checks (REL-03).
+- Recommended before tagging: protect `main` with required CI checks (REL-03; the
+  configuration is prepared for review in
+  [docs/runbooks/branch-protection.md](docs/runbooks/branch-protection.md), not applied).

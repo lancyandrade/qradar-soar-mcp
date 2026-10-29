@@ -412,7 +412,11 @@ def test_release_is_marked_pending_not_published():
     for doc in RELEASE_DOCS:
         text = _flat(_read(doc))
         assert "No waiver has been recorded" in text, doc
+        # REL-05 (08 §32, D14): the owner kept the lab gate.
+        assert "T4/T5/T6 have not been waived" in text, doc
         assert "REL-04" in text and "PyPI" in text, doc
+    assert "NO-GO" in _flat(_read(CHANGELOG)) and "NO-GO" in notes
+    assert "decided not to waive" in status
 
 
 # Each limitation the code imposes; the release documents must say it.
@@ -458,7 +462,16 @@ def test_release_doc_limitations_are_true_of_the_code():
     assert invoke.unsupported and int(invoke.tier) == 3
     assert [n for n, s in TOOL_REGISTRY.items() if s.unsupported] == [invoke.name]
     assert [n for n in TOOL_REGISTRY if "content" in n or "extract" in n] == []
-    assert not (ROOT / "tests" / "lab").exists()  # no T4-T6 suite yet
+    # LAB-01: only the guarded T4 module exists; no T5/T6 test, so none may be claimed.
+    lab = sorted(p.name for p in (ROOT / "tests" / "lab").glob("test_*.py"))
+    assert lab == ["test_t4_read_only.py"], lab
+    for marker in ("lab_write", "lab_destructive"):
+        needle = "pytest.mark." + marker  # built, so this file does not match itself
+        assert [
+            p.name
+            for p in (ROOT / "tests").rglob("test_*.py")
+            if needle in p.read_text(encoding="utf-8")
+        ] == []
 
 
 def test_release_notes_repository_links_resolve():

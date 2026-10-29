@@ -904,9 +904,10 @@ Two kinds of evidence stand behind the marks, and they are not the same thing:
   hash and text extraction are deferred.
 - **Early Phase-2 discovery is included**: 16 read-only tools, for 36 tools in all.
 - **`v0.3.0` is not ready.** Phase 2 is incomplete.
-- The release gate has not passed. The lab tests (T4–T6) do not exist yet, and the
-  owner has not decided whether to waive them for this alpha
-  ([release-readiness audit](docs/release-readiness.md#10-verdict)).
+- The release gate has not passed. The lab tests (T4–T6) have not run, and the owner
+  decided not to waive them: the alpha is published only after they pass
+  ([release-readiness §13.3](docs/release-readiness.md#133-verdict),
+  [lab-validation plan](docs/lab-validation-plan.md)).
 
 What changed: [CHANGELOG.md](CHANGELOG.md). Release notes:
 [docs/releases/v0.2.0-alpha.md](docs/releases/v0.2.0-alpha.md).
