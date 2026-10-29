@@ -89,8 +89,11 @@ working days.
 - The security of IBM QRadar SOAR itself, the App Host, or the integrations
   SOAR drives. Report those to IBM.
 - Deployments that set `SOAR_LAB_MODE=true`, `SOAR_APPROVAL_MODE=in_band` or
-  `disabled`, or `SOAR_VERIFY_SSL=false`; those settings exist for labs and are
-  documented as unsafe.
+  `disabled`, `SOAR_VERIFY_SSL=false`, or a confirmation switch
+  (`SOAR_REQUIRE_ACTION_CONFIRMATION`, `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION`) to
+  `false`; those settings exist for labs and are documented as unsafe. The server
+  starting with any of them *without* `SOAR_LAB_MODE=true` (approval modes: with
+  actions enabled) is a bug and in scope.
 - Operator-authored `action_policy.yaml` content. The mechanism enforcing the
   file is in scope; the correctness of your classifications is not.
 - What the SOAR API key's own permission set allows. The recommended two-instance

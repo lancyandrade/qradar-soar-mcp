@@ -286,7 +286,10 @@ def test_tier3_requires_approval_by_default_and_not_in_disabled_lab_mode(policy_
 
 def test_require_action_confirmation_false_allows_tier3_when_policy_says_allow(policy_file):
     cfg = _settings(
-        policy_file, SOAR_ALLOW_ACTIONS="true", SOAR_REQUIRE_ACTION_CONFIRMATION="false"
+        policy_file,
+        SOAR_ALLOW_ACTIONS="true",
+        SOAR_REQUIRE_ACTION_CONFIRMATION="false",
+        SOAR_LAB_MODE="true",  # lab-only since P1-SEC-01 (08 §31)
     )
     d = enforce(
         tool="soar_invoke_action",
@@ -319,7 +322,10 @@ def test_tier4_uses_playbook_confirmation(policy_file):
     )
     assert d.outcome is Outcome.REQUIRE_APPROVAL
     cfg2 = _settings(
-        policy_file, SOAR_ALLOW_PLAYBOOK_DEPLOY="true", SOAR_REQUIRE_PLAYBOOK_CONFIRMATION="false"
+        policy_file,
+        SOAR_ALLOW_PLAYBOOK_DEPLOY="true",
+        SOAR_REQUIRE_PLAYBOOK_CONFIRMATION="false",
+        SOAR_LAB_MODE="true",  # lab-only since P1-SEC-01 (08 §31)
     )
     assert enforce(
         tool="t",

@@ -12,7 +12,9 @@ HTTPS, and the cross-field rules of 02 §2/§4 (actions need a policy file;
 in-band approval for Tier 3 needs lab mode; HTTP transport needs a token) and of
 the TLS trust model (08 §22): a CA bundle that is not a file, a bundle given
 twice with different values, a bundle together with disabled verification, and
-``SOAR_VERIFY_SSL=false`` without ``SOAR_LAB_MODE=true``.
+``SOAR_VERIFY_SSL=false`` without ``SOAR_LAB_MODE=true``. A confirmation switch
+(``SOAR_REQUIRE_ACTION_CONFIRMATION``, ``SOAR_REQUIRE_PLAYBOOK_CONFIRMATION``) set to
+``false`` without ``SOAR_LAB_MODE=true`` also refuses to start (P1-SEC-01; 08 §31).
 
 Settings are loaded from the environment (``SOAR_*``). Tests inject a mapping
 through :meth:`Settings.load` and get the same source semantics.
@@ -464,6 +466,7 @@ class Settings(BaseSettings):
             if parts.query or parts.fragment or parts.username or parts.password:
                 raise ValueError("SOAR_BASE_URL must not carry credentials, a query or a fragment")
         self._tls_rules()
+        self._confirmation_rules()
         if self.allow_actions:
             if self.action_policy_file is None:
                 raise ValueError("SOAR_ALLOW_ACTIONS=true requires SOAR_ACTION_POLICY_FILE (02 §2)")
@@ -479,6 +482,36 @@ class Settings(BaseSettings):
                     "Tier 3 outside a lab (02 §4.1)"
                 )
         return self
+
+    def _confirmation_rules(self) -> None:
+        """Turning off a confirmation switch is lab-only (P1-SEC-01; 08 §31).
+
+        ``false`` drops the approval step for a Tier-3 call whose policy rule says
+        ``allow`` (action switch) or for every Tier-4 call (playbook switch, reserved:
+        no Tier-4 tool exists). Outside ``SOAR_LAB_MODE=true`` that refuses to start,
+        whether or not the matching capability is enabled. Unparseable values never
+        reach here as ``false``: they resolve to ``true`` with a warning.
+        """
+        disabled = [
+            name
+            for name, required in (
+                ("SOAR_REQUIRE_ACTION_CONFIRMATION", self.require_action_confirmation),
+                ("SOAR_REQUIRE_PLAYBOOK_CONFIRMATION", self.require_playbook_confirmation),
+            )
+            if not required
+        ]
+        if not disabled:
+            return
+        if not self.lab_mode:
+            raise ValueError(
+                f"{'=false and '.join(disabled)}=false is refused: turning off a confirmation "
+                "switch removes the approval step and is lab-only, so it also requires "
+                "SOAR_LAB_MODE=true. Leave it true in production"
+            )
+        _warn(
+            f"{'=false and '.join(disabled)}=false with SOAR_LAB_MODE=true: the approval "
+            "step is removed for calls it covers. Lab use only"
+        )
 
     def _tls_rules(self) -> None:
         """The TLS trust model (08 §22). Messages name variables, never paths."""

@@ -487,8 +487,11 @@ instance), and `audit.path` must be that instance's own file.
 ### Warnings
 
 - **Production.** Never set `SOAR_LAB_MODE=true`, `SOAR_APPROVAL_MODE=in_band` or
-  `disabled`, or `SOAR_VERIFY_SSL=false` on an instance that can reach a production
-  SOAR. They exist for throwaway labs and remove guarantees this README relies on.
+  `disabled`, `SOAR_VERIFY_SSL=false`, or a confirmation switch
+  (`SOAR_REQUIRE_ACTION_CONFIRMATION`, `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION`) to `false`
+  on an instance that can reach a production SOAR. They exist for throwaway labs and
+  remove guarantees this README relies on; each of them except lab mode itself refuses
+  to start without `SOAR_LAB_MODE=true` (approval modes only once actions are enabled).
 - **HTTP transport.** stdio is the supported transport. `streamable-http` refuses to
   start without `SOAR_HTTP_AUTH_TOKEN`, refuses to bind every interface without
   `SOAR_HTTP_ACKNOWLEDGE_EXPOSURE=true`, and denies Tier 3 regardless of flags. The
@@ -597,6 +600,14 @@ It never reads a `.env` file itself (the quick start sources one into the shell)
 Changing any variable takes a restart, except the presence of the kill-switch file,
 which is checked on every call. [`.env.example`](.env.example) is the annotated copy.
 
+**Code defaults and example values.** The *Default* column is what the server uses
+when a variable is absent. `.env.example` is a separate starting point: it shows every
+capability flag, each set to `false` like its code default, keeps both confirmation
+switches `true` and `SOAR_LAB_MODE=false`. It differs from the code defaults only in
+placeholders and suggested paths: the connection, the absolute state and public-key
+locations, and the policy file (read only when actions are enabled). A copied, unedited
+file therefore enables nothing, and `--check` lists no capabilities.
+
 **Parsing never fails open.** A boolean is true only for exactly `true`, `1`, `yes`
 or `on` (any case, no surrounding spaces), and false for `false`, `0`, `no` or `off`.
 Anything else logs a warning naming the variable and resolves to the safe side:
@@ -630,7 +641,7 @@ default) · **safety switch** (protective by default; changing it removes a prot
 | `SOAR_ALLOW_INCIDENT_WRITES` / `SOAR_ALLOW_TASK_WRITES` / `SOAR_ALLOW_INCIDENT_CLOSE` | `false` | capability, Tier 2 | create, update and assign incidents / task status / closing. `soar_update_incident` refuses the closing fields, so the close flag cannot be bypassed |
 | `SOAR_ALLOW_ACTIONS` / `SOAR_ALLOW_DESTRUCTIVE_ACTIONS` | `false` | capability, Tier 3 | `soar_invoke_action`, which refuses every call in this release. `true` needs `SOAR_ACTION_POLICY_FILE` to exist and parse, and out-of-band approval unless `SOAR_LAB_MODE=true`; otherwise the server refuses to start. A policy rule marked destructive also needs the second flag |
 | `SOAR_ACTION_POLICY_FILE` | — | capability input | your classification of manual actions ([example](config/action_policy.example.yaml), [schema](docs/action_policy.schema.json)). Required when `SOAR_ALLOW_ACTIONS=true`; a malformed file refuses to start. `.env.example` suggests `./config/action_policy.yaml` |
-| `SOAR_ALLOW_PLAYBOOK_DRAFT` / `_EXPORT` / `_CREATE` / `_MODIFY` / `_DEPLOY` / `_ENABLE` | `false` | reserved capability, Tier 4 | accepted and reported by `--check`; no tool uses them yet. `.env.example` sets `SOAR_ALLOW_PLAYBOOK_DRAFT=true` (the design baseline), so a copied file shows it under `capabilities`; it enables nothing |
+| `SOAR_ALLOW_PLAYBOOK_DRAFT` / `_EXPORT` / `_CREATE` / `_MODIFY` / `_DEPLOY` / `_ENABLE` | `false` | reserved capability, Tier 4 | accepted and reported by `--check`; no tool uses them yet. `.env.example` lists all six, each `false` |
 | `SOAR_ALLOW_SCRIPT_WRITES` | `false` | intentionally unsupported | script writes are a non-goal; `true` refuses to start |
 
 ### Approval
@@ -638,8 +649,8 @@ default) · **safety switch** (protective by default; changing it removes a prot
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
 | `SOAR_APPROVAL_MODE` | `out_of_band` | safety switch | `out_of_band` \| `in_band` \| `disabled`. Unrecognised ⇒ `out_of_band`. With `SOAR_ALLOW_ACTIONS=true`, `in_band` and `disabled` refuse to start unless `SOAR_LAB_MODE=true`. Only Tier ≥3 asks for approval, so without actions the mode has no effect |
-| `SOAR_REQUIRE_ACTION_CONFIRMATION` | `true` | safety switch | Tier-3 calls need approval. Garbage ⇒ `true`. `false` drops the approval for a Tier-3 action whose policy rule says `allow` (a `require_approval` rule still asks). It is **not** lab-gated, so leave it `true` |
-| `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION` | `true` | safety switch | the same for Tier 4; no Tier-4 tool exists yet |
+| `SOAR_REQUIRE_ACTION_CONFIRMATION` | `true` | safety switch | Tier-3 calls need approval. Garbage ⇒ `true`. `false` drops the approval for a Tier-3 action whose policy rule says `allow` (a `require_approval` rule still asks). `false` refuses to start unless `SOAR_LAB_MODE=true`, whether or not actions are enabled, and is warned about when accepted |
+| `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION` | `true` | safety switch | the same for Tier 4, including the lab-mode rule for `false`; reserved, since no Tier-4 tool exists yet |
 | `SOAR_APPROVAL_BROKER_PATH` | `approvals` | operational | the broker directory. Put it where the model and its client cannot write |
 | `SOAR_APPROVAL_PUBLIC_KEY_FILE` | — | operational | Ed25519 public key. Without it no approval can be verified, and every call that needs one is denied. A key that cannot be loaded, or is not Ed25519, refuses to start |
 | `SOAR_APPROVAL_TTL_SECONDS` | `900` | operational | request and signature lifetime, seconds (minimum 10) |
@@ -682,7 +693,7 @@ the MCP host.
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
-| `SOAR_LAB_MODE` | `false` | lab only | lab acknowledgement. On its own it changes nothing. It is what lets `SOAR_VERIFY_SSL=false` be accepted, and `in_band` / `disabled` approval when actions are enabled. Never in production |
+| `SOAR_LAB_MODE` | `false` | lab only | lab acknowledgement. On its own it changes nothing. It is what lets `SOAR_VERIFY_SSL=false` be accepted, `in_band` / `disabled` approval when actions are enabled, and `SOAR_REQUIRE_ACTION_CONFIRMATION=false` / `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION=false`. Never in production |
 | `SOAR_ALLOW_WRITES` | — | deprecated | maps to the five Tier 1–2 flags only, with a warning, and never to `SOAR_ALLOW_ACTIONS`. Removed in the next minor version |
 
 ### Command line
