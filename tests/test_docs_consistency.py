@@ -41,6 +41,10 @@ REQUIRED_DOCS = (
     "SECURITY.md",
     "CONTRIBUTING.md",
 )
+# REL-02: the changelog and the release notes of the pending alpha.
+CHANGELOG = "CHANGELOG.md"
+RELEASE_NOTES = "docs/releases/v0.2.0-alpha.md"
+RELEASE_DOCS = (CHANGELOG, RELEASE_NOTES)
 
 
 def _section(text: str, heading: str) -> str:
@@ -205,7 +209,7 @@ def test_required_docs_exist_and_are_substantial(doc: str):
     assert len(path.read_text(encoding="utf-8")) > 1500, doc
 
 
-@pytest.mark.parametrize("doc", ("README.md", "SECURITY.md", *REQUIRED_DOCS))
+@pytest.mark.parametrize("doc", ("README.md", "SECURITY.md", *RELEASE_DOCS, *REQUIRED_DOCS))
 def test_relative_links_resolve(doc: str):
     path = ROOT / doc
     text = path.read_text(encoding="utf-8")
@@ -240,6 +244,7 @@ OPERATOR_DOCS = (
     ".env.example",
     "docs/threat-model.md",
     "docs/runbooks/key-rotation.md",
+    *RELEASE_DOCS,
 )
 # Read by the approver CLI only; the server never reads it (08 §5).
 NON_SERVER_VARIABLES = frozenset({"SOAR_APPROVAL_PRIVATE_KEY_FILE"})
@@ -286,7 +291,7 @@ def _github_anchor(heading: str) -> str:
     return slug.replace(" ", "-")
 
 
-@pytest.mark.parametrize("doc", ("README.md", "SECURITY.md", *REQUIRED_DOCS))
+@pytest.mark.parametrize("doc", ("README.md", "SECURITY.md", *RELEASE_DOCS, *REQUIRED_DOCS))
 def test_anchors_resolve(doc: str):
     path = ROOT / doc
     text = path.read_text(encoding="utf-8")
@@ -298,3 +303,181 @@ def test_anchors_resolve(doc: str):
             continue
         headings = re.findall(r"^#+ (.+)$", linked.read_text(encoding="utf-8"), flags=re.M)
         assert anchor in {_github_anchor(h) for h in headings}, f"{doc}: broken anchor #{anchor}"
+
+
+# ------------------------------------------- REL-02: changelog and release notes
+
+REPO_BLOB = "https://github.com/lancyandrade/qradar-soar-mcp/blob/"
+
+
+def _read(doc: str) -> str:
+    return (ROOT / doc).read_text(encoding="utf-8")
+
+
+def _flat(text: str) -> str:
+    """One line of prose: blockquote markers dropped, whitespace collapsed."""
+    return re.sub(r"\s+", " ", re.sub(r"^> ?", "", text, flags=re.M))
+
+
+def _phase_one_tools() -> set[str]:
+    """The approved Phase-1 contract is the tool table of 08 §3; the rest is Phase 2."""
+    amendments = _read("docs/design/08-GREENFIELD-AMENDMENTS.md")
+    table = _section(amendments, "## 3. Approved Phase-1 tool contract")
+    return {row[0].strip("`") for row in _table_rows(table) if row[0].startswith("`soar_")}
+
+
+def _block(text: str, heading: str) -> str:
+    """From ``heading`` up to the next heading of the same or a higher level."""
+    level = len(heading) - len(heading.lstrip("#"))
+    start = text.index(heading)
+    rest = text[start + len(heading) :]
+    nxt = re.search(rf"^#{{1,{level}}} ", rest, flags=re.M)
+    return text[start : start + len(heading) + nxt.start()] if nxt else text[start:]
+
+
+def _version() -> str:
+    import tomllib
+
+    import qradar_soar_mcp
+
+    version = str(tomllib.loads(_read("pyproject.toml"))["project"]["version"])
+    assert qradar_soar_mcp.__version__ == version
+    return version
+
+
+def test_tool_counts_match_the_registry():
+    phase_one = _phase_one_tools()
+    phase_two = set(TOOL_REGISTRY) - phase_one
+    assert phase_one <= set(TOOL_REGISTRY)
+    assert (len(phase_one), len(phase_two), len(TOOL_REGISTRY)) == (20, 16, 36)
+    claim = f"{len(TOOL_REGISTRY)} MCP tools: {len(phase_one)} Phase-1 and {len(phase_two)} Phase-2"
+    for doc in RELEASE_DOCS:
+        assert claim in _flat(_read(doc)), doc
+    status = _flat(_section(README, "## Release status"))
+    assert f"{len(phase_two)} read-only tools, for {len(TOOL_REGISTRY)} tools in all" in status
+
+
+def test_changelog_lists_every_tool_under_its_phase():
+    phase_one = _phase_one_tools()
+    release = _block(_read(CHANGELOG), f"## [{_version()}]")
+    one = set(re.findall(r"`(soar_[a-z_]+)`", _block(release, "#### Phase 1: ")))
+    two = set(re.findall(r"`(soar_[a-z_]+)`", _block(release, "#### Early Phase 2: ")))
+    assert one == phase_one
+    assert two == set(TOOL_REGISTRY) - phase_one
+    assert f"#### Phase 1: {len(one)} tools" in release
+    assert f"#### Early Phase 2: {len(two)} discovery tools" in release
+
+
+def test_release_notes_tool_table_is_the_registry():
+    phase_one = _phase_one_tools()
+    rows = _table_rows(_section(_read(RELEASE_NOTES), "## 2. What is included"))
+    listed: dict[str, set[str]] = {"Phase 1": set(), "Phase 2": set()}
+    for group, tools, _tier in rows:
+        phase = re.search(r"\((Phase [12])\)", group)
+        assert phase, group
+        listed[phase.group(1)] |= set(re.findall(r"`(soar_[a-z_]+)`", tools))
+    assert listed["Phase 1"] == phase_one
+    assert listed["Phase 2"] == set(TOOL_REGISTRY) - phase_one
+
+
+def test_version_references_are_consistent():
+    version = _version()
+    releases = re.findall(r"^## \[([^\]]+)\]", _read(CHANGELOG), flags=re.M)
+    assert releases[:2] == ["Unreleased", version], releases
+    notes = _read(RELEASE_NOTES)
+    assert f"docs/releases/v{version}-alpha.md" == RELEASE_NOTES
+    assert notes.startswith(f"# qradar-soar-mcp v{version} (alpha)\n")
+    assert set(re.findall(r"/blob/([^/]+)/", notes)) == {f"v{version}"}
+    assert f"version **{version}**" in README
+    assert f"Current version: `{version}`, alpha, pending publication" in README
+    assert f"this release ({version})" in _read("SECURITY.md")
+    assert "Development Status :: 3 - Alpha" in _read("pyproject.toml")
+
+
+def test_release_is_marked_pending_not_published():
+    version = _version()
+    changelog = _read(CHANGELOG)
+    heading = re.search(rf"^## \[{re.escape(version)}\](.*)$", changelog, flags=re.M)
+    assert heading and heading.group(1) == " - Pending (alpha)", heading
+    release = _flat(_block(changelog, f"## [{version}]"))
+    assert "alpha, pending publication" in release
+    assert "The release gate is **not passed**" in release
+    notes = _flat(_read(RELEASE_NOTES))
+    assert "**Release status: pending.**" in notes
+    assert "the release gate has not passed" in notes
+    status = _flat(_section(README, "## Release status"))
+    assert "pending publication" in status and "The release gate has not passed" in status
+    major, minor, _ = version.split(".")
+    assert f"`v{major}.{int(minor) + 1}.0` is not ready" in status
+    for doc in RELEASE_DOCS:
+        text = _flat(_read(doc))
+        assert "No waiver has been recorded" in text, doc
+        assert "REL-04" in text and "PyPI" in text, doc
+
+
+# Each limitation the code imposes; the release documents must say it.
+REQUIRED_LIMITATIONS = (
+    "phase 2 is incomplete",
+    "always returns `deny_unsupported`",
+    "no tier-4",
+    "attachment hash and text extraction are deferred",
+    "offline-contract-tested, not live-validated",
+    "51.0.9.0.20848",
+    "no production-readiness claim",
+)
+# Phrases that would claim something this release does not do.
+UNSUPPORTED_CLAIMS = (
+    "production-ready",
+    "production ready",
+    "generally available",
+    "pip install qradar-soar-mcp",
+    "pypi.org/project",
+    "release gate has passed",
+    "gate passed",
+    "lab validation is complete",
+    "waiver was granted",
+    "waived by the owner",
+)
+
+
+@pytest.mark.parametrize("doc", RELEASE_DOCS)
+def test_release_docs_state_the_limitations_and_claim_nothing_unsupported(doc: str):
+    text = _flat(_read(doc)).lower()
+    for statement in REQUIRED_LIMITATIONS:
+        assert statement in text, f"{doc}: missing {statement!r}"
+    for claim in UNSUPPORTED_CLAIMS:
+        assert claim not in text, f"{doc}: unsupported claim {claim!r}"
+    assert "not reachable" in text or "unreachable" in text, doc
+    assert "t4/t5/t6" in text, doc
+
+
+def test_release_doc_limitations_are_true_of_the_code():
+    """What the release documents say is missing is missing from the registry."""
+    assert [n for n, s in TOOL_REGISTRY.items() if s.tier >= 4] == []
+    invoke = TOOL_REGISTRY["soar_invoke_action"]
+    assert invoke.unsupported and int(invoke.tier) == 3
+    assert [n for n, s in TOOL_REGISTRY.items() if s.unsupported] == [invoke.name]
+    assert [n for n in TOOL_REGISTRY if "content" in n or "extract" in n] == []
+    assert not (ROOT / "tests" / "lab").exists()  # no T4-T6 suite yet
+
+
+def test_release_notes_repository_links_resolve():
+    """The notes are pasted into GitHub, so they link to the tag; each target must exist."""
+    links = re.findall(r"\]\(([^)]+)\)", _read(RELEASE_NOTES))
+    repo = [link for link in links if link.startswith(REPO_BLOB)]
+    assert len(repo) >= 10
+    for link in repo:
+        target, _, anchor = link.removeprefix(REPO_BLOB).partition("#")
+        local = ROOT / target.split("/", 1)[1]
+        assert local.is_file(), f"broken link {link}"
+        if anchor:
+            headings = re.findall(r"^#+ (.+)$", local.read_text(encoding="utf-8"), flags=re.M)
+            assert anchor in {_github_anchor(h) for h in headings}, f"broken anchor {link}"
+    relative = [link for link in links if not link.startswith(("https://", "#"))]
+    assert relative == [], f"relative links do not work in a GitHub release body: {relative}"
+
+
+def test_readme_points_at_the_changelog_and_release_notes():
+    status = _section(README, "## Release status")
+    assert f"]({CHANGELOG})" in status
+    assert f"]({RELEASE_NOTES})" in status
