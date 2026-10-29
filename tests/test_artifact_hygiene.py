@@ -79,6 +79,27 @@ def test_a_tracked_sensitive_file_fails(tmp_path: Path):
     assert found == {"key.pem", ".env", "audit.jsonl"}
 
 
+def test_sensitive_directories_are_matched_at_every_depth(tmp_path: Path):
+    """PR #22 review: `.local/`, `.playwright-mcp/` and the other directory rules apply
+    at any depth in .gitignore, so a nested tracked file must fail too, whatever its
+    extension; a file merely *named* like a sensitive directory must not."""
+    root = _repo(tmp_path, "")
+    nested = [
+        "src/qradar_soar_mcp/.local/notes.txt",
+        "docs/.playwright-mcp/page.png",
+        "tests/approvals/APR-1.json",
+        "deep/a/b/lab-evidence/run.txt",
+        ".claude/settings.json",
+    ]
+    harmless = ["src/qradar_soar_mcp/security/approvals.py", "tests/__snapshots__/x.ambr"]
+    for name in nested + harmless:
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text("x", encoding="utf-8")
+    _git(root, "add", "-f", *nested, *harmless)
+    found = {f.path for f in hygiene.check_tracked_files(root)}
+    assert found == set(nested)
+
+
 def test_an_untracked_file_in_the_package_fails(tmp_path: Path):
     root = _repo(tmp_path, "*.log\n")
     (root / "src" / "qradar_soar_mcp" / "notes.txt").write_text("x", encoding="utf-8")

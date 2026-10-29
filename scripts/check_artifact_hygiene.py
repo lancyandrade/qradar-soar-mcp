@@ -72,6 +72,7 @@ MUST_BE_IGNORED = (
 # Paths that must stay trackable (the ignore rules must not swallow them).
 MUST_NOT_BE_IGNORED = (".env.example", "config/action_policy.example.yaml", "uv.lock")
 
+# File-name patterns, matched against the file name at any depth.
 SENSITIVE_TRACKED = (
     ".env",
     ".env.*",
@@ -84,11 +85,20 @@ SENSITIVE_TRACKED = (
     "*.log",
     "*.res",
     "*.resz",
-    ".playwright-mcp/*",
-    ".claude/*",
-    ".local/*",
-    "approvals/*",
-    "snapshots/*",
+)
+# Directory names, matched against every directory component of a tracked path, as the
+# matching .gitignore rules ("dir/") apply at any depth.
+SENSITIVE_DIRS = frozenset(
+    {
+        ".playwright-mcp",
+        ".claude",
+        ".local",
+        "approvals",
+        "snapshots",
+        "lab-evidence",
+        "credentials",
+        "screenshots",
+    }
 )
 TRACKED_ALLOWED = {".env.example"}
 
@@ -169,12 +179,16 @@ def check_tracked_files(root: Path) -> list[Finding]:
     tracked = _git(["ls-files", "-z"], root).stdout.split("\0")
     findings = []
     for path in filter(None, tracked):
-        name = path.rsplit("/", 1)[-1]
+        *dirs, name = path.split("/")
         if path in TRACKED_ALLOWED:
             continue
-        if any(fnmatch.fnmatch(path, p) or fnmatch.fnmatch(name, p) for p in SENSITIVE_TRACKED):
+        if any(fnmatch.fnmatch(name, p) for p in SENSITIVE_TRACKED):
             findings.append(
                 Finding("tracked-sensitive", path, "tracked file matches a sensitive pattern")
+            )
+        elif SENSITIVE_DIRS.intersection(dirs):
+            findings.append(
+                Finding("tracked-sensitive", path, "tracked file inside a sensitive directory")
             )
     return findings
 
