@@ -34,7 +34,8 @@ Evidence levels used throughout:
 - Local gates: Ruff, format, mypy `--strict`, the full offline test suite, both
   coverage floors, the repository secret scanner, `pip-audit --strict` and the package
   build all pass (§5). The wheel is clean; the **sdist is not safe to build from a
-  developer working copy** (it picked up locally excluded files, H-5). GitHub CI on `717530e` is reported in §5.1 exactly as GitHub
+  developer working copy** (it picked up locally excluded files, H-5; **remediated by
+  REL-06**, §12). GitHub CI on `717530e` is reported in §5.1 exactly as GitHub
   reported it at the time of writing.
 - Release mechanics are missing: **no changelog, no tag (other than a local-only
   reference tag), no GitHub release, no release workflow**, and `main` has **no branch
@@ -44,7 +45,8 @@ Evidence levels used throughout:
   recorded owner waiver for an alpha pre-release.
 
 **Verdict:** `v0.2.0` — **CONDITIONAL GO** as an alpha: a GitHub tag + pre-release of the source code only, with no manually built binary, wheel or sdist attached (§9, §10). Build
-artefacts are not distributed until REL-06 and REL-04 land. `v0.3.0` — **NO-GO**: Phase 2 is not complete.
+artefacts are not distributed until REL-06 and REL-04 land. *(Update: REL-06 has landed, §12;
+REL-04 is still open, so this verdict is unchanged.)* `v0.3.0` — **NO-GO**: Phase 2 is not complete.
 
 ---
 
@@ -187,9 +189,10 @@ itself (`tests/conftest.py`), and `config.py` reads no `.env` file.
   screenshots. Their contents were not opened. The `[tool.hatch.build.targets.sdist] exclude` list
   (`/.github`, `/automation`, raw probe/fixture dirs) is respected for the top-level tree only; the
   worktree copy re-introduces both. A sdist built from a clean checkout (as CI would) contains none
-  of these, but nothing enforces that. See H-5.
+  of these, but nothing enforces that. See H-5. **Remediated by REL-06 (§12)**: the sdist is now
+  an explicit allow-list, enforced by `tests/test_packaging.py`.
 - The intended sdist content also includes `tests/`, `docs/`, `scripts/probe/`,
-  `CLAUDE-CODE-PROMPT.md`, `.env.example` and `uv.lock` (L-1).
+  `CLAUDE-CODE-PROMPT.md`, `.env.example` and `uv.lock` (L-1; **remediated by REL-06**, §12).
 
 ### 5.1 GitHub CI
 
@@ -240,8 +243,8 @@ about that commit only; the CI result of this PR is whatever GitHub reports for 
   search syntax (Q2), configuration export contents (403), attachment contents
   beyond headers, AND/OR filter semantics live (Q14), field `required` semantics
   (D10), playbook enable/disable (`P5-00`).
-- **Reproducibility:** probe tooling is in `scripts/probe/` (not in the wheel; it is
-  in the sdist, see §5).
+- **Reproducibility:** probe tooling is in `scripts/probe/` (not in the wheel; it was
+  in the sdist at audit time, see §5, and is not since REL-06, §12). It stays in git.
 
 ---
 
@@ -279,7 +282,7 @@ was found unsafe.
 | H-2 | No `CHANGELOG.md` and no release notes | v0.2.0 | The `0.2.0` package also contains 16 Phase-2 tools; without a changelog the version misdescribes the content and the deferrals of §7 are not attached to the release |
 | H-3 | `main` has no branch protection and no ruleset | all | CI is advisory: a PR that drops a permission check fails `P1-13` but can still be merged. This weakens the `07 §1` principle in practice |
 | H-4 | Phase 2 incomplete: P2-06, P2-07 not started; P2-00, P2-01, P2-03 partial | v0.3.0 | `06` gate rule |
-| H-5 | The sdist takes whatever is on disk and not in `.gitignore`: built from this working copy it held `.claude/settings.local.json`, a stale worktree and browser logs (§5) | any distributed sdist or wheel; not the §9 tag-only pre-release | A hand-built sdist could ship local tool configuration. Fix (separate ticket REL-06): an `only-include` allow-list for the sdist plus a test over the built archive, and build release artefacts only in CI from a clean checkout (REL-04) |
+| H-5 | The sdist takes whatever is on disk and not in `.gitignore`: built from this working copy it held `.claude/settings.local.json`, a stale worktree and browser logs (§5) | any distributed sdist or wheel; not the §9 tag-only pre-release | A hand-built sdist could ship local tool configuration. Fix (separate ticket REL-06): an `only-include` allow-list for the sdist plus a test over the built archive, and build release artefacts only in CI from a clean checkout (REL-04). **Remediated (sdist part) by REL-06, §12**; the CI-only build (REL-04) is still open |
 
 ### Medium
 
@@ -295,7 +298,7 @@ was found unsafe.
 
 | # | Item |
 |---|---|
-| L-1 | sdist includes `scripts/probe/`, `tests/`, `docs/`, `CLAUDE-CODE-PROMPT.md`; harmless (sanitised, scanner-clean) but larger than needed |
+| L-1 | sdist includes `scripts/probe/`, `tests/`, `docs/`, `CLAUDE-CODE-PROMPT.md`; harmless (sanitised, scanner-clean) but larger than needed. **Remediated by REL-06 (§12)** |
 | L-2 | Running the suite or the server from the repository root leaves an empty `audit.jsonl` there (git-ignored) |
 | L-3 | `playbook/` is an empty skeleton shipped in the wheel (by design until Phase 3) |
 | L-4 | Classifier `Development Status :: 3 - Alpha` is correct; README does not state "alpha" in its status table |
@@ -314,7 +317,8 @@ manually built binary, wheel or sdist is attached, and nothing is uploaded to Py
 In particular, an sdist built in a developer working copy must not be published: it
 was shown in §5 to pick up locally excluded files (H-5). Distributing any build
 artefact waits for **REL-06** (sdist allow-list and archive test) and **REL-04**
-(artefacts built only in CI from a clean checkout). Users install from the tag
+(artefacts built only in CI from a clean checkout). *(Update: REL-06 has landed, §12;
+REL-04 has not, so no build artefact is distributed yet.)* Users install from the tag
 (`git clone --branch v0.2.0`, then `uv sync`), as the README quick start already
 describes.
 
@@ -334,7 +338,7 @@ describes.
 
 | Release | Verdict | Conditions |
 |---|---|---|
-| **`v0.2.0`** | **CONDITIONAL GO** (alpha: tag + source-code pre-release, no attached build artefacts) | (1) GitHub CI green on the tagged commit; (2) `CHANGELOG.md` with the 36-tool content and every deferral in §7 (REL-02); (3) owner records a waiver of `07 §7.5` T4–T6 for this alpha, or the lab suite is built first; (4) owner accepts the P1-15 and D4 deferrals as release scope; (5) no wheel, sdist or other build artefact is attached or published; distributing one requires REL-06 and REL-04 first (H-5); (6) recommended before tagging: protect `main` with the CI checks required (H-3) |
+| **`v0.2.0`** | **CONDITIONAL GO** (alpha: tag + source-code pre-release, no attached build artefacts) | (1) GitHub CI green on the tagged commit; (2) `CHANGELOG.md` with the 36-tool content and every deferral in §7 (REL-02); (3) owner records a waiver of `07 §7.5` T4–T6 for this alpha, or the lab suite is built first; (4) owner accepts the P1-15 and D4 deferrals as release scope; (5) no wheel, sdist or other build artefact is attached or published; distributing one requires REL-06 and REL-04 first (H-5; REL-06 done, §12; REL-04 open); (6) recommended before tagging: protect `main` with the CI checks required (H-3) |
 | **`v0.3.0`** | **NO-GO** | P2-06, P2-07; the partial ACs of P2-00, P2-01, P2-03 accepted or closed by the owner |
 
 No `v0.2.0` tag, release or version change is made by this PR.
@@ -349,7 +353,7 @@ No `v0.2.0` tag, release or version change is made by this PR.
 | 2 | **REL-03** — protect `main` (required CI checks, no force-push, PR required) | — | repository settings, owner action |
 | 3 | **REL-04** — tag-triggered release workflow: `uv build`, SHA-256 sums, artefact upload, optional attestation; no PyPI | REL-02 | CI only |
 | 4 | **REL-05** — owner decision record: waive `07 §7.5` lab gates for the alpha, or schedule LAB-01 first | — | 08 entry |
-| 4a | **REL-06** — sdist `only-include` allow-list + archive-content test (no `.claude/`, worktrees, logs, `automation/`, `.github/`) | — | `pyproject.toml` packaging config + one test; **required before any build artefact is distributed** |
+| 4a | ~~**REL-06** — sdist `only-include` allow-list + archive-content test (no `.claude/`, worktrees, logs, `automation/`, `.github/`)~~ **Done (§12)** | — | `pyproject.toml` packaging config + one test; **required before any build artefact is distributed** |
 | 5 | **TAG v0.2.0** (tag + source-code pre-release, no attachments) | 1, 4 (2 recommended) | owner |
 | 5a | **Attach build artefacts to a release** (optional, later) | 3, 4a | CI-built only |
 | 6 | **P2-06** — `qradar-soar-policy scaffold` (deny-all Tier-5 scaffold, schema-valid, never overwrites) | catalog (P2-02, P2-04 done) | offline-buildable from the committed catalog fixture |
@@ -360,3 +364,128 @@ No `v0.2.0` tag, release or version change is made by this PR.
 | 11 | **P2-00c** — export contract with an export-capable key in a disposable org; then P2-01 dual-backend AC | owner, disposable org | |
 | 12 | **Phase-2 close-out review** → **`v0.3.0`** | 6, 7, 8 (+ 9 if the gate is not waived again) | |
 | 13 | **P1-INV-01** — manual-action invocation contract (Q4/Q5) research, then T6 against the mock AppHost | LAB-02 | unlocks Tier 3 and the approval flow |
+
+---
+
+## 12. Remediation log
+
+### 12.1 REL-06 — sdist allow-list (remediates H-5 and L-1)
+
+**Change:** `[tool.hatch.build.targets.sdist]` in `pyproject.toml` replaces the old
+`exclude` list with an explicit allow-list:
+
+```toml
+only-include = ["src/qradar_soar_mcp", "pyproject.toml", "README.md", "LICENSE"]
+```
+
+`only-include` takes root-relative paths, not patterns, and Hatch walks only those
+paths, so nothing outside them (`.claude/`, `.playwright-mcp/`, worktrees, `automation/`,
+`.github/`, …) is considered, whatever `.git/info/exclude` says. `.gitignore` still
+applies inside the allowed paths (a `__pycache__/`, `*.log` or `*.pem` under the package
+stays out). There is no `force-include` and no wildcard. The wheel configuration
+(`packages = ["src/qradar_soar_mcp"]`) is unchanged.
+
+**Approved sdist content** (51 files for `0.2.0`):
+
+| Member | Why |
+|---|---|
+| `src/qradar_soar_mcp/**` (46 tracked files: `.py` and `py.typed`) | the package |
+| `pyproject.toml` | build configuration and project metadata |
+| `README.md` | `project.readme`, the long description |
+| `LICENSE` | `project.license-files` |
+| `PKG-INFO` | generated by the backend |
+| `.gitignore` | added by hatchling itself (`SdistBuilder.get_default_build_data`) so a wheel built from the sdist applies the same ignore rules; tracked and public |
+
+Deliberately **not** in the sdist (all stay in git and in the GitHub source archives):
+`tests/`, `docs/` (including the frozen design baseline), `scripts/` (probes and the
+secret scanner), `automation/`, `config/`, `examples/`, `uv.lock`, `.env.example` and the
+governance files other than `LICENSE`. None is needed to build or install the wheel;
+`uv.lock` pins the development environment, not the build. Those who want tests or
+tooling use a git checkout.
+
+**Before / after**, built with `uv build` from the same developer working copy
+(which still holds `.claude/` and `.playwright-mcp/`, excluded only in `.git/info/exclude`):
+
+| Archive | Before (`main` @ `ad9f1b2`) | After (REL-06) |
+|---|---|---|
+| sdist | 633 entries, incl. `.claude/settings.local.json`, 319 files of a stale worktree under `.claude/worktrees/`, 6 `.playwright-mcp/` logs/screenshots, `tests/` (207), `docs/` (20), `scripts/` (16), `uv.lock`, `.env.example`, `CLAUDE-CODE-PROMPT.md` | 51 files: exactly the table above |
+| wheel | 51 entries: 46 package files + `METADATA`, `WHEEL`, `RECORD`, `entry_points.txt`, `licenses/LICENSE` | identical (51 entries) |
+
+The contents of the leaked local files were not opened; only member names were listed.
+
+**Regression test:** `tests/test_packaging.py` (8 tests, offline, ~6 s). It copies the
+git-tracked files into a temporary directory, adds synthetic canary files (fixed
+marker text, no real data) under `.claude/` (settings, a worktree copy containing its
+own `pyproject.toml`, `src/qradar_soar_mcp/` and `.github/`), `.playwright-mcp/` (log,
+page dump, screenshot), a fake `.git/`, `.env`, `.env.local`, `.venv/`, `credentials/`,
+`screenshots/`, `dist/`, the raw probe/fixture directories, and inside the package
+(`__pycache__/*.pyc`, `*.log`, `*.pem`), and writes a `.git/info/exclude` that lists
+`.claude/` and `.playwright-mcp/` as on the machine that showed H-5. It then builds
+with the locked hatchling (`python -m hatchling build`) and, reading archive indexes
+without extracting:
+
+1. checks the config is an `only-include` list with no `force-include`, `include` or
+   wildcard;
+2. requires the sdist member set to equal the approved manifest exactly (tracked
+   package files + the table above), every member to be a regular file or directory
+   under `qradar_soar_mcp-0.2.0/` with no absolute or `..` path, and no member to hold
+   canary bytes;
+3. rejects any member with a `.claude`, `.playwright-mcp`, `.git`, `.github`, `.venv`,
+   `__pycache__`, `worktrees`, `automation`, `tests`, `docs`, `scripts`, `credentials` or
+   `screenshots` component, a `.env*` name or a `.log`/`.png`/`.pem`/`.key`/`.pyc`/`.jsonl`
+   suffix;
+4. requires the wheel to be exactly the package plus the five dist-info files;
+5. validates and then extracts the sdist (`tarfile` `filter="data"`) into an unrelated
+   directory with no `.git`, builds a wheel from it, and requires the same member set,
+   `Name`/`Version` metadata and the three `[project.scripts]` entry points.
+
+Against the old `exclude` configuration 3 of the 8 tests fail (config check, manifest,
+canaries: 8 canaries leaked: `.claude/settings.local.json`, the three worktree
+canaries, two `.playwright-mcp/` files, `credentials/…`, `screenshots/…`); with REL-06
+all 8 pass.
+
+**Clean-environment check (manual):** the `uv build` sdist was copied to an empty
+directory and `uv build --wheel` built from it; the resulting wheel's member list was
+identical to the one `uv build` produced. It was installed with `--no-deps` into a new
+Python 3.12 venv: `qradar-soar-mcp 0.2.0`, `License-Expression: Apache-2.0`,
+`Requires-Python: >=3.12`, `py.typed` present, and the console scripts
+`qradar-soar-mcp`, `qradar-soar-approve`, `qradar-soar-audit` resolve to
+`qradar_soar_mcp.cli:main`, `qradar_soar_mcp.cli_approve:main`,
+`qradar_soar_mcp.cli_audit:main`.
+
+**Dependency change:** `hatchling>=1.25` (the `[build-system]` floor) was added to the
+`dev` extra so the test can build offline after `uv sync`. `uv.lock` gains
+`hatchling 1.33.0`, `tomlkit 0.15.2` and `trove-classifiers 2026.9.21.13`; no existing
+pin changed. `uv build` itself still uses an isolated build environment resolved from
+`[build-system]`, so its hatchling version can differ from the locked one.
+
+**Validation on the REL-06 branch** (Windows 11, Python 3.12, uv 0.11.14):
+
+| Command | Result |
+|---|---|
+| `uv sync --extra dev --locked` | pass |
+| `uv lock --check` | pass (93 packages) |
+| `uv run ruff check .` / `uv run ruff format --check .` | pass |
+| `uv run mypy` | pass (55 source files) |
+| `uv run pytest -q --cov=qradar_soar_mcp --cov-fail-under=80` (`SOAR_BASE_URL=""`) | pass — 4098 passed, total coverage 98.44 % |
+| `uv run coverage report --include="src/qradar_soar_mcp/security/*" --fail-under=95` | pass — 99 % |
+| `uv run python scripts/check_no_secrets.py` | pass — clean |
+| locked export + `pip-audit --strict --desc --disable-pip --require-hashes` | pass — no known vulnerabilities (92 requirements) |
+| `uv build` | pass — sdist 51 files, wheel 51 entries |
+
+gitleaks was not run locally (binary not installed); it runs in CI.
+
+**What REL-06 does not cover:**
+
+- **REL-04 is still open.** A safe packaging configuration is not a release process:
+  artefacts must still be built only by a tag-triggered CI workflow from a clean
+  checkout, with checksums. Until then no wheel or sdist is attached to a release or
+  published (§9, §10 condition 5 unchanged).
+- `only-include` admits every non-ignored file under `src/qradar_soar_mcp/`. An
+  untracked, non-ignored file placed there in a working copy would reach both the
+  sdist and the wheel. The test guards the tracked tree (only `.py` and `py.typed`)
+  and the clean-checkout build of REL-04 closes the rest.
+- No application code, MCP tool, REST call, SOAR client behaviour, permission,
+  approval, audit or redaction rule changed. No version bump, tag, release or PyPI
+  upload was made.
+
