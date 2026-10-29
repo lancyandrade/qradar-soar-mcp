@@ -93,7 +93,7 @@ when they succeed.
 | T7 | A permission bug in this codebase | one chokepoint (`run_pipeline`) with a function-level AST test; a registry-enumerated permission matrix (every tool × 14 configuration states × 2 transports) that fails collection when a tool is missing; an AST test pinning the REST surface the client may call; a transport spy proving no mutation under default config; the recommended two-instance deployment with a read-only SOAR key on the default instance | `tools/registry.py`, `tests/test_chokepoint.py`, `tests/test_permission_matrix.py`, `tests/test_client_surface_ast.py` |
 | T8 | Audit tampering or loss | hash-chained append-only JSONL, fsynced per record; `qradar-soar-audit verify` names the first broken link; unwritable log ⇒ refuse to start; a write failure before a mutation refuses the mutation; each string of a record is redacted before hashing, and a record that cannot be redacted without losing a field is refused; audit records never reach tool output | `security/audit.py`, `cli_audit.py` |
 | T9 | Approval replay or forgery | Ed25519 signature the server cannot produce; binding to a hash of the tool and its arguments; TTL, with the signature never outliving the request; atomic single-use consumption by rename; a changed argument, another tool or a second use is denied. **Not reachable in 0.2.0** (see T1); tested offline | `security/approvals.py`, `cli_approve.py` |
-| T10 | Over-broad configuration by accident | deny by default; garbage in a capability flag ⇒ `false`, garbage in a safety switch ⇒ `true`; `SOAR_ALLOW_WRITES` (deprecated) never implies actions; `in_band`/`disabled` approval with actions refused outside `SOAR_LAB_MODE`; `SOAR_VERIFY_SSL=false` refused outside `SOAR_LAB_MODE`; `SOAR_ALLOW_SCRIPT_WRITES=true` refuses to start; `--check` lists the enabled capabilities | `config.py` |
+| T10 | Over-broad configuration by accident | deny by default; garbage in a capability flag ⇒ `false`, garbage in a safety switch ⇒ `true`; `SOAR_ALLOW_WRITES` (deprecated) never implies actions; `in_band`/`disabled` approval with actions or any Tier-4 flag refused outside `SOAR_LAB_MODE`; `SOAR_VERIFY_SSL=false` refused outside `SOAR_LAB_MODE`; `SOAR_REQUIRE_ACTION_CONFIRMATION=false` or `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION=false` refused outside `SOAR_LAB_MODE`; `.env.example` shows every capability set to `false`; `SOAR_ALLOW_SCRIPT_WRITES=true` refuses to start; `--check` lists the enabled capabilities | `config.py` |
 | T11 | An over-privileged SOAR API key | none in this software: no endpoint a read-only key can use reports the key's permissions (open question Q6), so nothing checks them at start-up. The control is the operator's: a read-only key on the default instance, a narrowly scoped key on the ops instance | deployment (README) |
 
 ## 5. What this does not protect against
@@ -111,11 +111,13 @@ Be honest with yourself about these before enabling anything above Tier 1.
   the key's permissions: on 51.0.9.0.20848 no endpoint a read-only key can use
   reports them (Q6).
 - **`SOAR_LAB_MODE=true`, `SOAR_APPROVAL_MODE=in_band` or `disabled`,
-  `SOAR_VERIFY_SSL=false`.** These exist for labs. In-band confirmation is not human
-  approval; it prevents accidents only.
-- **`SOAR_REQUIRE_ACTION_CONFIRMATION=false`.** It removes the approval for a Tier-3
-  action that a policy rule marks `allow`, and it is not restricted to lab mode.
-  Harmless in 0.2.0 (nothing can be invoked); leave it `true`.
+  `SOAR_VERIFY_SSL=false`, `SOAR_REQUIRE_ACTION_CONFIRMATION=false`,
+  `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION=false`.** These exist for labs. In-band
+  confirmation is not human approval; it prevents accidents only. A confirmation
+  switch set to `false` removes the approval for a Tier-3 action whose policy rule
+  says `allow` (or, for the reserved playbook switch, for Tier 4); since P1-SEC-01 it
+  refuses to start unless `SOAR_LAB_MODE=true` is also set (08 §31). Once lab mode is
+  set, this software no longer stands between the model and those calls.
 - **What an approved action does.** The approver sees the action name and
   the target ids. Whether "EDR — Isolate Endpoint" isolates the right host is
   a property of the AppHost app and the artifact data, not of this server.

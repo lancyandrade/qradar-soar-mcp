@@ -115,8 +115,11 @@ def test_safety_switches_resolve_to_true_on_garbage(flag: str, raw: str):
 
 
 def test_safety_switches_can_be_disabled_explicitly():
-    s = Settings.load({"SOAR_REQUIRE_ACTION_CONFIRMATION": "false", "SOAR_AUDIT_REQUIRED": "0"})
-    assert s.require_action_confirmation is False and s.audit_required is False
+    s = Settings.load({"SOAR_AUDIT_REQUIRED": "0"})
+    assert s.audit_required is False
+    # A confirmation switch can be turned off in a lab only (P1-SEC-01; 08 §31).
+    s = Settings.load({"SOAR_REQUIRE_ACTION_CONFIRMATION": "false", "SOAR_LAB_MODE": "true"})
+    assert s.require_action_confirmation is False
 
 
 # ---------------------------------------------------------------- legacy flag
@@ -436,12 +439,13 @@ def _keys(text: str) -> set[str]:
 
 def test_env_example_is_the_baseline_with_only_the_documented_changes():
     """The frozen design copy, plus exactly the changes 08 records: the Ed25519 rename
-    (§5) and ``SOAR_CA_BUNDLE`` (§22)."""
+    (§5), ``SOAR_CA_BUNDLE`` (§22) and ``SOAR_ALLOW_PLAYBOOK_DEPLOY`` (§31)."""
     ours = _keys((ROOT / ".env.example").read_text(encoding="utf-8"))
     baseline = _keys((ROOT / "docs" / "design" / "env.example").read_text(encoding="utf-8"))
     expected = (baseline - {"SOAR_APPROVAL_HMAC_KEY_FILE"}) | {
         "SOAR_APPROVAL_PUBLIC_KEY_FILE",
         "SOAR_CA_BUNDLE",
+        "SOAR_ALLOW_PLAYBOOK_DEPLOY",
     }
     assert ours == expected
     text = (ROOT / ".env.example").read_text(encoding="utf-8")
@@ -449,10 +453,8 @@ def test_env_example_is_the_baseline_with_only_the_documented_changes():
     assert "SOAR_VERIFY_SSL=true" in text and re.search(r"^SOAR_CA_BUNDLE=$", text, flags=re.M)
     assert re.search(r"^SOAR_VERIFY_SSL=false", text, flags=re.M) is None
     assert re.search(r"^SOAR_LAB_MODE=false$", text, flags=re.M)
-    assert re.search(r"^SOAR_ALLOW_[A-Z_]+=true", text, flags=re.MULTILINE) is None or (
-        set(re.findall(r"^(SOAR_ALLOW_[A-Z_]+)=true", text, flags=re.MULTILINE))
-        == {"SOAR_ALLOW_PLAYBOOK_DRAFT"}
-    )
+    # Every capability is shown, and shown off (08 §31 dropped the baseline's DRAFT=true).
+    assert re.search(r"^SOAR_ALLOW_[A-Z_]+=true", text, flags=re.MULTILINE) is None
 
 
 def test_every_env_example_variable_is_a_known_setting():
@@ -465,7 +467,7 @@ def test_every_env_example_variable_is_a_known_setting():
 
 
 def test_env_example_loads_as_a_safe_default(tmp_path: Path):
-    """The example file, with placeholders, must load and enable only DRAFT (local, safe)."""
+    """The example file, with placeholders, must load and enable nothing (08 §31)."""
     text = (ROOT / ".env.example").read_text(encoding="utf-8")
     env = {}
     for line in text.splitlines():
@@ -475,5 +477,6 @@ def test_env_example_loads_as_a_safe_default(tmp_path: Path):
     # Paths in the example point at /etc and /var; substitute so validation can pass offline.
     env["SOAR_ACTION_POLICY_FILE"] = ""
     s = Settings.load(env)
-    assert s.enabled_capabilities() == ["SOAR_ALLOW_PLAYBOOK_DRAFT"]
+    assert s.enabled_capabilities() == []
+    assert s.require_action_confirmation is True and s.require_playbook_confirmation is True
     assert s.approval_mode == "out_of_band" and s.audit_required is True

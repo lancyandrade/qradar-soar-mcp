@@ -339,7 +339,7 @@ none widens the REST surface of §4.
 | P1-15 `tools/investigation.py` | `soar_get_incident_full` budget: 60 000 characters of JSON (≈15k tokens); caps 50 tasks / 100 artifacts / 50 notes / 50 attachments, halved until the budget fits. `soar_find_similar_incidents` sends **no filter** (only `sorts` + `length`) and skips the source incident client-side, to avoid relying on an unverified `id` condition (open question Q2/Q3). |
 | P1-15 audit `tools/investigation.py` | The budget is enforced, not only reported, and is measured on the complete `data` object as step 12 returns it (`registry.response_chars`: redacted, ASCII-escaped JSON), `budget` block included; `budget.chars` is that size, set until it settles. Each reduction re-measures the whole object, so changes to `omitted`, `counts` and `reductions` are counted. If the payload is still over it with one row per collection (only the incident's requested `custom_fields` can do that), the call fails with `response_too_large`. Attachment metadata is projected by `summarise_attachment` (name and content type trimmed at 300, like other names, since file names are attacker-chosen, `02 §194`). `soar_find_similar_incidents` matches on the whole artifact value but shows `shared_artifacts` trimmed at the artifact-value limit. Attachment hash and text extraction stay DEFERRED-P2 (§9): `Q7` saw the contents route's headers for one `text/plain` attachment only. |
 | P1-16 | README claims about SOAR behaviour carry ✅/⚠️/❓ marks and state that ✅ means "documented and modelled offline, not yet verified by this repository". The key-capability startup probe of `01 §6` is documented as not implemented (Q6). |
-| P1-16 completion (2026-10-29) | After `P2-00` – `P2-05`, the README legend follows `docs/soar-api-verified.md` instead of the Phase-1 reading above: ✅ verified live on `51.0.9.0.20848`; ⚠️ documented by the appliance and modelled offline, not yet verified live; ❓ unverified and not relied on. Claims were re-marked against that record (the incident PATCH, close and Tier-1/2 `POST`s are ⚠️; `/rest/session` answers 200 on this version), and offline contract testing is described separately from the one-off live research runs. Documentation only: no tool, endpoint, permission, approval rule or default changed. `.env.example` keeps its variable set and values (the baseline's `SOAR_ALLOW_PLAYBOOK_DRAFT=true`, pinned by `tests/test_config.py`), but its comments now sit on lines of their own. |
+| P1-16 completion (2026-10-29) | After `P2-00` – `P2-05`, the README legend follows `docs/soar-api-verified.md` instead of the Phase-1 reading above: ✅ verified live on `51.0.9.0.20848`; ⚠️ documented by the appliance and modelled offline, not yet verified live; ❓ unverified and not relied on. Claims were re-marked against that record (the incident PATCH, close and Tier-1/2 `POST`s are ⚠️; `/rest/session` answers 200 on this version), and offline contract testing is described separately from the one-off live research runs. Documentation only: no tool, endpoint, permission, approval rule or default changed. `.env.example` keeps its variable set and values (the baseline's `SOAR_ALLOW_PLAYBOOK_DRAFT=true`, pinned by `tests/test_config.py`), but its comments now sit on lines of their own. (Superseded for `.env.example` by §31: every capability is now `false`.) |
 
 ## 19. Deferred to Session 2 / lab access
 
@@ -1461,3 +1461,71 @@ until the owner approves its deletion.
 
 This ticket's only edit to the baseline is one implementation-status note in `05`, under
 the P2-04 note (the eleventh exception).
+
+## 31. P1-SEC-01 — confirmation switches are lab-only; the example enables nothing
+
+Decided by the owner on 2026-10-29, after `P1-16` documented both points as open
+concerns (threat model §5, README configuration reference). Neither opened an
+executable path: `soar_invoke_action` refuses every call (`DENY_UNSUPPORTED`, §21) and
+no Tier-4 tool exists.
+
+### 31.1 Confirmation switches
+
+Before: `SOAR_REQUIRE_ACTION_CONFIRMATION=false` was accepted in any configuration and
+removed the approval step for a Tier-3 call whose policy rule says `allow`;
+`SOAR_REQUIRE_PLAYBOOK_CONFIRMATION=false` did the same for Tier 4 (reserved).
+
+Now (`config.py`, `Settings._confirmation_rules`): either switch resolving to `false`
+refuses to start unless `SOAR_LAB_MODE=true`, whether or not the matching capability
+is enabled. The `ConfigError` names each switch that is off and `SOAR_LAB_MODE=true`.
+With lab mode the configuration loads, and one warning naming the switches is emitted
+(shown by `--check`). This is the lab-mode principle `02 §4.1` and `06 P1-02` already
+apply to in-band approval, and §22 to `SOAR_VERIFY_SSL=false`; nothing in `00`–`07`
+allows a switch to be off outside a lab, so no baseline requirement conflicts.
+
+Unchanged: parsing (§14; an unparseable value still resolves to `true` with a warning,
+so it can never trigger the refusal), the code defaults (`true`), `enforce()` and the
+tier policy, the approval broker, Ed25519 verification, `DENY_UNSUPPORTED` for
+invocation, and the tool and REST surfaces.
+
+### 31.2 `.env.example`
+
+Before: it set `SOAR_ALLOW_PLAYBOOK_DRAFT=true`, copied from the baseline env block
+(`02 §2`, `docs/design/env.example`), and did not list `SOAR_ALLOW_PLAYBOOK_DEPLOY`,
+which `02 §2` defines but the baseline `env.example` omits. §18 (P1-16 completion)
+recorded keeping that value.
+
+Now: every capability flag `CAPABILITY_FLAGS` names is listed, each `false`, including
+all six Tier-4 flags (`SOAR_ALLOW_PLAYBOOK_DEPLOY` added); `SOAR_ALLOW_SCRIPT_WRITES`
+stays `false`. This supersedes the `.env.example` sentence of the §18 P1-16 completion
+row and, for `.env.example` only, the baseline's `DRAFT=true` example value. The code
+default of every flag was already `false` and is unchanged. The baseline files (`02`,
+`docs/design/env.example`) are not edited, so this adds no baseline exception;
+`tests/test_config.py` now expects the baseline key set plus `SOAR_ALLOW_PLAYBOOK_DEPLOY`
+(with §5 and §22) and no `SOAR_ALLOW_*=true` line.
+
+### 31.3 Approval mode with Tier-4 flags
+
+`06 P1-02` and `02 §4.1` lab-gate `SOAR_APPROVAL_MODE=in_band|disabled` when
+`SOAR_ALLOW_ACTIONS=true`. A Tier-4 flag with `disabled` outside lab mode was accepted,
+so a Tier-4 call would have needed no approval (unreachable: no Tier-4 tool exists).
+The owner decided on 2026-10-29 (open question D13) to extend the gate: `in_band` or
+`disabled` with any Tier-4 flag enabled now refuses to start unless
+`SOAR_LAB_MODE=true`, naming the mode and each enabled Tier-4 flag. The actions rule and
+its message are unchanged; with no Tier ≥3 flag the mode is still accepted, since it
+asks for nothing. This extends `06 P1-02` in the same direction and narrows nothing.
+
+### 31.4 Tests
+
+`tests/test_confirmation_lab_mode.py`: each switch off outside lab mode refuses (every
+`false` spelling × absent, false and unparseable `SOAR_LAB_MODE`), with and without the
+matching capability, through `Settings.load`, `Runtime.build` and the CLI (exit 2);
+both off name both; no secret in the message; lab mode loads with one warning and drops
+approval only for an `allow` rule and Tier 4, while `deny`, a missing flag and the HTTP
+transport still deny; unparseable values resolve to `true` and still require approval;
+`in_band` and `disabled` with each Tier-4 flag refuse outside lab mode and load inside
+it, and are still accepted with no Tier ≥3 flag; `.env.example` lists every capability and every Tier-4 flag as `false`; with every
+switch off in lab mode, `soar_invoke_action` is still a `DENY_UNSUPPORTED` denial with
+no SOAR traffic; the mutating-tool set and tool count are pinned and no Tier-4 tool
+exists. `tests/test_config.py` and `tests/test_permissions.py` set `SOAR_LAB_MODE=true`
+where they turn a switch off.
