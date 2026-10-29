@@ -18,7 +18,8 @@ controlled response actions. Playbook authoring and deployment are designed
 > Tier 1. If you are looking for a quick way to let Claude "just fix things" in
 > SOAR, this is not that project, on purpose.
 
-This is version **0.2.0**, the Phase-1 milestone, plus the Phase-2 discovery tools.
+This is version **0.2.0** (alpha, pending publication; see
+[Release status](#release-status)), the Phase-1 milestone, plus the Phase-2 discovery tools.
 Every tool is tested offline against a contract model of the SOAR REST API
 (`tests/fake_soar.py`). Separately, owner-approved research runs checked the API
 against **one** lab appliance, IBM QRadar SOAR `51.0.9.0.20848`
@@ -893,11 +894,28 @@ Two kinds of evidence stand behind the marks, and they are not the same thing:
   shapes, not every secret a script may hold. A script renamed since the catalog was loaded is reported
   as `conflict` until `soar_refresh_catalog` is called.
 
+## Release status
+
+- **Current version: `0.2.0`, alpha, pending publication.** No `v0.2.0` tag or GitHub
+  release exists yet. When it is published, it will be a source-code pre-release only:
+  no wheel or sdist is attached and nothing is published to PyPI.
+- **Phase 1 is complete in code, with documented deferrals.** Manual-action invocation
+  always refuses (`DENY_UNSUPPORTED`), the approval flow is unreachable, and attachment
+  hash and text extraction are deferred.
+- **Early Phase-2 discovery is included**: 16 read-only tools, for 36 tools in all.
+- **`v0.3.0` is not ready.** Phase 2 is incomplete.
+- The release gate has not passed. The lab tests (T4–T6) do not exist yet, and the
+  owner has not decided whether to waive them for this alpha
+  ([release-readiness audit](docs/release-readiness.md#10-verdict)).
+
+What changed: [CHANGELOG.md](CHANGELOG.md). Release notes:
+[docs/releases/v0.2.0-alpha.md](docs/releases/v0.2.0-alpha.md).
+
 ## Status
 
 | Phase | Scope | State |
 |---|---|---|
-| 1 | Investigation + controlled actions + security architecture | **this release, v0.2.0** |
+| 1 | Investigation + controlled actions + security architecture | **v0.2.0 (alpha, pending publication)**; complete in code with documented deferrals |
 | 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); incident-type, phase, field and data-table discovery in (`P2-03`); rule and workflow discovery in (`P2-04`); playbook discovery in (`P2-05`); the rest (`P2-06`, `P2-07`) planned |
 | 3 | Playbook IR, validation, offline simulation | planned |
 | 4 | Compilation, export, import (always disabled) | planned |
