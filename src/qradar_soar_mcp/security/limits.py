@@ -97,29 +97,47 @@ class Limits:
     # ------------------------------------------------------------ persist
     def seed_from_records(self, records: Iterable[Mapping[str, Any]]) -> int:
         """Replay COMMITTED/FAILED mutations from the last hour so a restart
-        does not reset the budget (02 §5). Returns how many were counted."""
-        now = self._wall()
+        does not reset the budget (02 §5). Returns how many were counted.
+
+        A MUTATION_PENDING with no COMMITTED, FAILED or DECISION_DENIED for its
+        request id also counts: the terminal record is best-effort, so the write
+        may have reached SOAR although nothing after PENDING was recorded."""
         counted = 0
+        pending: dict[Any, Mapping[str, Any]] = {}
+        settled: set[Any] = set()
         for record in records:
-            if record.get("event") not in COUNTED_EVENTS:
+            event = record.get("event")
+            request_id = record.get("request_id")
+            if event == "MUTATION_PENDING" and request_id is not None:
+                pending[request_id] = record
                 continue
-            ts = record.get("ts")
-            tier = record.get("tier")
-            if not isinstance(ts, str) or not isinstance(tier, int):
-                continue
-            try:
-                when = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            except ValueError:
-                continue
-            age = now - when.astimezone(UTC).timestamp()
-            if age < 0 or age > WINDOW_SECONDS:
-                continue
-            window = self._window_for(Tier(tier)) if 0 <= tier <= 5 else None
-            if window is None:
-                continue
-            window.seed(age)
-            counted += 1
+            if event == "DECISION_DENIED" or event in COUNTED_EVENTS:
+                settled.add(request_id)  # a cap refusal after PENDING never ran
+            if event in COUNTED_EVENTS and self._seed_one(record):
+                counted += 1
+        for request_id, record in pending.items():
+            if request_id not in settled and self._seed_one(record):
+                counted += 1
         return counted
+
+    def _seed_one(self, record: Mapping[str, Any]) -> bool:
+        """Seed one mutation record's window slot if it is from the last hour."""
+        ts = record.get("ts")
+        tier = record.get("tier")
+        if not isinstance(ts, str) or not isinstance(tier, int):
+            return False
+        try:
+            when = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        age = self._wall() - when.astimezone(UTC).timestamp()
+        if age < 0 or age > WINDOW_SECONDS:
+            return False
+        window = self._window_for(Tier(tier)) if 0 <= tier <= 5 else None
+        if window is None:
+            return False
+        window.seed(age)
+        return True
 
     @classmethod
     def from_audit_log(

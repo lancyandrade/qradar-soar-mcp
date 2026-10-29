@@ -141,6 +141,35 @@ def test_seed_returns_count_and_iter_jsonl_missing(tmp_path: Path):
     assert list(iter_jsonl(tmp_path / "missing.jsonl")) == []
 
 
+def test_a_pending_mutation_with_no_terminal_record_still_counts(tmp_path: Path):
+    """The terminal record is best-effort (registry ``_finish``): a write SOAR may have
+    applied leaves only MUTATION_PENDING. It must still use its slot after a restart,
+    and every other shape of a request must count exactly once or not at all."""
+    now = datetime.now(UTC)
+
+    def rec(event: str, request_id: str | None, age: float = 30) -> dict[str, object]:
+        out: dict[str, object] = json.loads(_record(event, 3, age, now))
+        if request_id is not None:
+            out["request_id"] = request_id
+        return out
+
+    lim = Limits(_settings(tmp_path, SOAR_MAX_TIER3_PER_HOUR="10"), wall=lambda: now.timestamp())
+    counted = lim.seed_from_records(
+        [
+            rec("MUTATION_PENDING", "a"),  # completed normally: counted once, by COMMITTED
+            rec("MUTATION_COMMITTED", "a"),
+            rec("MUTATION_PENDING", "b"),  # failed in SOAR: counted once, by FAILED
+            rec("MUTATION_FAILED", "b"),
+            rec("MUTATION_PENDING", "c"),  # refused by the hourly cap after PENDING: never ran
+            rec("DECISION_DENIED", "c"),
+            rec("MUTATION_PENDING", "d"),  # terminal record lost: counted from PENDING
+            rec("MUTATION_PENDING", "e", age=4000),  # lost too, but outside the window
+            rec("MUTATION_COMMITTED", None),  # an older log without request ids still counts
+        ]
+    )
+    assert counted == 4 and lim.tier3.remaining() == 6
+
+
 # ---------------------------------------------------------- breaker
 
 
