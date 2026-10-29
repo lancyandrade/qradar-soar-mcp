@@ -7,6 +7,7 @@ A failure to *check* a limit counts as the limit being hit.
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 from collections import deque
@@ -22,6 +23,11 @@ from qradar_soar_mcp.security.tiers import MUTATING_FROM, Tier
 BREAKER_THRESHOLD = 3  # consecutive Tier ≥ 2 failures ⇒ Tier ≥ 2 disabled for the process
 WINDOW_SECONDS = 3600.0
 COUNTED_EVENTS = frozenset({"MUTATION_COMMITTED", "MUTATION_FAILED"})
+# The one shape audit.new_request_id() writes (uuid4().hex). Anything else is malformed.
+REQUEST_ID = re.compile(r"[0-9a-f]{32}")
+# The only denial written after MUTATION_PENDING: the hourly cap (registry step 9).
+CAP_REFUSAL = str(Code.DENY_RATE_LIMIT)
+_MALFORMED = object()  # a request_id is present but unusable
 
 
 class SlidingWindow:
@@ -58,6 +64,35 @@ class SlidingWindow:
         with self._lock:
             self._prune(self._clock())
             return max(0, self.limit - len(self._events))
+
+
+def _request_id(record: Mapping[str, Any]) -> str | object | None:
+    """The record's request id: a well-formed id, None when absent, else _MALFORMED.
+
+    Audit lines are untrusted on replay: a JSON array or object here would be an
+    unhashable key, and any other value can never equal a real id."""
+    value = record.get("request_id")
+    if value is None:
+        return None
+    if isinstance(value, str) and REQUEST_ID.fullmatch(value):
+        return value
+    return _MALFORMED
+
+
+def _settle(
+    open_pending: dict[str, deque[Mapping[str, Any]]],
+    request_id: str | object | None,
+    terminal: Mapping[str, Any],
+) -> None:
+    """Close the oldest open PENDING that ``terminal`` belongs to, if there is one."""
+    if not isinstance(request_id, str):
+        return  # missing or malformed: it can settle nothing
+    queue = open_pending.get(request_id)
+    if not queue:
+        return
+    head = queue[0]
+    if head.get("tool") == terminal.get("tool") and head.get("tier") == terminal.get("tier"):
+        queue.popleft()
 
 
 def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
@@ -99,38 +134,61 @@ class Limits:
         """Replay COMMITTED/FAILED mutations from the last hour so a restart
         does not reset the budget (02 §5). Returns how many were counted.
 
-        A MUTATION_PENDING with no COMMITTED, FAILED or DECISION_DENIED for its
-        request id also counts: the terminal record is best-effort, so the write
-        may have reached SOAR although nothing after PENDING was recorded."""
+        A MUTATION_PENDING that nothing later settles also counts: the terminal
+        record is best-effort, so the write may have reached SOAR although nothing
+        after PENDING was recorded. Replay never raises, and an unclear record can
+        only cost budget, never free it ("a failure to check a limit counts as the
+        limit being hit"):
+
+        - COMMITTED / FAILED always count themselves, with or without a request id.
+        - A later COMMITTED, FAILED or cap refusal with the same well-formed request
+          id, tool and tier settles the oldest open PENDING for that id, one for one.
+          Any other denial, mismatch or earlier record settles nothing.
+        - A PENDING whose request id is malformed cannot be settled, so it counts.
+        - A PENDING with no request id is skipped as before: its terminal record,
+          if any, has none either and already counts, so counting both would
+          charge one write twice.
+
+        A record whose tier or timestamp cannot be read cannot be placed in a
+        window and is skipped, as before; ``qradar-soar-audit verify`` reports the
+        damaged chain."""
         counted = 0
-        pending: dict[Any, Mapping[str, Any]] = {}
-        settled: set[Any] = set()
+        open_pending: dict[str, deque[Mapping[str, Any]]] = {}
         for record in records:
             event = record.get("event")
-            request_id = record.get("request_id")
-            if event == "MUTATION_PENDING" and request_id is not None:
-                pending[request_id] = record
+            if not isinstance(event, str):
                 continue
-            if event == "DECISION_DENIED" or event in COUNTED_EVENTS:
-                settled.add(request_id)  # a cap refusal after PENDING never ran
-            if event in COUNTED_EVENTS and self._seed_one(record):
-                counted += 1
-        for request_id, record in pending.items():
-            if request_id not in settled and self._seed_one(record):
-                counted += 1
+            request_id = _request_id(record)
+            if event == "MUTATION_PENDING":
+                if request_id is None:
+                    continue
+                if request_id is _MALFORMED:
+                    counted += self._seed_one(record)
+                else:
+                    open_pending.setdefault(str(request_id), deque()).append(record)
+                continue
+            if event in COUNTED_EVENTS or (
+                event == "DECISION_DENIED" and record.get("decision") == CAP_REFUSAL
+            ):
+                _settle(open_pending, request_id, record)
+            if event in COUNTED_EVENTS:
+                counted += self._seed_one(record)
+        for queue in open_pending.values():
+            for record in queue:
+                counted += self._seed_one(record)
         return counted
 
     def _seed_one(self, record: Mapping[str, Any]) -> bool:
         """Seed one mutation record's window slot if it is from the last hour."""
         ts = record.get("ts")
         tier = record.get("tier")
-        if not isinstance(ts, str) or not isinstance(tier, int):
+        if not isinstance(ts, str) or not isinstance(tier, int) or isinstance(tier, bool):
             return False
         try:
             when = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        except ValueError:
+            age = self._wall() - when.astimezone(UTC).timestamp()
+        except (ValueError, OverflowError, OSError):  # unparseable or out-of-range time
             return False
-        age = self._wall() - when.astimezone(UTC).timestamp()
         if age < 0 or age > WINDOW_SECONDS:
             return False
         window = self._window_for(Tier(tier)) if 0 <= tier <= 5 else None

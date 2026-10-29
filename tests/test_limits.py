@@ -5,6 +5,11 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
+
+import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from qradar_soar_mcp.config import Settings
 from qradar_soar_mcp.security.limits import BREAKER_THRESHOLD, Limits, SlidingWindow, iter_jsonl
@@ -141,33 +146,198 @@ def test_seed_returns_count_and_iter_jsonl_missing(tmp_path: Path):
     assert list(iter_jsonl(tmp_path / "missing.jsonl")) == []
 
 
-def test_a_pending_mutation_with_no_terminal_record_still_counts(tmp_path: Path):
-    """The terminal record is best-effort (registry ``_finish``): a write SOAR may have
-    applied leaves only MUTATION_PENDING. It must still use its slot after a restart,
-    and every other shape of a request must count exactly once or not at all."""
-    now = datetime.now(UTC)
+# --------------------------------------------- replay of PENDING / terminal pairs
+# What the registry writes for one Tier-2 call (tools/registry.py steps 9-11): PENDING,
+# then COMMITTED or FAILED, or a cap refusal when the hourly window is full.
+NOW = datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
+RID_A, RID_B = "a" * 32, "b" * 32  # the uuid4().hex shape audit.new_request_id writes
 
-    def rec(event: str, request_id: str | None, age: float = 30) -> dict[str, object]:
-        out: dict[str, object] = json.loads(_record(event, 3, age, now))
-        if request_id is not None:
-            out["request_id"] = request_id
-        return out
 
-    lim = Limits(_settings(tmp_path, SOAR_MAX_TIER3_PER_HOUR="10"), wall=lambda: now.timestamp())
-    counted = lim.seed_from_records(
-        [
-            rec("MUTATION_PENDING", "a"),  # completed normally: counted once, by COMMITTED
-            rec("MUTATION_COMMITTED", "a"),
-            rec("MUTATION_PENDING", "b"),  # failed in SOAR: counted once, by FAILED
-            rec("MUTATION_FAILED", "b"),
-            rec("MUTATION_PENDING", "c"),  # refused by the hourly cap after PENDING: never ran
-            rec("DECISION_DENIED", "c"),
-            rec("MUTATION_PENDING", "d"),  # terminal record lost: counted from PENDING
-            rec("MUTATION_PENDING", "e", age=4000),  # lost too, but outside the window
-            rec("MUTATION_COMMITTED", None),  # an older log without request ids still counts
-        ]
+def rec(event: str, request_id: Any = RID_A, *, age: float = 30, **extra: Any) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "event": event,
+        "tool": "soar_update_incident",
+        "tier": 2,
+        "ts": (NOW - timedelta(seconds=age)).isoformat().replace("+00:00", "Z"),
+    }
+    if request_id is not None:
+        out["request_id"] = request_id
+    if event == "DECISION_DENIED":
+        out["decision"] = "DENY_RATE_LIMIT"
+    out.update(extra)
+    return out
+
+
+def _replay(tmp_path: Path, records: list[dict[str, Any]]) -> tuple[int, Limits]:
+    lim = Limits(_settings(tmp_path, SOAR_MAX_TIER2_PER_HOUR="10"), wall=NOW.timestamp)
+    return lim.seed_from_records(records), lim
+
+
+@pytest.mark.parametrize(
+    ("records", "expected"),
+    [
+        pytest.param([rec("MUTATION_PENDING"), rec("MUTATION_COMMITTED")], 1, id="committed"),
+        pytest.param([rec("MUTATION_PENDING"), rec("MUTATION_FAILED")], 1, id="failed"),
+        pytest.param([rec("MUTATION_PENDING")], 1, id="terminal-record-lost"),
+        pytest.param([rec("MUTATION_PENDING"), rec("DECISION_DENIED")], 0, id="cap-refused"),
+        # Older logs: a terminal record without an id still counts; a PENDING without
+        # one is skipped, since its terminal record (if any) already counts.
+        pytest.param([rec("MUTATION_COMMITTED", None)], 1, id="legacy-terminal"),
+        pytest.param(
+            [rec("MUTATION_PENDING", None), rec("MUTATION_COMMITTED", None)], 1, id="legacy-pair"
+        ),
+        # Outside the hour: nothing counts, open or settled.
+        pytest.param([rec("MUTATION_PENDING", age=3601)], 0, id="expired-pending"),
+        pytest.param(
+            [rec("MUTATION_PENDING", age=4000), rec("MUTATION_COMMITTED", age=3990)],
+            0,
+            id="expired-pair",
+        ),
+    ],
+)
+def test_each_request_counts_exactly_once_or_not_at_all(
+    tmp_path: Path, records: list[dict[str, Any]], expected: int
+):
+    counted, lim = _replay(tmp_path, records)
+    assert counted == expected and lim.tier2.remaining() == 10 - expected
+
+
+@pytest.mark.parametrize(
+    "bad_id",
+    [["x"], {"id": RID_A}, 42, True, "", "A" * 32, RID_A + "0", " " + RID_A[1:]],
+    ids=["list", "dict", "int", "bool", "empty", "upper", "long", "space"],
+)
+def test_a_malformed_request_id_never_raises_and_never_frees_a_slot(tmp_path: Path, bad_id: Any):
+    """An id that cannot be a real one: a PENDING carrying it counts (it can never be
+    settled), and a terminal record carrying it settles nothing but itself counts."""
+    assert _replay(tmp_path, [rec("MUTATION_PENDING", bad_id)])[0] == 1
+    assert _replay(tmp_path, [rec("MUTATION_PENDING"), rec("DECISION_DENIED", bad_id)])[0] == 1
+    assert _replay(tmp_path, [rec("MUTATION_PENDING"), rec("MUTATION_COMMITTED", bad_id)])[0] == 2
+    assert _replay(tmp_path, [rec("DECISION_DENIED", bad_id)])[0] == 0
+
+
+@pytest.mark.parametrize(
+    "terminal",
+    [
+        pytest.param(rec("DECISION_DENIED", RID_B), id="other-request"),
+        pytest.param(rec("DECISION_DENIED", decision="DENY_DISABLED"), id="not-a-cap-refusal"),
+        pytest.param(rec("DECISION_DENIED", decision=["DENY_RATE_LIMIT"]), id="garbled-decision"),
+        pytest.param(rec("DECISION_DENIED", tool="soar_add_comment"), id="other-tool"),
+        pytest.param(rec("DECISION_DENIED", tier=3), id="other-tier"),
+    ],
+)
+def test_a_record_for_something_else_cannot_settle_a_pending_write(
+    tmp_path: Path, terminal: dict[str, Any]
+):
+    counted, _ = _replay(tmp_path, [rec("MUTATION_PENDING"), terminal])
+    assert counted == 1
+
+
+def test_order_and_duplicates_cannot_free_a_slot(tmp_path: Path):
+    # A refusal written before the PENDING it names settles nothing.
+    assert _replay(tmp_path, [rec("DECISION_DENIED"), rec("MUTATION_PENDING")])[0] == 1
+    # Two PENDINGs under one id need two settlements; one COMMITTED leaves one open.
+    assert (
+        _replay(
+            tmp_path, [rec("MUTATION_PENDING"), rec("MUTATION_PENDING"), rec("MUTATION_COMMITTED")]
+        )[0]
+        == 2
     )
-    assert counted == 4 and lim.tier3.remaining() == 6
+    # A second refusal cannot settle what is already settled, nor a later PENDING twice.
+    assert (
+        _replay(
+            tmp_path,
+            [
+                rec("MUTATION_PENDING"),
+                rec("DECISION_DENIED"),
+                rec("DECISION_DENIED"),
+                rec("MUTATION_PENDING"),
+            ],
+        )[0]
+        == 1
+    )
+
+
+@pytest.mark.parametrize(
+    "junk",
+    [
+        {"event": ["MUTATION_COMMITTED"], "tier": 2},
+        {"event": {"x": 1}},
+        {"event": None},
+        {"event": "MUTATION_COMMITTED", "tier": True, "ts": NOW.isoformat()},
+        {"event": "MUTATION_COMMITTED", "tier": 2, "ts": "0001-01-01T00:00:00-23:59"},
+        {"event": "MUTATION_COMMITTED", "tier": 2, "ts": "9999-12-31T23:59:59+14:00"},
+        {"event": "MUTATION_PENDING", "request_id": RID_A, "tier": [2], "ts": {}},
+    ],
+)
+def test_garbled_records_are_skipped_without_raising(tmp_path: Path, junk: dict[str, Any]):
+    counted, _ = _replay(tmp_path, [rec("MUTATION_PENDING", RID_B), junk])
+    assert counted == 1  # the valid open PENDING; junk neither raises nor settles it
+
+
+_JSON = st.recursive(
+    st.none() | st.booleans() | st.integers() | st.floats(allow_nan=False) | st.text(max_size=40),
+    lambda inner: (
+        st.lists(inner, max_size=3) | st.dictionaries(st.text(max_size=8), inner, max_size=3)
+    ),
+    max_leaves=6,
+)
+_JUNK = st.fixed_dictionaries(
+    {},
+    optional={
+        "event": st.sampled_from(
+            ["MUTATION_PENDING", "MUTATION_COMMITTED", "MUTATION_FAILED", "DECISION_DENIED"]
+        )
+        | _JSON,
+        "request_id": _JSON,
+        "tool": _JSON,
+        "tier": _JSON,
+        "ts": _JSON,
+        "decision": _JSON,
+    },
+)
+
+
+@settings(max_examples=300, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+@given(junk=st.lists(_JUNK, max_size=8), positions=st.lists(st.integers(0, 4), max_size=8))
+def test_adding_malformed_records_never_lowers_the_count(
+    junk: list[dict[str, Any]], positions: list[int], tmp_path_factory: pytest.TempPathFactory
+):
+    """Restart is fail closed: whatever malformed records a damaged log adds around a
+    valid one, replay never raises and never counts fewer writes than the valid log."""
+    valid = [
+        rec("MUTATION_PENDING", RID_A),
+        rec("MUTATION_COMMITTED", RID_A),
+        rec("MUTATION_PENDING", RID_B),  # lost terminal record
+        rec("MUTATION_COMMITTED", None),  # legacy
+    ]
+    base, _ = _replay(tmp_path_factory.mktemp("base"), list(valid))
+    mixed = list(valid)
+    for record, at in zip(junk, positions + [len(mixed)] * len(junk), strict=False):
+        mixed.insert(min(at, len(mixed)), record)
+    counted, _ = _replay(tmp_path_factory.mktemp("mixed"), mixed)
+    assert base == 3 and counted >= base
+
+
+def test_restart_over_a_damaged_log_keeps_the_cap(tmp_path: Path):
+    """End to end through from_audit_log: garbage lines, unhashable ids and a lost
+    terminal record in the file; the server still starts and the cap still holds."""
+    lines = [
+        json.dumps(rec("MUTATION_PENDING", RID_A)),  # SOAR applied it; COMMITTED lost
+        json.dumps(rec("MUTATION_PENDING", ["x"])),  # unhashable id: counts
+        json.dumps(rec("DECISION_DENIED", {"id": RID_A})),  # cannot settle RID_A
+        json.dumps({"event": ["MUTATION_COMMITTED"]}),
+        "not json",
+        "[1, 2]",
+    ]
+    (tmp_path / "audit.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    lim = Limits.from_audit_log(
+        _settings(tmp_path, SOAR_MAX_TIER2_PER_HOUR="3"), clock=Clock(), wall=NOW.timestamp
+    )
+    assert lim.tier2.remaining() == 1
+    assert lim.acquire(Tier.MODIFICATION) is None
+    denied = lim.acquire(Tier.MODIFICATION)
+    assert denied is not None and denied.code is Code.DENY_RATE_LIMIT
 
 
 # ---------------------------------------------------------- breaker
