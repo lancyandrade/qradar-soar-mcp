@@ -212,6 +212,14 @@ def _redacted(value: Any) -> Any:
     return redact_strings(json.loads(json.dumps(value, default=str, ensure_ascii=False)), redact)
 
 
+def response_chars(value: Any) -> int:
+    """Characters of ``value`` as step 12 returns it: redacted (which can lengthen text),
+    then serialised as JSON with its default ASCII escaping. Escaping never shortens a
+    string, so this is an upper bound on any JSON serialisation of the returned value.
+    For a tool that has to keep its answer under a size budget."""
+    return len(json.dumps(_redacted(value)))
+
+
 def _audit(rt: Runtime, event: str, **fields: Any) -> None:
     """Best-effort audit for every record except MUTATION_PENDING."""
     if rt.audit is None:
