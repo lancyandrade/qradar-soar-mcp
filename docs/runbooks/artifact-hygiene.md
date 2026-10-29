@@ -19,9 +19,12 @@ automatically; the check below only reports.
 
 Packages: the sdist is an explicit allow-list (`only-include`, release-readiness §12.1)
 and the wheel is the package directory only; `tests/test_packaging.py` builds both with
-canary files in place. The one residual path is an **untracked, non-ignored file under
-`src/qradar_soar_mcp/`**, which both archives would take: the check below fails on it,
-and REL-04 (release artefacts built only in CI from a clean checkout) closes it.
+canary files in place. The one residual path is an **untracked file under
+`src/qradar_soar_mcp/` that no tracked `.gitignore` ignores**, which both archives
+would take. Hatch reads `.gitignore` only, so a file hidden by `.git/info/exclude` or a
+global excludes file is still packed (release-readiness H-5). The check below fails on
+such a file whatever git's other exclude sources say, and REL-04 (release artefacts
+built only in CI from a clean checkout) closes the path.
 
 ## 2. The check
 
@@ -29,10 +32,11 @@ and REL-04 (release artefacts built only in CI from a clean checkout) closes it.
 uv run python scripts/check_artifact_hygiene.py
 ```
 
-Read-only. It fails (exit 1) if a sample of every path above is not ignored by the
-**tracked** `.gitignore` alone (a per-machine `.git/info/exclude` or a global ignore
-file does not count: the next clone would not have it), if a tracked file matches a
-sensitive pattern, or if an untracked non-ignored file sits in the package directory.
+Read-only. It fails (exit 1) if a sample of every path above is not ignored by a
+`.gitignore` **that git tracks** (a per-machine `.git/info/exclude`, a global ignore
+file or an untracked `.gitignore` does not count: the next clone would not have it), if
+a tracked file matches a sensitive pattern, or if an untracked file in the package
+directory is not ignored by a tracked `.gitignore`.
 It then lists, by name, size and age only, the local artefacts this runbook asks a
 human to review, and every git worktree. It never opens, prints, moves or deletes a
 file. `tests/test_artifact_hygiene.py` runs it in CI and proves those properties.
@@ -50,10 +54,9 @@ file. `tests/test_artifact_hygiene.py` runs it in CI and proves those properties
 | **Caches and build outputs** | any time | may be deleted freely; they are regenerated |
 | **`.env`, keys, `.local/` certificates** | while in use | if one was ever exposed, rotate it first ([key-rotation.md](key-rotation.md)), then delete the copy |
 
-## 4. State on 2026-10-29 (this machine, names only)
+## 4. Reviewing a working copy
 
-Reported by the check, not acted on: 11 `.playwright-mcp/` files (6 days old), an empty
-root `audit.jsonl`, one `.local/` certificate file, `.coverage`, and two worktrees: the
-main checkout and `.claude/worktrees/hopeful-kepler-fa0a80` on `fix/msgpack-advisory`,
-which is merged into `main` and clean. **Nothing was deleted.** Whether to remove that
-worktree and the browser files is the owner's call under §3.
+Run the check without `--quiet` to see what is on your machine now: it lists the
+artefacts of §3 by name, size and age, and every worktree with its branch. Decide each
+one under §3 yourself; the check acts on nothing. The state of any one machine is not
+recorded in this repository.

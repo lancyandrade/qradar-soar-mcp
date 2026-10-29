@@ -12,7 +12,7 @@ it matters:
 
 | Gate item (`07 §7.5`) | Tier | Where it runs (`07 §2`, §7.1–7.2) | Exact requirement |
 |---|---|---|---|
-| All T1–T3 green in CI | T1 unit, T2 `contract`, T3 `golden` | CI, offline | met today (GitHub CI on every push and PR) |
+| All T1–T3 green in CI | T1 unit, T2 `contract`, T3 `golden` | CI, offline | T1 and T2 met today (GitHub CI on every push and PR). **T3: no test carries the `golden` marker** (there are snapshot tests only; the golden corpus is `P3-10`, Phase 3), so T3 is green only vacuously; whether that satisfies the gate is open question D21 |
 | T4 green against the lab | `lab` | real SOAR, **read-only key**, org `201` ("existing lab data — read-only tests only", never reset) | nightly / pre-release |
 | T5 green in org 301 | `lab_write` | real SOAR, **disposable org** `301` (`MCP-TEST`), seeded and torn down per run (§7.3); snapshot the VM before every run (§7.1) | pre-release, manual trigger |
 | T6 green against the mock AppHost | `lab_destructive` | real SOAR + **mock AppHost** (`resilient-circuits` app whose `fn_edr_isolate_endpoint`, `fn_firewall_block_ip`, `fn_disable_account` only log); the real AppHost is **never** targeted (§7.1) | pre-release, manual, **never in CI** |
@@ -46,7 +46,17 @@ configuration runs green offline on a fresh clone. The scaffolding keeps that.
 5. every Tier ≥ 1 tool is denied and **no request at all** leaves while denying (the live
    counterpart of `tests/test_chokepoint.py`);
 6. no response contains the API secret;
-7. at teardown: the wire guard blocked nothing, and the audit chain of the run verifies.
+7. at each test's teardown: the wire guard blocked nothing, and the audit log verifies.
+   All T4 tests of one pytest run share **one** audit log (a session-scoped state
+   directory), so the chain verified at the end covers the whole run, as `07 §7.5`
+   asks; it is copied once, at the end of the run, to `SOAR_TEST_EVIDENCE_DIR`.
+
+The read-only key must be allowed to read everything the read tools touch: incidents
+and their tasks, artifacts, notes and attachment metadata, users, field definitions,
+and the configuration the catalog loads (functions, scripts, rules, workflows,
+playbooks, message destinations, phases, incident types, data tables). Earlier
+research saw `403` for workflows and playbooks with a narrower key (open questions
+D11, D12); a `403` in T4 fails the test rather than being skipped.
 
 The wire guard (`tests/lab/guard.py`, `ReadOnlyTransport`) sits under the SOAR client.
 It sends only `GET`/`HEAD` under `/rest/` on the one lab host and `POST` to the two
@@ -138,8 +148,8 @@ no `SOAR_*` variable of the server set.
 For each of T4, T5 and T6: the exact command, commit, appliance version, the pytest
 summary line (with **zero** skipped tests for the tier under test), and the
 `qradar-soar-audit verify` line over the run's audit log. pytest rotates its temporary
-directories, so set `SOAR_TEST_EVIDENCE_DIR`: each lab test's audit log is copied there
-with its SHA-256 (never overwritten) and kept under the retention rules of
+directories, so set `SOAR_TEST_EVIDENCE_DIR`: the run's single audit log is copied there
+at the end of the run with its SHA-256 (never overwritten) and kept under the retention rules of
 [`runbooks/artifact-hygiene.md`](runbooks/artifact-hygiene.md). Recorded in
 `docs/release-readiness.md`, sanitised (no host names, ids beyond org numbers, or
 incident content). Only then may the release documents say the lab gate passed.

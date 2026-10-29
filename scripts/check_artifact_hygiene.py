@@ -11,12 +11,13 @@ Run from the repository root:
 
 Hard failures (exit 1):
 
-1. a sensitive path that the tracked ``.gitignore`` does not ignore (a per-machine
-   ``.git/info/exclude`` or a global ignore file does not count: another clone would
-   not have it);
+1. a sensitive path that no tracked ``.gitignore`` ignores (a per-machine
+   ``.git/info/exclude``, a global ignore file or an untracked ``.gitignore`` does not
+   count: another clone would not have it);
 2. a tracked file that matches a sensitive pattern;
-3. an untracked, non-ignored file under ``src/qradar_soar_mcp/``: the sdist and the
-   wheel take every non-ignored file there (release-readiness §12.1).
+3. an untracked file under ``src/qradar_soar_mcp/`` that no tracked ``.gitignore``
+   ignores: the sdist and the wheel take it (Hatch reads ``.gitignore`` only;
+   release-readiness §5 H-5, §12.1).
 
 The report (never a failure) lists local artefacts that the retention rules of
 ``docs/runbooks/artifact-hygiene.md`` ask a human to review, and every git worktree,
@@ -125,12 +126,16 @@ def _git(
 def ignored_by_tracked_gitignore(paths: Iterable[str], root: Path) -> dict[str, bool]:
     """For each path: does a tracked ``.gitignore`` rule ignore it?
 
-    ``git check-ignore -v -n -z --no-index`` names the matching source; a match from
-    ``.git/info/exclude`` or the global excludes file is reported as *not* ignored, and
-    so is a negation (``!``) rule. NUL-separated bytes, so no platform newline or
-    quoting changes a path.
+    ``git check-ignore -v -n -z --no-index`` names the deciding rule's source. The path
+    counts as ignored only if that source is a ``.gitignore`` **tracked by git**: a
+    match from ``.git/info/exclude``, the global excludes file or an untracked
+    ``.gitignore`` (which another clone would not have) is reported as *not* ignored,
+    and so is a negation (``!``) rule. This errs towards a failure: if an untracked
+    ``.gitignore`` decides, a tracked rule that would also match is not consulted.
+    NUL-separated bytes, so no platform newline or quoting changes a path.
     """
     items = list(paths)
+    tracked = set(filter(None, _git(["ls-files", "-z"], root).stdout.split("\0")))
     proc = subprocess.run(
         ["git", "check-ignore", "-v", "-n", "-z", "--no-index", "--stdin"],  # noqa: S607
         cwd=root,
@@ -143,7 +148,8 @@ def ignored_by_tracked_gitignore(paths: Iterable[str], root: Path) -> dict[str, 
     for i in range(0, len(fields) - 3, 4):
         source, _line, pattern, path = fields[i : i + 4]
         if path in result and source and pattern and not pattern.startswith("!"):
-            result[path] = Path(source).name == ".gitignore" and not Path(source).is_absolute()
+            rel = "/".join(source.split("\\")).removeprefix("./")
+            result[path] = Path(rel).name == ".gitignore" and rel in tracked
     return result
 
 
@@ -174,10 +180,19 @@ def check_tracked_files(root: Path) -> list[Finding]:
 
 
 def check_package_tree(root: Path) -> list[Finding]:
-    proc = _git(["ls-files", "--others", "--exclude-standard", "-z", "--", PACKAGE], root)
+    """Every untracked file under the package that no *tracked* ``.gitignore`` ignores.
+
+    Hatch honours ``.gitignore`` only (release-readiness H-5), so git's standard
+    exclusions (``.git/info/exclude``, the global excludes file) must not hide a file
+    here: list every untracked file, then keep those the tracked rules do not ignore.
+    """
+    proc = _git(["ls-files", "--others", "-z", "--", PACKAGE], root)
+    untracked = list(filter(None, proc.stdout.split("\0")))
+    ignored = ignored_by_tracked_gitignore(untracked, root) if untracked else {}
     return [
         Finding("untracked-in-package", p, "would be packed into the sdist and wheel")
-        for p in filter(None, proc.stdout.split("\0"))
+        for p in untracked
+        if not ignored.get(p)
     ]
 
 

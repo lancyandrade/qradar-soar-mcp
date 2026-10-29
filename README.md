@@ -821,9 +821,10 @@ Two kinds of evidence stand behind the marks, and they are not the same thing:
   [`scripts/probe/`](scripts/probe/README.md), each run approved by the owner. Only one
   kind of write was sent: four task-status `PUT`s on a disposable task.
   `docs/soar-api-verified.md` records the evidence, with sanitised response shapes in
-  `tests/fixtures/soar/verified/`. These were one-off runs, not a test suite: the
-  `lab` test markers are registered, but no lab test exists yet, and nothing re-checks
-  a newer appliance automatically.
+  `tests/fixtures/soar/verified/`. These were one-off runs, not a test suite. An
+  opt-in T4 read-only lab suite is scaffolded under `tests/lab/` but has **never run**;
+  no T5 or T6 test exists, and nothing re-checks a newer appliance automatically
+  ([lab-validation plan](docs/lab-validation-plan.md)).
 
 ---
 

@@ -1533,19 +1533,22 @@ where they turn a switch off.
 ## 32. REL-05 — owner release decisions for `v0.2.0` (2026-10-29)
 
 Decided by the owner on **2026-10-29**, after the `REL-07` release verification found
-every technical gate green and two owner decisions missing. Recorded as open-question
-entries D14 – D19 ([`open-questions.md`](../open-questions.md) C). Documentation only:
-no tool, REST call, permission, approval rule, default or package content changed by
-this section.
+every technical gate green and two owner decisions missing. The owner gave **six**
+decisions; the table splits decision 2 into two entries (D15, D16) because they settle
+two separate open items, and decision 6 is the `P1-08` amendment of §32.1, which needs no
+open-question entry. Open-question entries: D14 – D19
+([`open-questions.md`](../open-questions.md) C). Documentation only: no tool, REST call,
+permission, approval rule, default or package content changed by this section.
 
-| # | Decision | Scope |
-|---|---|---|
-| D14 | The `07 §7.5` lab gate is **not waived**. T4 (lab read-only), T5 (org 301, mutating) and T6 (mock AppHost, destructive) must each run green, and `qradar-soar-audit verify` must be clean over the run, before `v0.2.0` is published. | `v0.2.0` and every later release. `v0.2.0` stays **NO-GO** until that evidence exists |
-| D15 | The `P1-15` attachment hash and opt-in text extraction deferral (§9) is **accepted** for the `v0.2.0` alpha. | `v0.2.0` alpha only; the release documents must say it is not implemented |
-| D16 | The `D4` limitation is **accepted** for the `v0.2.0` alpha: `soar_invoke_action` refuses every call (`DENY_UNSUPPORTED`, §21), so the approval broker (`P1-10`) is implemented and tested offline but reachable by no tool. | `v0.2.0` alpha only; the release documents must say both |
-| D17 | `main` branch protection (`REL-03`) is approved **in principle**; the configuration is prepared for review and applied only by the owner. | repository settings; see [`docs/runbooks/branch-protection.md`](../runbooks/branch-protection.md) |
-| D18 | Release scope: a **source-only GitHub pre-release** (tag + GitHub's own source archives; no wheel, sdist or PyPI upload), and only after every mandatory gate has passed. | `v0.2.0` |
-| D19 | `SEC-14`: sensitive development artefacts are excluded from git and packages, audit evidence is retained, and stale artefacts are cleaned only by a human, never automatically. | repository hygiene; see [`docs/runbooks/artifact-hygiene.md`](../runbooks/artifact-hygiene.md) |
+| Owner decision | Entry | Decision | Scope |
+|---|---|---|---|
+| 1 | D14 | The `07 §7.5` lab gate is **not waived**. T4 (lab read-only), T5 (org 301, mutating) and T6 (mock AppHost, destructive) must each run green, and `qradar-soar-audit verify` must be clean over the run, before `v0.2.0` is published. | `v0.2.0` and every later release. `v0.2.0` stays **NO-GO** until that evidence exists |
+| 2 | D15 | The `P1-15` attachment hash and opt-in text extraction deferral (§9) is **accepted** for the `v0.2.0` alpha. | `v0.2.0` alpha only; the release documents must say it is not implemented |
+| 2 | D16 | The `D4` limitation is **accepted** for the `v0.2.0` alpha: `soar_invoke_action` refuses every call (`DENY_UNSUPPORTED`, §21), so the approval broker (`P1-10`) is implemented and tested offline but reachable by no tool. | `v0.2.0` alpha only; the release documents must say both |
+| 3 | D17 | `main` branch protection (`REL-03`) is approved **in principle**; the configuration is prepared for review and applied only by the owner. | repository settings; see [`docs/runbooks/branch-protection.md`](../runbooks/branch-protection.md) |
+| 4 | D18 | Release scope: a **source-only GitHub pre-release** (tag + GitHub's own source archives; no wheel, sdist or PyPI upload), and only after every mandatory gate has passed. | `v0.2.0` |
+| 5 | D19 | `SEC-14`: sensitive development artefacts are excluded from git and packages, audit evidence is retained, and stale artefacts are cleaned only by a human, never automatically. | repository hygiene; see [`docs/runbooks/artifact-hygiene.md`](../runbooks/artifact-hygiene.md) |
+| 6 | §32.1 | The `P1-08` hourly-cap audit behaviour (`MUTATION_PENDING` + `DECISION_DENIED`) is intentional and is recorded as an acceptance-criteria amendment. | `06 P1-08` AC; pinned by a test |
 
 Consequences:
 
@@ -1574,9 +1577,20 @@ fix in the changelog). That needs the `PENDING` record to exist before the slot 
 taken. The `DENY_RATE_LIMIT` record that follows settles that `PENDING`, so a refused
 write never consumes budget on replay (`Limits.from_audit_log`).
 
-Amended AC: every mutation produces exactly two records (`MUTATION_PENDING` +
-`MUTATION_COMMITTED`/`MUTATION_FAILED`); every denial produces exactly one
-`DECISION_DENIED` record, **except** an hourly-cap denial, which produces
-`MUTATION_PENDING` + `DECISION_DENIED` (`DENY_RATE_LIMIT`). No other denial is written
-after `MUTATION_PENDING`. Pinned by
-`tests/test_registry.py::test_hourly_cap_denial_writes_pending_then_one_denial`.
+Amended AC: every mutation produces exactly two mutation records (`MUTATION_PENDING` +
+`MUTATION_COMMITTED`/`MUTATION_FAILED`; approval events and a `BREAKER_TRIPPED` record
+are written in addition). Every denial produces exactly one `DECISION_DENIED` record,
+with two exceptions:
+
+- an **hourly-cap denial** produces `MUTATION_PENDING` + `DECISION_DENIED`
+  (`DENY_RATE_LIMIT`). No other denial is written after `MUTATION_PENDING`;
+- a denial **because the audit log cannot be written** (`DENY_AUDIT`: no audit log is
+  open, or the `MUTATION_PENDING` write failed) produces no record, as does any denial
+  whose best-effort `DECISION_DENIED` write fails (logged instead). This is the
+  fail-closed case of `06 P1-08` itself: the mutation is refused because nothing can be
+  recorded.
+
+The hourly-cap case is pinned by
+`tests/test_registry.py::test_hourly_cap_denial_writes_pending_then_one_denial`; the
+`DENY_AUDIT` case by `test_audit_write_failure_fails_closed` and
+`tests/test_registry_enforcement.py` (unwritable and missing audit log).

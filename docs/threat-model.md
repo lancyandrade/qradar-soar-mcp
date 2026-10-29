@@ -150,7 +150,7 @@ Be honest with yourself about these before enabling anything above Tier 1.
 | Attachment contents and text extraction | deferred; metadata only |
 | Catalog from the configuration export | `SOAR_CATALOG_SOURCE=export` is selectable and always fails (the export answered 403) |
 | Audit of successful reads | not recorded |
-| Lab test suite | the `lab` test markers exist, no lab test does; live evidence comes from one-off research runs (`soar-api-verified.md`) |
+| Lab test suite | an opt-in T4 read-only suite is scaffolded (`tests/lab/`, guarded, read-only on the wire) but has never run; no T5/T6 test or mock AppHost exists; live evidence comes from one-off research runs (`soar-api-verified.md`); see [`lab-validation-plan.md`](lab-validation-plan.md) |
 
 ## 7. Residual risks accepted in 0.2.0
 

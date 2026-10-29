@@ -307,3 +307,29 @@ def test_lab_audit_evidence_is_kept_without_overwriting(tmp_path: Path, monkeypa
     assert first.read_bytes() == second.read_bytes() == audit.read_bytes()
     assert first.with_suffix(".sha256").read_text(encoding="utf-8").split()[1] == first.name
     assert audit.exists()  # the original is copied, never moved
+
+
+async def test_runtimes_sharing_a_state_dir_write_one_verifiable_chain(tmp_path: Path):
+    """Review m6: T4 uses one state directory per run, so successive runtimes append to
+    one audit chain that verifies end to end. Denials only: nothing reaches a network."""
+    import json
+
+    from qradar_soar_mcp.security.audit import verify
+    from qradar_soar_mcp.tools import TOOL_REGISTRY, Runtime, run_pipeline
+
+    target = resolve(T4, LabTier.READ_ONLY)
+    state = tmp_path / "state"
+    for _ in range(2):
+        rt = Runtime.build(target.runtime_env(state), transport="stdio")
+        assert rt.usable
+        out = await run_pipeline(
+            TOOL_REGISTRY["soar_add_comment"], rt, {"incident_id": 1, "text": "x"}
+        )
+        assert out["error"]["code"] == "DENY_DISABLED"
+        await rt.aclose()
+    audit = state / "audit.jsonl"
+    records = [json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines() if line]
+    assert [r["seq"] for r in records] == [1, 2]
+    assert records[1]["prev_hash"] == records[0]["hash"]
+    result = verify(audit)
+    assert result.ok and result.records == 2

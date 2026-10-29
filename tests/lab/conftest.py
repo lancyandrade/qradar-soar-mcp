@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
 import httpx
@@ -69,31 +69,47 @@ def lab_target(request: pytest.FixtureRequest) -> LabTarget:
         pytest.fail(f"lab guard refused: {exc}", pytrace=False)
 
 
+@pytest.fixture(scope="session")
+def t4_state_dir(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
+    """One state directory, and so **one** audit log, for every T4 test of the run.
+
+    The audit chain continues across runtimes (each test reopens the same log), so the
+    chain verified at the end covers the whole run (07 §7.5). At session end the log is
+    verified once more and copied to ``SOAR_TEST_EVIDENCE_DIR``.
+    """
+    state = tmp_path_factory.mktemp("t4-state")
+    yield state
+    audit = state / "audit.jsonl"
+    keep_evidence(audit, request_nodeid="t4-run")
+
+
 @pytest.fixture
 async def t4_runtime(
-    lab_target: LabTarget, tmp_path: Path
+    lab_target: LabTarget, t4_state_dir: Path
 ) -> AsyncIterator[tuple[Runtime, ReadOnlyTransport]]:
     """A server runtime for T4: default (deny-all) configuration, TLS verified, every
-    request through :class:`ReadOnlyTransport`, audit required under ``tmp_path``.
+    request through :class:`ReadOnlyTransport`, audit required in the run's shared
+    state directory.
 
-    Teardown fails the test if the guard blocked anything or the audit chain of the
-    run does not verify (07 §7.5: ``qradar-soar-audit verify`` clean over the run).
+    Teardown fails the test if the guard blocked anything or the run's audit chain, as
+    far as it goes, does not verify (07 §7.5: ``qradar-soar-audit verify`` clean over
+    the run).
     """
     assert lab_target.tier is LabTier.READ_ONLY
-    state = tmp_path / "state"
-    env = lab_target.runtime_env(state)
+    env = lab_target.runtime_env(t4_state_dir)
     settings = Settings.load(env)
     inner = httpx.AsyncHTTPTransport(verify=build_trust(settings).httpx_verify)
     guard = ReadOnlyTransport(inner, host=lab_target.host, org_id=lab_target.org_id)
     rt = Runtime.build(env, transport="stdio", http_transport=guard)
-    assert rt.usable, "the lab runtime refused to start (see the log)"
+    if not rt.usable:
+        await guard.aclose()
+        pytest.fail("the lab runtime refused to start (see the log)", pytrace=False)
     try:
         yield rt, guard
     finally:
         await rt.aclose()
-    audit = state / "audit.jsonl"
-    keep_evidence(audit, request_nodeid=os.environ.get("PYTEST_CURRENT_TEST", "t4"))
     assert guard.blocked == [], f"read-only guard blocked {guard.blocked}"
+    audit = t4_state_dir / "audit.jsonl"
     if audit.exists():
         result = verify(audit)
         assert result.ok, f"audit chain broken at seq {result.first_broken_seq}: {result.reason}"

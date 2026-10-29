@@ -520,7 +520,7 @@ ruleset).
 
 ### 13.2 Owner decisions (REL-05)
 
-Recorded in 08 §32 and `open-questions.md` D14 – D20:
+Recorded in 08 §32 and `open-questions.md` D14 – D21:
 
 | Decision | Outcome |
 |---|---|
@@ -532,12 +532,13 @@ Recorded in 08 §32 and `open-questions.md` D14 – D20:
 | SEC-14 artefact hygiene | Exclude, retain audit evidence, human-only cleanup (D19): [`runbooks/artifact-hygiene.md`](runbooks/artifact-hygiene.md). |
 | P1-08 hourly-cap audit deviation | Recorded as an AC amendment, 08 §32.1, and pinned by a test. |
 | T6 while invocation refuses | **Open** (D20). |
+| T3 (`golden`) has no test | **Open** (D21). |
 
 ### 13.3 Verdict
 
 | Release | Verdict | What is missing |
 |---|---|---|
-| **`v0.2.0`** | **NO-GO** | T4 green against the lab; T5 green in a disposable organisation (org 301); T6 green against a mock AppHost (and D20 decided); `qradar-soar-audit verify` clean over that run; a human read of the `security/` diff (07 §7.5). Recommended before tagging: REL-03 applied. The lab work is planned in [`lab-validation-plan.md`](lab-validation-plan.md) (LAB-01). |
+| **`v0.2.0`** | **NO-GO** | T4 green against the lab; T5 green in a disposable organisation (org 301); T6 green against a mock AppHost (and D20 decided); T3 evidenced or accepted as vacuous (D21); `qradar-soar-audit verify` clean over that run; a human read of the `security/` diff (07 §7.5). Recommended before tagging: REL-03 applied. The lab work is planned in [`lab-validation-plan.md`](lab-validation-plan.md) (LAB-01). |
 | **`v0.3.0`** | **NO-GO** | unchanged (§10) |
 
 No tag, release, version change or repository setting is made by this change.

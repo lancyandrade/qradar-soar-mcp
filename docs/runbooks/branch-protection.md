@@ -43,13 +43,22 @@ the matrix changes, or the proposal drifts from `ci.yml`.
 ## 2. Proposed rulesets
 
 Rulesets rather than classic branch protection: they can pin each check to its source
-app and they are listed by the API. Three JSON bodies, ready for
-`POST /repos/{owner}/{repo}/rulesets`:
+app and they are listed by the API. Three JSON bodies, intended for
+`POST /repos/{owner}/{repo}/rulesets`.
+
+> **Unverified against the API.** No ruleset call was made while preparing these. The
+> rule types and parameters (`allowed_merge_methods`, `do_not_enforce_on_create`,
+> `required_review_thread_resolution`, the tag `update` rule, a string
+> `integration_id`) follow GitHub's ruleset API as the author understands it, but no
+> response from GitHub has confirmed any of them. Treat the first apply as the
+> validation: read the response, then run every **Verify** command in §6 and compare
+> each rule and parameter with the file. If GitHub rejects or silently drops a field,
+> fix the file and this runbook before relying on the protection.
 
 | File | Target | Apply when |
 |---|---|---|
 | [`rulesets/main-phase1.json`](rulesets/main-phase1.json) | `main` (`~DEFAULT_BRANCH`) | now, after review |
-| [`rulesets/main-phase2-merge-gate.json`](rulesets/main-phase2-merge-gate.json) | `main` | **replaces** phase 1 once the review-loop App exists and has published `review-loop/merge-gate` on a PR (review-loop §3.7); fill in the App id first: the placeholder is a string, so the API rejects the file until it is replaced |
+| [`rulesets/main-phase2-merge-gate.json`](rulesets/main-phase2-merge-gate.json) | `main` | **replaces** phase 1 once the review-loop App exists and has published `review-loop/merge-gate` on a PR (review-loop §3.7); fill in the App id first: the placeholder is a string, which the API is expected to reject (unverified), so never apply it unedited |
 | [`rulesets/release-tags.json`](rulesets/release-tags.json) | tags `v*` | before the first release tag; makes a published tag impossible to move or delete |
 
 Phase 1 rules on `main`:
@@ -156,6 +165,10 @@ must show the six required checks; a PR with an unresolved review thread must no
 mergeable.
 
 ### Emergency (owner only; §5)
+
+Unverified: these assume that an update carrying only `enforcement` leaves every rule
+unchanged. Rehearse once on a throw-away ruleset, and after each use confirm with the
+Verify commands that the rules are intact; the Settings → Rules page is the fallback.
 
 ```bash
 gh api -X PUT repos/lancyandrade/qradar-soar-mcp/rulesets/RULESET_ID -f enforcement=disabled

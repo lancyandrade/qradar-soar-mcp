@@ -38,6 +38,7 @@ def _repo(tmp_path: Path, gitignore: str) -> Path:
     (root / "src" / "qradar_soar_mcp").mkdir(parents=True)
     _git(root, "init", "-q")
     (root / ".gitignore").write_text(gitignore, encoding="utf-8")
+    _git(root, "add", ".gitignore")  # only a tracked .gitignore counts
     return root
 
 
@@ -86,6 +87,36 @@ def test_an_untracked_file_in_the_package_fails(tmp_path: Path):
     assert [(f.kind, f.path) for f in found] == [
         ("untracked-in-package", "src/qradar_soar_mcp/notes.txt")
     ]
+
+
+def test_a_package_file_hidden_only_by_a_per_machine_exclude_still_fails(tmp_path: Path):
+    """Review M1: Hatch honours .gitignore only, so .git/info/exclude must not hide a
+    file the sdist would pack (the H-5 failure mode)."""
+    root = _repo(tmp_path, "*.log\n")
+    (root / ".git" / "info" / "exclude").write_text("stray.txt\n", encoding="utf-8")
+    (root / "src" / "qradar_soar_mcp" / "stray.txt").write_text("x", encoding="utf-8")
+    found = [(f.kind, f.path) for f in hygiene.check_package_tree(root)]
+    assert found == [("untracked-in-package", "src/qradar_soar_mcp/stray.txt")]
+
+
+def test_an_untracked_nested_gitignore_does_not_count(tmp_path: Path):
+    """Review m1: a .gitignore git does not track exists on this machine only."""
+    root = _repo(tmp_path, "")
+    (root / ".playwright-mcp").mkdir()
+    (root / ".playwright-mcp" / ".gitignore").write_text("*\n", encoding="utf-8")
+    result = hygiene.ignored_by_tracked_gitignore([".playwright-mcp/page.png"], root)
+    assert result == {".playwright-mcp/page.png": False}
+    _git(root, "add", "-f", ".playwright-mcp/.gitignore")  # once tracked, it counts
+    result = hygiene.ignored_by_tracked_gitignore([".playwright-mcp/page.png"], root)
+    assert result == {".playwright-mcp/page.png": True}
+
+
+def test_an_untracked_root_gitignore_does_not_count(tmp_path: Path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, "init", "-q")
+    (root / ".gitignore").write_text(".env\n", encoding="utf-8")  # never added
+    assert hygiene.ignored_by_tracked_gitignore([".env"], root) == {".env": False}
 
 
 def test_the_report_names_files_and_never_touches_them(tmp_path: Path):
