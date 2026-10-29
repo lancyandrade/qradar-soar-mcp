@@ -149,10 +149,13 @@ Custom fields (`properties.*`) are returned only when a tool is asked for them
 (`custom_fields=[...]`), each trimmed individually. Free text is trimmed with a
 visible `… [truncated N chars]` marker: descriptions and resolution summaries
 at 2,000 characters, note text at 2,000, artifact values at 1,000, custom
-fields at 1,000. `soar_get_incident_full` keeps its whole payload under
+fields at 1,000, attachment names and content types at 300 (the same as other
+names). `soar_get_incident_full` keeps its whole payload under
 **60,000 characters** (roughly 15k tokens): collections are capped (50 tasks,
 100 artifacts, 50 notes, 50 attachments) and halved until the budget fits;
-`omitted` reports what was cut. The field list is pinned by a snapshot test;
+`omitted` reports what was cut. If the incident still does not fit with one row
+per collection (only possible with many `custom_fields`), the call fails with
+`response_too_large` rather than exceed the budget. The field list is pinned by a snapshot test;
 changing it is a reviewed change.
 
 

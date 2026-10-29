@@ -18,14 +18,19 @@ import json
 from collections.abc import Mapping
 from typing import Any, Literal
 
+from qradar_soar_mcp.errors import SoarResponseTooLargeError
 from qradar_soar_mcp.security.tiers import Tier
 from qradar_soar_mcp.tools.projection import (
+    ARTIFACT_VALUE_LIMIT,
+    NAME_LIMIT,
     flatten_comments,
     patch_changes,
     summarise_artifact,
+    summarise_attachment,
     summarise_incident,
     summarise_task,
     task_audit_image,
+    trim,
 )
 from qradar_soar_mcp.tools.registry import ToolResult, soar_tool
 from qradar_soar_mcp.tools.runtime import Runtime
@@ -88,7 +93,9 @@ async def soar_list_comments(rt: Runtime, incident_id: int) -> ToolResult:
 async def soar_list_attachments(rt: Runtime, incident_id: int) -> ToolResult:
     """Attachment metadata (id, name, size, content type, created) on one incident.
     Contents are never fetched in this release."""
-    rows = await rt.require_client().attachments.list(incident_id)
+    rows = [
+        summarise_attachment(a) for a in await rt.require_client().attachments.list(incident_id)
+    ]
     return ToolResult(data={"incident_id": incident_id, "count": len(rows), "attachments": rows})
 
 
@@ -133,7 +140,9 @@ async def soar_get_incident_full(
         "tasks": [summarise_task(t) for t in await client.tasks.list(incident_id)],
         "artifacts": [summarise_artifact(a) for a in await client.artifacts.list(incident_id)],
         "comments": flatten_comments(await client.comments.list(incident_id)),
-        "attachments": await client.attachments.list(incident_id),
+        "attachments": [
+            summarise_attachment(a) for a in await client.attachments.list(incident_id)
+        ],
     }
     caps = dict(FULL_INCIDENT_CAPS)
     data = _assemble_full(incident, custom_fields or [], collections, caps)
@@ -144,6 +153,14 @@ async def soar_get_incident_full(
         caps = {name: max(1, cap // 2) for name, cap in caps.items()}
         data = _assemble_full(incident, custom_fields or [], collections, caps)
         reductions += 1
+    if len(json.dumps(data, default=str)) > FULL_INCIDENT_BUDGET_CHARS:
+        # Every collection is already down to one row, so what is left is the incident
+        # itself with the requested custom fields. Refuse rather than exceed the budget.
+        raise SoarResponseTooLargeError(
+            f"soar_get_incident_full: the incident exceeds the {FULL_INCIDENT_BUDGET_CHARS}-"
+            "character budget even with one row per collection; request fewer custom_fields, "
+            "or use soar_get_incident and the list tools"
+        )
     data["budget"] = {
         "chars": len(json.dumps(data, default=str)),
         "limit_chars": FULL_INCIDENT_BUDGET_CHARS,
@@ -159,7 +176,11 @@ def _artifact_keys(rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str
         if value is None or row.get("type") is None:
             continue
         key = (str(row["type"]).strip().lower(), str(value).strip().lower())
-        keys.setdefault(key, {"type": row["type"], "value": value})
+        # Matching uses the whole value; the output shows it trimmed like any artifact.
+        keys.setdefault(
+            key,
+            {"type": trim(row["type"], NAME_LIMIT), "value": trim(value, ARTIFACT_VALUE_LIMIT)},
+        )
     return keys
 
 

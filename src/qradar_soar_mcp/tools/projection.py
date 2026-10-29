@@ -136,6 +136,18 @@ def summarise_artifact(artifact: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def summarise_attachment(attachment: Mapping[str, Any]) -> dict[str, Any]:
+    """Attachment metadata only. The file name is chosen by whoever supplied the file,
+    possibly an attacker, so it is trimmed like any other name."""
+    return {
+        "id": attachment.get("id"),
+        "name": trim(attachment.get("name"), NAME_LIMIT),
+        "size": attachment.get("size"),
+        "content_type": trim(attachment.get("content_type"), NAME_LIMIT),
+        "created": attachment.get("created"),
+    }
+
+
 TASK_STATUS_LABELS = {"O": "open", "C": "closed"}
 
 

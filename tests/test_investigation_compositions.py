@@ -169,3 +169,94 @@ async def test_find_similar_without_artifacts(rt: Runtime, fake: FakeSoar):
     out = await call(rt, "soar_find_similar_incidents", incident_id=42)
     assert out["data"]["matches"] == [] and "no artifacts" in out["data"]["reason"]
     assert not any(r.path.endswith("/query_paged") for r in fake.requests)
+
+
+# ------------------------------------------------- P1-15 regression (budget, trims)
+
+LONG = "A" * 5_000  # longer than every free-text trim limit
+
+
+async def test_get_incident_full_worst_case_incident_stays_under_budget(
+    rt: Runtime, fake: FakeSoar
+):
+    """Every collection over its cap and every free-text value over its trim limit."""
+    fake.incident.update({"description": LONG, "resolution_summary": LONG, "name": LONG})
+    fake.tasks = {
+        9100 + i: {"id": 9100 + i, "inc_id": 42, "name": LONG, "instructions": LONG, "status": "O"}
+        for i in range(120)
+    }
+    fake.artifacts[42] = [
+        {"id": 8000 + i, "type": "URL", "value": LONG, "description": LONG, "hits": []}
+        for i in range(250)
+    ]
+    fake.comments[42] = [
+        {"id": 7000 + i, "parent_id": None, "text": LONG, "create_date": i, "children": []}
+        for i in range(120)
+    ]
+    fake.attachments[42] = [
+        {"id": 5000 + i, "name": LONG, "size": 50_000_000, "content_type": LONG, "created": i}
+        for i in range(120)
+    ]
+    out = await call(rt, "soar_get_incident_full", incident_id=42)
+    assert out["ok"], out
+    data = out["data"]
+    assert len(json.dumps(data)) <= FULL_INCIDENT_BUDGET_CHARS + 200  # + the budget block
+    assert data["budget"]["chars"] <= FULL_INCIDENT_BUDGET_CHARS
+    assert data["counts"] == {"tasks": 120, "artifacts": 250, "comments": 120, "attachments": 120}
+    for name, rows in (("tasks", 120), ("artifacts", 250), ("comments", 120), ("attachments", 120)):
+        assert data["omitted"][name] == rows - len(data[name])
+    assert not any("/contents" in r.path for r in fake.requests)
+
+
+async def test_attachment_metadata_is_projected_and_trimmed(rt: Runtime, fake: FakeSoar):
+    """Attachment names are attacker-chosen (02 §194); SOAR returns 23 keys (Q7)."""
+    fake.attachments[42] = [
+        {
+            "id": 5001,
+            "name": INJECTION + LONG,
+            "size": 50_000_000,
+            "content_type": "text/plain",
+            "created": 1,
+            "uuid": "u",
+            "creator_id": 3,
+            "inc_id": 42,
+            "task_id": None,
+            "vers": 1,
+            "content": "never returned",
+        }
+    ]
+    listed = (await call(rt, "soar_list_attachments", incident_id=42))["data"]["attachments"]
+    full = (await call(rt, "soar_get_incident_full", incident_id=42))["data"]["attachments"]
+    for rows in (listed, full):
+        (row,) = rows
+        assert list(row) == ["id", "name", "size", "content_type", "created"]
+        assert row["name"].startswith(INJECTION) and row["name"].endswith("chars]")
+        assert len(row["name"]) < 400
+    assert "never returned" not in json.dumps(listed + full)
+    assert not any("/contents" in r.path for r in fake.requests)
+
+
+async def test_get_incident_full_refuses_rather_than_exceed_budget(rt: Runtime, fake: FakeSoar):
+    names = [f"cf_{i}" for i in range(80)]  # 80 custom fields x 1 000 characters each
+    fake.incident["properties"] = {name: INJECTION + LONG for name in names}
+    out = await call(rt, "soar_get_incident_full", incident_id=42, custom_fields=names)
+    assert out["ok"] is False and out["error"]["code"] == "response_too_large"
+    assert "custom_fields" in out["error"]["message"]
+    assert INJECTION not in json.dumps(out)
+    assert len(json.dumps(out)) < 2_000
+    assert fake.mutating_requests == []
+    # The same call with a few custom fields fits.
+    ok = await call(rt, "soar_get_incident_full", incident_id=42, custom_fields=names[:5])
+    assert ok["ok"] and ok["data"]["budget"]["chars"] <= FULL_INCIDENT_BUDGET_CHARS
+
+
+async def test_find_similar_trims_shared_artifact_values(rt: Runtime, fake: FakeSoar):
+    url = "https://phish.example.com/" + LONG
+    fake.artifacts[42] = [{"id": 1, "type": "URL", "value": url, "hits": []}]
+    _add_incident(fake, 43, create_date=1758100000000, artifacts=[("URL", url.upper())])
+    out = await call(rt, "soar_find_similar_incidents", incident_id=42)
+    (match,) = out["data"]["matches"]
+    (shared,) = match["shared_artifacts"]
+    assert match["score"] == 1 and shared["type"] == "URL"
+    assert shared["value"].startswith("https://phish.example.com/")
+    assert shared["value"].endswith("chars]") and len(shared["value"]) < 1_100
