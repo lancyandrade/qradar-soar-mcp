@@ -153,9 +153,12 @@ fields at 1,000, attachment names and content types at 300 (the same as other
 names). `soar_get_incident_full` keeps its whole payload under
 **60,000 characters** (roughly 15k tokens): collections are capped (50 tasks,
 100 artifacts, 50 notes, 50 attachments) and halved until the budget fits;
-`omitted` reports what was cut. If the incident still does not fit with one row
-per collection (only possible with many `custom_fields`), the call fails with
-`response_too_large` rather than exceed the budget. The field list is pinned by a snapshot test;
+`omitted` reports what was cut. The budget applies to the whole `data` object
+the client receives: after redaction, serialised as JSON with ASCII escaping, and
+including the `budget` block itself; `budget.chars` is exactly that size. If the
+incident still does not fit with one row per collection (only possible with many
+`custom_fields`), the call fails with `response_too_large` rather than exceed the
+budget. The field list is pinned by a snapshot test;
 changing it is a reviewed change.
 
 

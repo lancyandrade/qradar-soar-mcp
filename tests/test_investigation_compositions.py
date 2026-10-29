@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from qradar_soar_mcp.tools import TOOL_REGISTRY, Runtime, run_pipeline
+from qradar_soar_mcp.tools import TOOL_REGISTRY, Runtime, investigation, run_pipeline
 from qradar_soar_mcp.tools.investigation import (
     CONTENT_NOTE,
     FULL_INCIDENT_BUDGET_CHARS,
@@ -53,6 +53,14 @@ def _add_incident(
     ]
 
 
+def assert_within_budget(data: dict[str, Any], limit: int = FULL_INCIDENT_BUDGET_CHARS) -> None:
+    """The whole returned object, budget block included, fits; budget.chars is its size."""
+    size = len(json.dumps(data, default=str))
+    assert size <= limit
+    assert data["budget"]["chars"] == size
+    assert data["budget"]["limit_chars"] == limit
+
+
 # ---------------------------------------------------------- incident_full
 
 
@@ -86,7 +94,7 @@ async def test_get_incident_full_respects_the_budget(rt: Runtime, fake: FakeSoar
     ]
     out = await call(rt, "soar_get_incident_full", incident_id=42)
     data = out["data"]
-    assert data["budget"]["chars"] <= FULL_INCIDENT_BUDGET_CHARS
+    assert_within_budget(data)
     assert data["budget"]["reductions"] >= 1
     assert data["counts"]["artifacts"] == 400 and data["counts"]["comments"] == 200
     assert len(data["artifacts"]) < FULL_INCIDENT_CAPS["artifacts"]
@@ -200,8 +208,7 @@ async def test_get_incident_full_worst_case_incident_stays_under_budget(
     out = await call(rt, "soar_get_incident_full", incident_id=42)
     assert out["ok"], out
     data = out["data"]
-    assert len(json.dumps(data)) <= FULL_INCIDENT_BUDGET_CHARS + 200  # + the budget block
-    assert data["budget"]["chars"] <= FULL_INCIDENT_BUDGET_CHARS
+    assert_within_budget(data)
     assert data["counts"] == {"tasks": 120, "artifacts": 250, "comments": 120, "attachments": 120}
     for name, rows in (("tasks", 120), ("artifacts", 250), ("comments", 120), ("attachments", 120)):
         assert data["omitted"][name] == rows - len(data[name])
@@ -260,3 +267,61 @@ async def test_find_similar_trims_shared_artifact_values(rt: Runtime, fake: Fake
     assert match["score"] == 1 and shared["type"] == "URL"
     assert shared["value"].startswith("https://phish.example.com/")
     assert shared["value"].endswith("chars]") and len(shared["value"]) < 1_100
+
+
+def _without_budget_chars(data: dict[str, Any]) -> int:
+    return len(json.dumps({k: v for k, v in data.items() if k != "budget"}, default=str))
+
+
+async def test_budget_block_counts_and_forces_a_further_reduction(
+    rt: Runtime, fake: FakeSoar, monkeypatch: pytest.MonkeyPatch
+):
+    """Fits before the budget block is added, not after: more rows must be cut."""
+    first = (await call(rt, "soar_get_incident_full", incident_id=42))["data"]
+    assert first["budget"]["reductions"] == 0 and first["omitted"] == {}
+    limit = _without_budget_chars(first)  # exactly the size without the budget block
+    assert limit < first["budget"]["chars"]
+    monkeypatch.setattr(investigation, "FULL_INCIDENT_BUDGET_CHARS", limit)
+    out = await call(rt, "soar_get_incident_full", incident_id=42)
+    assert out["ok"], out
+    data = out["data"]
+    assert_within_budget(data, limit)
+    assert data["budget"]["reductions"] >= 1 and data["omitted"]
+    for name, count in data["counts"].items():
+        assert len(data[name]) + data["omitted"].get(name, 0) == count
+
+
+async def test_budget_block_overflow_fails_closed_when_nothing_is_left_to_cut(
+    rt: Runtime, fake: FakeSoar, monkeypatch: pytest.MonkeyPatch
+):
+    """One row per collection, fits only without the budget block: refuse, no content."""
+    fake.tasks = {k: v for k, v in fake.tasks.items() if v.get("inc_id") != 42}
+    fake.tasks[9100] = {"id": 9100, "inc_id": 42, "name": INJECTION, "status": "O"}
+    fake.artifacts[42] = fake.artifacts[42][:1]
+    fake.comments[42] = [
+        {"id": 7001, "parent_id": None, "text": INJECTION, "create_date": 1, "children": []}
+    ]
+    fake.attachments[42] = [{"id": 5001, "name": INJECTION, "size": 1, "content_type": "x"}]
+    first = (await call(rt, "soar_get_incident_full", incident_id=42))["data"]
+    assert all(len(first[n]) == 1 for n in ("tasks", "artifacts", "comments", "attachments"))
+    monkeypatch.setattr(investigation, "FULL_INCIDENT_BUDGET_CHARS", _without_budget_chars(first))
+    out = await call(rt, "soar_get_incident_full", incident_id=42)
+    assert out["ok"] is False and out["error"]["code"] == "response_too_large"
+    text = json.dumps(out)
+    assert INJECTION not in text and "incident" not in out and len(text) < 2_000
+    assert fake.mutating_requests == []
+
+
+async def test_budget_counts_text_as_redacted(fake: FakeSoar, tmp_path: Path):
+    """Step 12 redaction can lengthen text (a short secret becomes [REDACTED]); the
+    budget is measured on what the client receives."""
+    rt = build_runtime(fake, tmp_path)
+    fake.comments[42] = [
+        {"id": 7000 + i, "parent_id": None, "text": "Authorization: x " * 100, "children": []}
+        for i in range(50)
+    ]
+    out = await call(rt, "soar_get_incident_full", incident_id=42)
+    data = out["data"]
+    assert "[REDACTED]" in data["comments"][0]["text"]
+    assert_within_budget(data)
+    await rt.aclose()

@@ -14,7 +14,6 @@ server-side artifact search is invented (05 §1.2 names none).
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from typing import Any, Literal
 
@@ -32,7 +31,7 @@ from qradar_soar_mcp.tools.projection import (
     task_audit_image,
     trim,
 )
-from qradar_soar_mcp.tools.registry import ToolResult, soar_tool
+from qradar_soar_mcp.tools.registry import ToolResult, response_chars, soar_tool
 from qradar_soar_mcp.tools.runtime import Runtime
 
 # soar_get_incident_full budget (documented in the README). Characters of the
@@ -125,6 +124,23 @@ def _assemble_full(
     return data
 
 
+def _with_budget(data: dict[str, Any], reductions: int) -> tuple[dict[str, Any], int]:
+    """``data`` plus its ``budget`` block, and the size of the whole as the client gets it.
+
+    ``budget.chars`` is that size, so it counts the budget block too; that makes it
+    self-referential, and it is set until it stops changing (its digit count settles
+    within a few rounds). The returned size is always measured, never assumed."""
+    budget = {"chars": 0, "limit_chars": FULL_INCIDENT_BUDGET_CHARS, "reductions": reductions}
+    out = {**data, "budget": budget}
+    size = response_chars(out)
+    for _ in range(4):
+        if budget["chars"] == size:
+            break
+        budget["chars"] = size
+        size = response_chars(out)
+    return out, size
+
+
 @soar_tool(name="soar_get_incident_full", tier=Tier.READ)
 async def soar_get_incident_full(
     rt: Runtime, incident_id: int, custom_fields: list[str] | None = None
@@ -144,28 +160,29 @@ async def soar_get_incident_full(
             summarise_attachment(a) for a in await client.attachments.list(incident_id)
         ],
     }
+    # Every candidate is measured whole, budget block included and as step 12 will
+    # return it, so a change in omitted, counts or reductions is always accounted for.
     caps = dict(FULL_INCIDENT_CAPS)
-    data = _assemble_full(incident, custom_fields or [], collections, caps)
     reductions = 0
-    while len(json.dumps(data, default=str)) > FULL_INCIDENT_BUDGET_CHARS and any(
-        caps[name] > 1 for name in caps
-    ):
+    data, size = _with_budget(
+        _assemble_full(incident, custom_fields or [], collections, caps), reductions
+    )
+    while size > FULL_INCIDENT_BUDGET_CHARS and any(caps[name] > 1 for name in caps):
         caps = {name: max(1, cap // 2) for name, cap in caps.items()}
-        data = _assemble_full(incident, custom_fields or [], collections, caps)
         reductions += 1
-    if len(json.dumps(data, default=str)) > FULL_INCIDENT_BUDGET_CHARS:
+        data, size = _with_budget(
+            _assemble_full(incident, custom_fields or [], collections, caps), reductions
+        )
+    if size > FULL_INCIDENT_BUDGET_CHARS or data["budget"]["chars"] != size:
         # Every collection is already down to one row, so what is left is the incident
-        # itself with the requested custom fields. Refuse rather than exceed the budget.
+        # itself with the requested custom fields (or budget.chars did not settle, which
+        # the digit arithmetic rules out). Refuse rather than exceed the budget.
+        # Fixed text: nothing from the incident goes into the message.
         raise SoarResponseTooLargeError(
             f"soar_get_incident_full: the incident exceeds the {FULL_INCIDENT_BUDGET_CHARS}-"
             "character budget even with one row per collection; request fewer custom_fields, "
             "or use soar_get_incident and the list tools"
         )
-    data["budget"] = {
-        "chars": len(json.dumps(data, default=str)),
-        "limit_chars": FULL_INCIDENT_BUDGET_CHARS,
-        "reductions": reductions,
-    }
     return ToolResult(data=data)
 
 
