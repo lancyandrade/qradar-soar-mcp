@@ -8,8 +8,9 @@ safety switches (``SOAR_REQUIRE_*``, ``SOAR_AUDIT_REQUIRED``). Numbers fall
 back to their documented default with a warning. The only inputs that refuse
 to start are the ones where guessing either way would be wrong: a forbidden
 capability set to true, an unusable TLS setting, a base URL that is not
-HTTPS, and the cross-field rules of 02 §2/§4 (actions need a policy file;
-in-band approval for Tier 3 needs lab mode; HTTP transport needs a token) and of
+HTTPS, and the cross-field rules of 02 §2/§4 (actions need a policy file; in-band
+or disabled approval with a Tier-3 or Tier-4 flag needs lab mode; HTTP
+transport needs a token) and of
 the TLS trust model (08 §22): a CA bundle that is not a file, a bundle given
 twice with different values, a bundle together with disabled verification, and
 ``SOAR_VERIFY_SSL=false`` without ``SOAR_LAB_MODE=true``. A confirmation switch
@@ -39,6 +40,8 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 from pydantic_settings.sources.utils import parse_env_vars
+
+from qradar_soar_mcp.security.tiers import CAPABILITY_TIERS, Tier
 
 logger = logging.getLogger(__name__)
 
@@ -481,6 +484,18 @@ class Settings(BaseSettings):
                     "requires SOAR_LAB_MODE=true; out_of_band approval is mandatory for "
                     "Tier 3 outside a lab (02 §4.1)"
                 )
+        # The same rule for the reserved Tier-4 flags (P1-SEC-01, D13; 08 §31.3).
+        tier4 = [
+            name
+            for name in CAPABILITY_FLAGS
+            if CAPABILITY_TIERS[name] is Tier.AUTOMATION and self.capability_enabled(name)
+        ]
+        if tier4 and self.approval_mode != "out_of_band" and not self.lab_mode:
+            raise ValueError(
+                f"SOAR_APPROVAL_MODE={self.approval_mode} with {'=true, '.join(tier4)}=true "
+                "requires SOAR_LAB_MODE=true; out_of_band approval is mandatory for "
+                "Tier 4 outside a lab (02 §4.1)"
+            )
         return self
 
     def _confirmation_rules(self) -> None:

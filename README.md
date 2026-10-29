@@ -491,7 +491,8 @@ instance), and `audit.path` must be that instance's own file.
   (`SOAR_REQUIRE_ACTION_CONFIRMATION`, `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION`) to `false`
   on an instance that can reach a production SOAR. They exist for throwaway labs and
   remove guarantees this README relies on; each of them except lab mode itself refuses
-  to start without `SOAR_LAB_MODE=true` (approval modes only once actions are enabled).
+  to start without `SOAR_LAB_MODE=true` (approval modes only once actions or a Tier-4
+  flag are enabled).
 - **HTTP transport.** stdio is the supported transport. `streamable-http` refuses to
   start without `SOAR_HTTP_AUTH_TOKEN`, refuses to bind every interface without
   `SOAR_HTTP_ACKNOWLEDGE_EXPOSURE=true`, and denies Tier 3 regardless of flags. The
@@ -648,7 +649,7 @@ default) · **safety switch** (protective by default; changing it removes a prot
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
-| `SOAR_APPROVAL_MODE` | `out_of_band` | safety switch | `out_of_band` \| `in_band` \| `disabled`. Unrecognised ⇒ `out_of_band`. With `SOAR_ALLOW_ACTIONS=true`, `in_band` and `disabled` refuse to start unless `SOAR_LAB_MODE=true`. Only Tier ≥3 asks for approval, so without actions the mode has no effect |
+| `SOAR_APPROVAL_MODE` | `out_of_band` | safety switch | `out_of_band` \| `in_band` \| `disabled`. Unrecognised ⇒ `out_of_band`. With `SOAR_ALLOW_ACTIONS=true` or any Tier-4 flag, `in_band` and `disabled` refuse to start unless `SOAR_LAB_MODE=true`. Only Tier ≥3 asks for approval, so without those flags the mode has no effect |
 | `SOAR_REQUIRE_ACTION_CONFIRMATION` | `true` | safety switch | Tier-3 calls need approval. Garbage ⇒ `true`. `false` drops the approval for a Tier-3 action whose policy rule says `allow` (a `require_approval` rule still asks). `false` refuses to start unless `SOAR_LAB_MODE=true`, whether or not actions are enabled, and is warned about when accepted |
 | `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION` | `true` | safety switch | the same for Tier 4, including the lab-mode rule for `false`; reserved, since no Tier-4 tool exists yet |
 | `SOAR_APPROVAL_BROKER_PATH` | `approvals` | operational | the broker directory. Put it where the model and its client cannot write |
@@ -693,7 +694,7 @@ the MCP host.
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
-| `SOAR_LAB_MODE` | `false` | lab only | lab acknowledgement. On its own it changes nothing. It is what lets `SOAR_VERIFY_SSL=false` be accepted, `in_band` / `disabled` approval when actions are enabled, and `SOAR_REQUIRE_ACTION_CONFIRMATION=false` / `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION=false`. Never in production |
+| `SOAR_LAB_MODE` | `false` | lab only | lab acknowledgement. On its own it changes nothing. It is what lets `SOAR_VERIFY_SSL=false` be accepted, `in_band` / `disabled` approval when actions or a Tier-4 flag are enabled, and `SOAR_REQUIRE_ACTION_CONFIRMATION=false` / `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION=false`. Never in production |
 | `SOAR_ALLOW_WRITES` | — | deprecated | maps to the five Tier 1–2 flags only, with a warning, and never to `SOAR_ALLOW_ACTIONS`. Removed in the next minor version |
 
 ### Command line

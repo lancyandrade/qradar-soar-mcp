@@ -93,7 +93,7 @@ working days.
   (`SOAR_REQUIRE_ACTION_CONFIRMATION`, `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION`) to
   `false`; those settings exist for labs and are documented as unsafe. The server
   starting with any of them *without* `SOAR_LAB_MODE=true` (approval modes: with
-  actions enabled) is a bug and in scope.
+  actions or a Tier-4 flag enabled) is a bug and in scope.
 - Operator-authored `action_policy.yaml` content. The mechanism enforcing the
   file is in scope; the correctness of your classifications is not.
 - What the SOAR API key's own permission set allows. The recommended two-instance

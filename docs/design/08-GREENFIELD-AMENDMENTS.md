@@ -1504,12 +1504,16 @@ default of every flag was already `false` and is unchanged. The baseline files (
 `tests/test_config.py` now expects the baseline key set plus `SOAR_ALLOW_PLAYBOOK_DEPLOY`
 (with §5 and §22) and no `SOAR_ALLOW_*=true` line.
 
-### 31.3 Observed, not changed
+### 31.3 Approval mode with Tier-4 flags
 
-`SOAR_APPROVAL_MODE=in_band|disabled` is lab-gated only when `SOAR_ALLOW_ACTIONS=true`
-(`06 P1-02`, `02 §4.1`). With a Tier-4 flag and `disabled`, outside lab mode, a Tier-4
-call would need no approval. No Tier-4 tool exists, so it is unreachable; extending the
-gate is left to the owner (open question D13) rather than folded into this ticket.
+`06 P1-02` and `02 §4.1` lab-gate `SOAR_APPROVAL_MODE=in_band|disabled` when
+`SOAR_ALLOW_ACTIONS=true`. A Tier-4 flag with `disabled` outside lab mode was accepted,
+so a Tier-4 call would have needed no approval (unreachable: no Tier-4 tool exists).
+The owner decided on 2026-10-29 (open question D13) to extend the gate: `in_band` or
+`disabled` with any Tier-4 flag enabled now refuses to start unless
+`SOAR_LAB_MODE=true`, naming the mode and each enabled Tier-4 flag. The actions rule and
+its message are unchanged; with no Tier ≥3 flag the mode is still accepted, since it
+asks for nothing. This extends `06 P1-02` in the same direction and narrows nothing.
 
 ### 31.4 Tests
 
@@ -1519,7 +1523,8 @@ matching capability, through `Settings.load`, `Runtime.build` and the CLI (exit 
 both off name both; no secret in the message; lab mode loads with one warning and drops
 approval only for an `allow` rule and Tier 4, while `deny`, a missing flag and the HTTP
 transport still deny; unparseable values resolve to `true` and still require approval;
-`.env.example` lists every capability and every Tier-4 flag as `false`; with every
+`in_band` and `disabled` with each Tier-4 flag refuse outside lab mode and load inside
+it, and are still accepted with no Tier ≥3 flag; `.env.example` lists every capability and every Tier-4 flag as `false`; with every
 switch off in lab mode, `soar_invoke_action` is still a `DENY_UNSUPPORTED` denial with
 no SOAR traffic; the mutating-tool set and tool count are pinned and no Tier-4 tool
 exists. `tests/test_config.py` and `tests/test_permissions.py` set `SOAR_LAB_MODE=true`

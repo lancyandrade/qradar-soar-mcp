@@ -8,6 +8,7 @@ was accepted without ``SOAR_LAB_MODE=true``. Now:
 * either switch ``false`` outside lab mode refuses to start, naming the switch;
 * with lab mode it loads, with a warning, and drops approval only where designed;
 * unparseable values still resolve to ``true`` (fail closed) and never refuse;
+* ``SOAR_APPROVAL_MODE=in_band|disabled`` with any Tier-4 flag needs lab mode too (D13);
 * ``.env.example`` shows every capability, all off, including every Tier-4 flag;
 * ``soar_invoke_action`` stays ``DENY_UNSUPPORTED`` and the tool surface is unchanged.
 """
@@ -209,6 +210,46 @@ def test_lab_mode_alone_keeps_both_confirmations(policy_file: str):
     assert s.require_action_confirmation and s.require_playbook_confirmation
     assert _tier3(s).outcome is Outcome.REQUIRE_APPROVAL
     assert _tier4(s).outcome is Outcome.REQUIRE_APPROVAL
+
+
+# ------------------------------------- approval mode with Tier 4 (D13)
+
+TIER4_FLAGS = [f for f in CAPABILITY_FLAGS if CAPABILITY_TIERS[f] is Tier.AUTOMATION]
+
+
+@pytest.mark.parametrize("flag", TIER4_FLAGS)
+@pytest.mark.parametrize("mode", ["in_band", "disabled"])
+def test_weak_approval_mode_with_a_tier4_flag_outside_lab_mode_refuses(flag: str, mode: str):
+    with pytest.raises(ConfigError) as info:
+        Settings.load({flag: "true", "SOAR_APPROVAL_MODE": mode})
+    message = str(info.value)
+    assert f"SOAR_APPROVAL_MODE={mode}" in message and flag in message
+    assert "SOAR_LAB_MODE=true" in message
+
+
+@pytest.mark.parametrize("mode", ["in_band", "disabled"])
+def test_weak_approval_mode_with_a_tier4_flag_in_lab_mode_loads(mode: str):
+    s = Settings.load(
+        {"SOAR_ALLOW_PLAYBOOK_DEPLOY": "true", "SOAR_APPROVAL_MODE": mode, "SOAR_LAB_MODE": "true"}
+    )
+    assert s.approval_mode == mode
+
+
+@pytest.mark.parametrize("mode", ["in_band", "disabled"])
+def test_weak_approval_mode_without_tier3_or_tier4_flags_is_unchanged(mode: str):
+    """No Tier >= 3 capability: the mode asks for nothing, so it is still accepted."""
+    s = Settings.load({"SOAR_ALLOW_COMMENTS": "true", "SOAR_APPROVAL_MODE": mode})
+    assert s.approval_mode == mode
+
+
+def test_out_of_band_with_tier4_flags_needs_no_lab_mode():
+    s = Settings.load(dict.fromkeys(TIER4_FLAGS, "true"))
+    assert s.approval_mode == "out_of_band" and _tier4(s).outcome is Outcome.REQUIRE_APPROVAL
+
+
+def test_unrecognised_approval_mode_with_tier4_resolves_to_out_of_band():
+    s = Settings.load({"SOAR_ALLOW_PLAYBOOK_DEPLOY": "true", "SOAR_APPROVAL_MODE": "none"})
+    assert s.approval_mode == "out_of_band"
 
 
 # --------------------------------------------------------- fail closed
