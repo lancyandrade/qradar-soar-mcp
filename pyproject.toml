@@ -44,6 +44,9 @@ dev = [
   "types-PyYAML>=6.0",
   "pip-audit>=2.9",
   "pre-commit>=4.0",
+  # Build backend, importable offline so the packaging tests can build the
+  # sdist and wheel without network access. Same floor as [build-system].
+  "hatchling>=1.25",
 ]
 
 [project.scripts]
@@ -60,7 +63,13 @@ Security = "https://github.com/lancyandrade/qradar-soar-mcp/blob/main/SECURITY.m
 packages = ["src/qradar_soar_mcp"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/scripts/probe/raw", "/tests/fixtures/raw", "/.github", "/automation"]
+# REL-06: an explicit allow-list. Hatch reads .gitignore but not .git/info/exclude,
+# so an exclude list let local-only files (.claude/, worktrees, browser logs) into
+# the sdist (release-readiness H-5). Only these root-relative paths are walked; the
+# package, build config, readme (metadata) and licence are all a wheel build needs.
+# Tests, docs, probes and uv.lock stay in git, not in the sdist. Keep this list in
+# step with tests/test_packaging.py; never add a force-include or a wildcard.
+only-include = ["src/qradar_soar_mcp", "pyproject.toml", "README.md", "LICENSE"]
 
 # ---------------------------------------------------------------------------
 # ruff
