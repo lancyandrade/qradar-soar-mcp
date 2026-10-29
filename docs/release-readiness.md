@@ -22,10 +22,12 @@ Evidence levels used throughout:
   08 §21 D4), so the out-of-band approval broker is built and tested but reachable by
   no tool; attachment hash and text extraction (P1-15) are deferred; the lab test
   tiers T4–T6 and the mock AppHost do not exist (08 §19).
-- **Phase 2 is five of eight tickets in.** P2-00 (research), P2-01 – P2-05 have
-  landed, three of them with an acceptance criterion met only as far as the evidence
-  allows (P2-00, P2-01, P2-03). **P2-06 (policy scaffold CLI) and P2-07 (historical
-  response analysis) are not started.**
+- **Phase 2 has eight roadmap tickets (P2-00 – P2-07). Six have landed: three
+  COMPLETE (P2-02, P2-04, P2-05) and three PARTIAL (P2-00, P2-01, P2-03), each with
+  an acceptance criterion met only as far as the evidence allows. Two are NOT
+  STARTED: P2-06 (policy scaffold CLI) and P2-07 (historical response analysis).**
+  P2-00b is a supplemental research ticket (08 §23) and is not counted among the
+  eight.
 - The package version is `0.2.0`, but the tree holds **36 tools: the 20-tool Phase-1
   contract plus 16 Phase-2 discovery tools**. The version number understates what
   ships; a changelog must say so.
@@ -41,8 +43,8 @@ Evidence levels used throughout:
   None of those tests exists. Releasing needs either that work or an explicit,
   recorded owner waiver for an alpha pre-release.
 
-**Verdict:** `v0.2.0` — **CONDITIONAL GO** as a source-only alpha pre-release
-(§10). `v0.3.0` — **NO-GO**: Phase 2 is not complete.
+**Verdict:** `v0.2.0` — **CONDITIONAL GO** as an alpha: a GitHub tag + pre-release of the source code only, with no manually built binary, wheel or sdist attached (§9, §10). Build
+artefacts are not distributed until REL-06 and REL-04 land. `v0.3.0` — **NO-GO**: Phase 2 is not complete.
 
 ---
 
@@ -108,7 +110,7 @@ D13).
 | Ticket | Status | Evidence | Gap |
 |---|---|---|---|
 | P2-00 verify ⚠️/❓ endpoints | **PARTIAL** (research done; AC not fully met) | `docs/soar-api-verified.md`, 64+ sanitised fixtures in `tests/fixtures/soar/verified/` | AC "every ⚠️/❓ resolved to ✅ or 🚫" is not met: Q2, Q4, Q5, Q8, Q14, export contents and the meaning of `required` stay ❓/📄 (`open-questions.md`). Each needs a write, an export-capable key or a disposable org |
-| P2-00b finish the record | COMPLETE (for what the lab could show) | `soar-api-verified.md §3.1`; D6 | closed incident, note reply, executed playbook, export contents unavailable |
+| P2-00b finish the record *(supplemental research, 08 §23; not one of the eight roadmap tickets)* | COMPLETE (for what the lab could show) | `soar-api-verified.md §3.1`; D6 | closed incident, note reply, executed playbook, export contents unavailable |
 | P2-01 catalog, dual backends | **PARTIAL** | `catalog/`, `test_catalog_*.py`, `soar_refresh_catalog` | `export` backend selectable but always `catalog_unavailable` (403); the "both backends equivalent" lab-marked AC is **deferred** with the export contract (08 §25.1) |
 | P2-02 functions, scripts, destinations | COMPLETE | `test_discovery_tools.py`, `test_no_script_writes.py` (AST, mutation-tested) | owner choices open (D9) |
 | P2-03 types, phases, fields, datatables | **PARTIAL** | `test_discovery_types_fields.py` | close-required not met as a verified flag (08 §28.3, **D10 open**); `soar_describe_incident_fields` still derives `close_required` from the unverified baseline reading |
@@ -265,8 +267,8 @@ about that commit only; the CI result of this PR is whatever GitHub reports for 
 
 ### Critical
 
-None that block a source-only **alpha pre-release** of `v0.2.0`, provided the
-conditions in §10 are met. No security control was found unenforced, and no default
+None that block the `v0.2.0` **alpha tag and source-code pre-release** of §9 (no
+attached build artefacts), provided the conditions in §10 are met. No security control was found unenforced, and no default
 was found unsafe.
 
 ### High
@@ -277,7 +279,7 @@ was found unsafe.
 | H-2 | No `CHANGELOG.md` and no release notes | v0.2.0 | The `0.2.0` package also contains 16 Phase-2 tools; without a changelog the version misdescribes the content and the deferrals of §7 are not attached to the release |
 | H-3 | `main` has no branch protection and no ruleset | all | CI is advisory: a PR that drops a permission check fails `P1-13` but can still be merged. This weakens the `07 §1` principle in practice |
 | H-4 | Phase 2 incomplete: P2-06, P2-07 not started; P2-00, P2-01, P2-03 partial | v0.3.0 | `06` gate rule |
-| H-5 | The sdist takes whatever is on disk and not in `.gitignore`: built from this working copy it held `.claude/settings.local.json`, a stale worktree and browser logs (§5) | any published sdist | A hand-built release could ship local tool configuration. Fix (separate ticket REL-06): an `only-include` allow-list for the sdist plus a test over the built archive, and build release artefacts only in CI from a clean checkout (REL-04) |
+| H-5 | The sdist takes whatever is on disk and not in `.gitignore`: built from this working copy it held `.claude/settings.local.json`, a stale worktree and browser logs (§5) | any distributed sdist or wheel; not the §9 tag-only pre-release | A hand-built sdist could ship local tool configuration. Fix (separate ticket REL-06): an `only-include` allow-list for the sdist plus a test over the built archive, and build release artefacts only in CI from a clean checkout (REL-04) |
 
 ### Medium
 
@@ -303,8 +305,18 @@ was found unsafe.
 ## 9. Recommended release version and rationale
 
 **Recommend `v0.2.0`**, tagged on the audited `main` commit (or its successor carrying
-only the changelog), published as a **GitHub pre-release, source-only** (no PyPI
-upload).
+only the changelog).
+
+**Release format:** a signed or annotated git tag `v0.2.0` and a **GitHub pre-release
+of the source code only**. The only downloadable files are the "Source code (zip /
+tar.gz)" archives GitHub generates from the tag, which hold tracked files only. **No
+manually built binary, wheel or sdist is attached, and nothing is uploaded to PyPI.**
+In particular, an sdist built in a developer working copy must not be published: it
+was shown in §5 to pick up locally excluded files (H-5). Distributing any build
+artefact waits for **REL-06** (sdist allow-list and archive test) and **REL-04**
+(artefacts built only in CI from a clean checkout). Users install from the tag
+(`git clone --branch v0.2.0`, then `uv sync`), as the README quick start already
+describes.
 
 - `v0.2.0` is the Phase-1 milestone (`06`); Phase 1 is complete in code with recorded
   deferrals. Version, tests (`test_version_is_the_phase_one_milestone`), README,
@@ -322,7 +334,7 @@ upload).
 
 | Release | Verdict | Conditions |
 |---|---|---|
-| **`v0.2.0`** | **CONDITIONAL GO** (alpha pre-release, source-only) | (1) GitHub CI green on the tagged commit; (2) `CHANGELOG.md` with the 36-tool content and every deferral in §7 (REL-02); (3) owner records a waiver of `07 §7.5` T4–T6 for this alpha, or the lab suite is built first; (4) owner accepts the P1-15 and D4 deferrals as release scope; (5) any attached sdist is built from a clean checkout, or REL-06 lands first (H-5); (6) recommended before tagging: protect `main` with the CI checks required (H-3) |
+| **`v0.2.0`** | **CONDITIONAL GO** (alpha: tag + source-code pre-release, no attached build artefacts) | (1) GitHub CI green on the tagged commit; (2) `CHANGELOG.md` with the 36-tool content and every deferral in §7 (REL-02); (3) owner records a waiver of `07 §7.5` T4–T6 for this alpha, or the lab suite is built first; (4) owner accepts the P1-15 and D4 deferrals as release scope; (5) no wheel, sdist or other build artefact is attached or published; distributing one requires REL-06 and REL-04 first (H-5); (6) recommended before tagging: protect `main` with the CI checks required (H-3) |
 | **`v0.3.0`** | **NO-GO** | P2-06, P2-07; the partial ACs of P2-00, P2-01, P2-03 accepted or closed by the owner |
 
 No `v0.2.0` tag, release or version change is made by this PR.
@@ -337,8 +349,9 @@ No `v0.2.0` tag, release or version change is made by this PR.
 | 2 | **REL-03** — protect `main` (required CI checks, no force-push, PR required) | — | repository settings, owner action |
 | 3 | **REL-04** — tag-triggered release workflow: `uv build`, SHA-256 sums, artefact upload, optional attestation; no PyPI | REL-02 | CI only |
 | 4 | **REL-05** — owner decision record: waive `07 §7.5` lab gates for the alpha, or schedule LAB-01 first | — | 08 entry |
-| 4a | **REL-06** — sdist `only-include` allow-list + archive-content test (no `.claude/`, worktrees, logs, `automation/`, `.github/`) | — | `pyproject.toml` packaging config + one test |
-| 5 | **TAG v0.2.0** | 1, 4, 4a or a clean-checkout build (3 recommended) | owner |
+| 4a | **REL-06** — sdist `only-include` allow-list + archive-content test (no `.claude/`, worktrees, logs, `automation/`, `.github/`) | — | `pyproject.toml` packaging config + one test; **required before any build artefact is distributed** |
+| 5 | **TAG v0.2.0** (tag + source-code pre-release, no attachments) | 1, 4 (2 recommended) | owner |
+| 5a | **Attach build artefacts to a release** (optional, later) | 3, 4a | CI-built only |
 | 6 | **P2-06** — `qradar-soar-policy scaffold` (deny-all Tier-5 scaffold, schema-valid, never overwrites) | catalog (P2-02, P2-04 done) | offline-buildable from the committed catalog fixture |
 | 7 | **P2-07** — `soar_analyse_incident_response` | P2-04, P1-15 | history reads are live-verified; execution rows were empty on the lab, so degradation is mandatory |
 | 8 | **D10 decision / P2-03b** — settle `required` semantics; align `soar_describe_incident_fields` | owner approval for a static read or a close experiment | |
