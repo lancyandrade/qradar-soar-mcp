@@ -1560,7 +1560,8 @@ Consequences:
   (07 §7.1). Neither exists yet. T5/T6 also cover paths this release cannot execute:
   every Tier-3 step of 07 §7.4 ends in `DENY_UNSUPPORTED` while D16 stands, so T6 can
   only show the refusal (and zero calls at the mock AppHost) until invocation is
-  implemented. How that affects the gate is an open owner question (D20).
+  implemented. How that affects the gate was an open owner question (D20), decided
+  on 2026-10-30 (§33).
 
 ### 32.1 `P1-08` amendment — the hourly-cap denial writes two records
 
@@ -1594,3 +1595,26 @@ The hourly-cap case is pinned by
 `tests/test_registry.py::test_hourly_cap_denial_writes_pending_then_one_denial`; the
 `DENY_AUDIT` case by `test_audit_write_failure_fails_closed` and
 `tests/test_registry_enforcement.py` (unwritable and missing audit log).
+
+## 33. D20 and D21 — owner decisions on T6 and T3 (2026-10-30)
+
+Decided by the owner on **2026-10-30**, answering the two questions §32 left open.
+Documentation only: no code, test, tool or gate criterion changed by this section.
+
+| Entry | Decision | Scope |
+|---|---|---|
+| D20 | A **denial-only T6 run** (every Tier-3 step of `07 §7.4` ends in `DENY_UNSUPPORTED`; the mock AppHost receives zero calls; the audit chain verifies and contains every denial) **may count as evidence that unsupported action invocation is correctly rejected**. It does **not** demonstrate successful action execution or approval enforcement. Full T6 is **not** marked complete unless every `07 §7.4` acceptance criterion is met (steps 1–9, including an approved invocation reaching the mock AppHost exactly once, replay denial, `deny_values` and kill switch with a valid approval) or the criteria are separately amended. | T6 evidence and every release document that reports T6 |
+| D21 | **T3 golden tests remain a mandatory release gate. No waiver is granted.** `07 §7.5`'s "All T1–T3 green in CI" stands; T3 is unmet while no `@pytest.mark.golden` test exists. | `v0.2.0` and every later release |
+
+Consequences:
+
+- With D21, `v0.2.0` stays NO-GO until golden tests exist and pass in CI. Proposed
+  ticket: [`docs/proposals/LAB-03-t3-golden-test-gate.md`](../proposals/LAB-03-t3-golden-test-gate.md).
+  What T3 must cover before Phase 3 is ambiguous in the baseline (`07 §6` and `06
+  P3-10` define golden tests for Playbook-IR artefacts only); that question is D22,
+  open, and `LAB-03` waits for it.
+- With D20, a denial-only T6 run is partial evidence. Release documents must call it
+  that: "T6 (denial path only)", never "T6 green", while `soar_invoke_action` refuses
+  every call (D16).
+- The owner named the T3 ticket `LAB-03`; the T6 mock-AppHost work that the lab plan had
+  called `LAB-03` is renamed `LAB-04`.
