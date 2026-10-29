@@ -230,3 +230,71 @@ def test_open_questions_reference_real_modules():
         assert (ROOT / "src" / "qradar_soar_mcp" / module).is_file(), module
     assert "DEFERRED-P2" in text and "public-sanitised" in text
     assert "172.16." not in text  # no private topology anywhere in the published tree
+
+
+# ----------------------------------------------- names in the operator docs
+
+OPERATOR_DOCS = (
+    "README.md",
+    "SECURITY.md",
+    ".env.example",
+    "docs/threat-model.md",
+    "docs/runbooks/key-rotation.md",
+)
+# Read by the approver CLI only; the server never reads it (08 §5).
+NON_SERVER_VARIABLES = frozenset({"SOAR_APPROVAL_PRIVATE_KEY_FILE"})
+
+
+def _settings_variables() -> set[str]:
+    return {f"SOAR_{name.upper()}" for name in Settings.model_fields if name != "warnings"}
+
+
+@pytest.mark.parametrize("doc", OPERATOR_DOCS)
+def test_every_documented_variable_exists(doc: str):
+    text = (ROOT / doc).read_text(encoding="utf-8")
+    named = set(re.findall(r"\b(SOAR_[A-Z][A-Z0-9_]*[A-Z0-9])\b", text))
+    # `SOAR_ALLOW_PLAYBOOK_DRAFT` / `_EXPORT` rows name the prefix on its own.
+    named.discard("SOAR_ALLOW_PLAYBOOK")
+    unknown = sorted(named - _settings_variables() - NON_SERVER_VARIABLES)
+    assert unknown == [], f"{doc} names variables the server does not read: {unknown}"
+
+
+def test_configuration_reference_has_a_row_for_every_setting():
+    reference = _section(README, "## Configuration reference")
+    rows = " ".join(row[0] for row in _table_rows(reference))
+    for m in re.finditer(r"`(SOAR_ALLOW_PLAYBOOK)_DRAFT` / (.*?)\|", reference):
+        suffixes = re.findall(r"`_([A-Z]+)`", m.group(2))
+        rows += " " + " ".join(f"`{m.group(1)}_{s}`" for s in suffixes)
+    missing = sorted(v for v in _settings_variables() if f"`{v}`" not in rows)
+    assert missing == [], f"settings without a configuration-reference row: {missing}"
+
+
+@pytest.mark.parametrize("doc", OPERATOR_DOCS)
+def test_every_documented_tool_and_denial_code_exists(doc: str):
+    from qradar_soar_mcp.security.permissions import Code
+
+    text = (ROOT / doc).read_text(encoding="utf-8")
+    tools = set(re.findall(r"`(soar_[a-z_]+)`", text))
+    assert tools <= set(TOOL_REGISTRY), sorted(tools - set(TOOL_REGISTRY))
+    codes = set(re.findall(r"\b((?:DENY|REQUIRE)_[A-Z0-9_]+)\b", text))
+    known = {str(c) for c in Code}
+    assert codes <= known, sorted(codes - known)
+
+
+def _github_anchor(heading: str) -> str:
+    slug = re.sub(r"[^\w\- ]", "", heading.strip().lower())
+    return slug.replace(" ", "-")
+
+
+@pytest.mark.parametrize("doc", ("README.md", "SECURITY.md", *REQUIRED_DOCS))
+def test_anchors_resolve(doc: str):
+    path = ROOT / doc
+    text = path.read_text(encoding="utf-8")
+    for target, anchor in re.findall(r"\]\(([^)#]*)#([^)]+)\)", text):
+        if target.startswith(("http://", "https://")):
+            continue
+        linked = (path.parent / target) if target else path
+        if linked.suffix != ".md":
+            continue
+        headings = re.findall(r"^#+ (.+)$", linked.read_text(encoding="utf-8"), flags=re.M)
+        assert anchor in {_github_anchor(h) for h in headings}, f"{doc}: broken anchor #{anchor}"

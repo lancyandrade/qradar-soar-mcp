@@ -18,10 +18,15 @@ controlled response actions. Playbook authoring and deployment are designed
 > Tier 1. If you are looking for a quick way to let Claude "just fix things" in
 > SOAR, this is not that project, on purpose.
 
-This is version **0.2.0**, the Phase-1 milestone. It has been tested offline
-against a contract model of the SOAR REST API (`tests/fake_soar.py`); it has
-**not yet** been verified against a live appliance by this repository. See
-[Confidence in API claims](#confidence-in-api-claims).
+This is version **0.2.0**, the Phase-1 milestone, plus the Phase-2 discovery tools.
+Every tool is tested offline against a contract model of the SOAR REST API
+(`tests/fake_soar.py`). Separately, owner-approved research runs checked the API
+against **one** lab appliance, IBM QRadar SOAR `51.0.9.0.20848`
+([docs/soar-api-verified.md](docs/soar-api-verified.md)). Those runs verified the read
+surface and the task-status write. The other writes (notes, artifacts, incident
+create, update and close) were **not** exercised live: their request bodies follow
+the appliance's own reference and the offline model only. No other SOAR version was
+tested. See [Confidence in API claims](#confidence-in-api-claims).
 
 ---
 
@@ -387,19 +392,113 @@ warning.
 
 ## Recommended deployment: two instances, two keys
 
-| Instance | SOAR key | Tiers | When |
-|---|---|---|---|
-| `qradar-soar` | read-only permission set | 0 | always registered |
-| `qradar-soar-ops` | read + write (+ invoke) | 0–3 | registered deliberately, per engagement, with its own `.env` |
+Run two separate server processes, each with its own configuration and its own SOAR
+API key:
+
+| Instance | SOAR key | Flags | Tiers usable in this release | When |
+|---|---|---|---|---|
+| `qradar-soar` | read-only permission set | none (the defaults) | 0 | always registered |
+| `qradar-soar-ops` | read plus exactly the writes you enable, nothing more | only the Tier 1–2 flags this engagement needs | 0–2 | registered deliberately, per engagement, removed afterwards |
 
 This puts a permission boundary **in SOAR** behind the one in this software. If
 our permission code has a bug, the read-only key still cannot close an
 incident. For a project whose job is letting an LLM touch a security platform,
 defending against your own code is the correct posture.
 
-The server does **not** yet probe its key's permission set at startup (the
-endpoint for that is an open question, `docs/open-questions.md`); the SOAR
-permission set is your control, not ours.
+**The SOAR permission set is your control, not ours.** The server cannot check
+which permissions its key has. On 51.0.9.0.20848 no endpoint that a read-only key can
+use reports them (`/rest/session` answers with empty permission data; `/permissions`
+and `/apikeys` answer 403; [open question Q6](docs/open-questions.md)). Nothing at
+start-up warns you that a key can do more than the flags allow. Create the read-only
+key with a read-only permission set in SOAR, and give the ops key only the permissions
+its enabled tools need. For example, `soar_update_task_status` needs SOAR's task-edit
+permission.
+
+**Tier 3 in this release.** `soar_invoke_action` refuses every call
+(`DENY_UNSUPPORTED`), so `SOAR_ALLOW_ACTIONS` gives the ops instance nothing it can
+use. Leave it `false`. If you do set it, it needs a valid policy file to start, and
+under the HTTP transport Tier 3 is refused anyway.
+
+### Keep the two instances independent
+
+Each process holds its own state in files. Nothing locks those files across
+processes, so two processes must never share them:
+
+| Setting | Read-only instance | Ops instance | Why separate |
+|---|---|---|---|
+| `SOAR_API_KEY_ID` / `SOAR_API_KEY_SECRET` | read-only key | narrowly scoped key | the SOAR-side boundary above; rotate each on its own |
+| `SOAR_AUDIT_LOG_PATH` | its own file | its own file | each process continues the hash chain from the last line it read at start-up; two writers interleave and break the chain, and the hourly caps are rebuilt from this one file |
+| `SOAR_APPROVAL_BROKER_PATH` | its own directory (unused) | its own directory, which the model cannot reach | approval requests are bound to one server's tool calls |
+| `SOAR_APPROVAL_PUBLIC_KEY_FILE` | not needed | only if Tier 3 is ever enabled | the server holds only the public key |
+| `SOAR_KILL_SWITCH_FILE` | any (it never mutates) | an absolute path the on-call operator can `touch` | stops the ops instance's mutations in one step |
+| `SOAR_ACTION_POLICY_FILE` | not set | only if `SOAR_ALLOW_ACTIONS=true` | |
+
+The code defaults for these paths are relative (`audit.jsonl`, `approvals`, `HALT`).
+They resolve against the process's working directory, so two instances started from
+the same directory would share them. Set absolute paths for both instances.
+
+Register the two as separate MCP servers, each with its own `env` block (or its own
+environment file sourced by its own wrapper). The server reads **only its process
+environment**; it never reads a `.env` file itself.
+
+```json
+{
+  "mcpServers": {
+    "qradar-soar": {
+      "command": "uv",
+      "args": ["--directory", "/opt/qradar-soar-mcp", "run", "qradar-soar-mcp"],
+      "env": {
+        "SOAR_BASE_URL": "https://soar.example.internal",
+        "SOAR_ORG_ID": "201",
+        "SOAR_API_KEY_ID": "<read-only key id>",
+        "SOAR_API_KEY_SECRET": "<read-only key secret>",
+        "SOAR_AUDIT_LOG_PATH": "/var/log/qradar-soar-mcp/ro/audit.jsonl",
+        "SOAR_APPROVAL_BROKER_PATH": "/var/lib/qradar-soar-mcp/ro/approvals",
+        "SOAR_KILL_SWITCH_FILE": "/etc/qradar-soar-mcp/ro/HALT"
+      }
+    },
+    "qradar-soar-ops": {
+      "command": "uv",
+      "args": ["--directory", "/opt/qradar-soar-mcp", "run", "qradar-soar-mcp"],
+      "env": {
+        "SOAR_BASE_URL": "https://soar.example.internal",
+        "SOAR_ORG_ID": "201",
+        "SOAR_API_KEY_ID": "<ops key id>",
+        "SOAR_API_KEY_SECRET": "<ops key secret>",
+        "SOAR_ALLOW_COMMENTS": "true",
+        "SOAR_ALLOW_ARTIFACTS": "true",
+        "SOAR_AUDIT_LOG_PATH": "/var/log/qradar-soar-mcp/ops/audit.jsonl",
+        "SOAR_APPROVAL_BROKER_PATH": "/var/lib/qradar-soar-mcp/ops/approvals",
+        "SOAR_KILL_SWITCH_FILE": "/etc/qradar-soar-mcp/ops/HALT"
+      }
+    }
+  }
+}
+```
+
+The client's configuration file now holds both API key secrets in plain text. Protect
+it like any other secret store, and include it in key rotation
+([runbook](docs/runbooks/key-rotation.md)).
+
+Run `--check` with each instance's environment before registering it.
+`capabilities` must list exactly the flags you meant (an empty list for the read-only
+instance), and `audit.path` must be that instance's own file.
+
+### Warnings
+
+- **Production.** Never set `SOAR_LAB_MODE=true`, `SOAR_APPROVAL_MODE=in_band` or
+  `disabled`, or `SOAR_VERIFY_SSL=false` on an instance that can reach a production
+  SOAR. They exist for throwaway labs and remove guarantees this README relies on.
+- **HTTP transport.** stdio is the supported transport. `streamable-http` refuses to
+  start without `SOAR_HTTP_AUTH_TOKEN`, refuses to bind every interface without
+  `SOAR_HTTP_ACKNOWLEDGE_EXPOSURE=true`, and denies Tier 3 regardless of flags. The
+  listener itself serves plain HTTP. Off loopback it must sit behind a
+  TLS-terminating reverse proxy; the server logs that obligation but cannot check it.
+  Anyone holding the one bearer token can use every tier that instance enables. Never
+  expose the ops instance over HTTP.
+- **One key per instance.** Do not reuse the ops key on the read-only instance "for
+  convenience". That removes the SOAR-side boundary, and nothing in this software
+  would notice.
 
 ---
 
@@ -419,8 +518,13 @@ file a phishing report can write into the data the model reads. `in_band` and
 response carries a disclaimer saying so.
 
 Out-of-band approval works through a file broker and an Ed25519 signature the
-server can verify but cannot forge. (The example below shows `soar_invoke_action`;
-in this release that tool is refused before any approval is requested.)
+server can verify but cannot forge.
+
+**In this release no tool reaches this step.** Approval is required from Tier 3 up.
+The only Tier-3 tool, `soar_invoke_action`, is refused (`DENY_UNSUPPORTED`) before any
+approval is requested, and Tiers 1–2 never ask for one. The broker, the signature check
+and the replay protection are built and tested offline, and kept for when an
+invocation contract is verified. The example below shows how the flow will work.
 
 1. Once, in the approver's environment (not on the MCP host):
    `qradar-soar-approve keygen --private ~/.config/qradar-soar/approval.key --public approval.pub`.
@@ -445,12 +549,20 @@ in this release that tool is refused before any approval is requested.)
    Type the reference to approve, anything else to reject: _
    ```
 
-4. The approval is bound to a hash of the exact arguments, expires after
-   `SOAR_APPROVAL_TTL_SECONDS` (900), and is consumed atomically on use: a
-   replay or a changed argument is denied.
+4. The approval is bound to a hash of the tool name and the exact arguments. It
+   expires with the request (`SOAR_APPROVAL_TTL_SECONDS`, 900), and the signature's own
+   expiry is never later than the request's. It is consumed atomically on use by
+   renaming `….approved.json` to `….consumed.json`, so a replay, a different tool or a
+   changed argument is denied (`DENY_APPROVAL`). Typing anything other than the
+   reference writes `….rejected.json` and denies the request.
 
 The plan deliberately shows ids and the operator-named action, never incident
 text, so an attacker cannot write into the approver's terminal.
+
+`qradar-soar-approve list` shows each request's state (`pending`, `approved`,
+`consumed`, `rejected`). The approver's name in the audit record is `--approver`, or
+the operating-system user by default. The approver identity is not authenticated
+beyond who holds the private key.
 
 ---
 
@@ -459,14 +571,14 @@ text, so an attacker cannot write into the approver's terminal.
 | Control | Behaviour |
 |---|---|
 | Deny by default | Absent, empty or unparseable config ⇒ denied. Never permissive on error. |
-| One chokepoint | Every tool runs through the same enforce → limits → approval → audit → execute → redact pipeline; an AST test fails if anything under `tools/` reaches the client outside it. |
+| One chokepoint | Every tool runs through the same pipeline, in this order: capability flag → policy classification → tier → transport → unsupported-tool refusal (`enforce()`); kill switch → circuit breaker → one-object cap; approval (Tier ≥3); audit `MUTATION_PENDING`; hourly cap; execute; audit `MUTATION_COMMITTED` / `MUTATION_FAILED`; redact and project the response. An AST test fails if anything under `tools/` reaches the client outside it. |
 | Unknown action ⇒ deny | Anything absent from `action_policy.yaml` is Tier 5 and denied. |
 | `deny_values` | Per-action value blocklists — your own egress ranges, DC subnets, hypervisors. |
 | Mutation cap | One object per tool call (`SOAR_MAX_MUTATIONS_PER_CALL` is clamped to 1). |
-| Rate limits | `SOAR_MAX_TIER2_PER_HOUR` (25) and `SOAR_MAX_TIER3_PER_HOUR` (5); counters are rebuilt from the audit log so a restart does not reset them. |
-| Circuit breaker | 3 consecutive Tier ≥2 failures disable Tier ≥2 until restart. |
-| Kill switch | `touch $SOAR_KILL_SWITCH_FILE` stops all mutation immediately; reads continue. |
-| Audit log | Hash-chained append-only JSONL with pre/post images; denials logged too; `qradar-soar-audit verify`. Each string and key of a record is redacted on its own, never the serialised JSON, and the hash is taken over the redacted record, which is exactly the line on disk. |
+| Rate limits | `SOAR_MAX_TIER2_PER_HOUR` (25) and `SOAR_MAX_TIER3_PER_HOUR` (5), sliding one-hour windows. The counters are rebuilt from the audit log, so a restart does not reset them; a mutation whose outcome was never recorded still counts. **Tier 1 (notes, artifacts) has no hourly cap.** |
+| Circuit breaker | 3 consecutive failed Tier ≥2 calls disable Tier ≥2 until the process restarts. Tier 1 neither feeds nor trips it. |
+| Kill switch | `touch $SOAR_KILL_SWITCH_FILE` denies every Tier ≥1 call from the next call on, with no restart; reads continue. If the server cannot tell whether the file exists, it treats the switch as engaged. Remove the file to resume. |
+| Audit log | Hash-chained append-only JSONL: one record per denial, approval event, and mutation attempt (pending, then committed or failed, with pre/post images where the tool has them); `qradar-soar-audit verify`. Each string and key of a record is redacted on its own, never the serialised JSON, and the hash is taken over the redacted record, which is exactly the line on disk. Long values are clipped (2,000 characters per string). **Successful reads are not audited.** |
 | Fail closed | Unwritable audit log ⇒ refuse to start; a mid-session write failure refuses the mutation before SOAR is called. A record that cannot be redacted without losing a field (two keys equal after redaction) is not written either; when it is the record required before a mutation, the mutation is refused. |
 | Secret hygiene | `SecretStr`, a redacting log filter, sanitised errors, a startup self-test, `gitleaks` and a tree scanner in CI; a sentinel-leak test drives every tool through every failure class. |
 | HTTP transport | Refuses to start without `SOAR_HTTP_AUTH_TOKEN`; refuses `0.0.0.0` without `SOAR_HTTP_ACKNOWLEDGE_EXPOSURE`; Tier ≥3 is hard-disabled over HTTP regardless of flags. |
@@ -480,70 +592,151 @@ vulnerabilities per [SECURITY.md](SECURITY.md).
 
 ## Configuration reference
 
-All variables, with defaults. `.env.example` is the annotated copy.
+The server reads `SOAR_*` variables from its **process environment** once, at start-up.
+It never reads a `.env` file itself (the quick start sources one into the shell).
+Changing any variable takes a restart, except the presence of the kill-switch file,
+which is checked on every call. [`.env.example`](.env.example) is the annotated copy.
 
-| Variable | Default | Meaning |
+**Parsing never fails open.** A boolean is true only for exactly `true`, `1`, `yes`
+or `on` (any case, no surrounding spaces), and false for `false`, `0`, `no` or `off`.
+Anything else logs a warning naming the variable and resolves to the safe side:
+`false` for a **capability** flag, `true` for a **safety switch**. An unparseable or
+too-small number falls back to its default, with a warning; a number above its
+maximum is clamped to the maximum. The values that refuse to start are named in the
+tables; `--check` then exits 2 and names the variable, never a secret.
+
+Kinds: **connection** · **capability** (enables tools of the tier shown; off by
+default) · **safety switch** (protective by default; changing it removes a protection) ·
+**operational** (sizes, paths, logging) · **transport** · **lab only** · **reserved**
+(accepted, used by nothing in this release) · **deprecated**.
+
+### Connection
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `SOAR_BASE_URL` | — | connection | `https://` URL of the appliance. Plain `http://` only on loopback. A URL with credentials, a query or a fragment refuses to start |
+| `SOAR_ORG_ID` | — | connection | organisation id. Unparseable or not positive ⇒ connection disabled, with a warning |
+| `SOAR_API_KEY_ID` / `SOAR_API_KEY_SECRET` | — | connection | API key (HTTP Basic). The secret is held as a `SecretStr` and redacted from log lines, errors, tool output and audit records. Without all four connection values every tool that reaches SOAR fails with `not_configured` |
+| `SOAR_VERIFY_SSL` | `true` | safety switch | TLS verification. `false` is lab-only: refused without `SOAR_LAB_MODE=true`, and warned about on every start. Anything unrecognised refuses to start. (The path of an existing CA bundle is still accepted here, deprecated.) See [TLS trust](#tls-trust) |
+| `SOAR_CA_BUNDLE` | — | connection | PEM CA bundle for a private or self-signed CA. Empty ⇒ Python's default TLS trust configuration; set ⇒ the supplied bundle is used instead of it. Missing or not PEM, or set together with `SOAR_VERIFY_SSL=false` ⇒ refuses to start |
+| `SOAR_TIMEOUT` | `30` | operational | request timeout, seconds (minimum 1) |
+| `SOAR_MAX_RESULTS` | `50` | operational | page-size cap for search and for similar-incident candidates (1–500); discovery lists use the lower of this and 100 |
+
+### Capabilities
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `SOAR_ALLOW_COMMENTS` / `SOAR_ALLOW_ARTIFACTS` | `false` | capability, Tier 1 | `soar_add_comment` / `soar_add_artifact` |
+| `SOAR_ALLOW_INCIDENT_WRITES` / `SOAR_ALLOW_TASK_WRITES` / `SOAR_ALLOW_INCIDENT_CLOSE` | `false` | capability, Tier 2 | create, update and assign incidents / task status / closing. `soar_update_incident` refuses the closing fields, so the close flag cannot be bypassed |
+| `SOAR_ALLOW_ACTIONS` / `SOAR_ALLOW_DESTRUCTIVE_ACTIONS` | `false` | capability, Tier 3 | `soar_invoke_action`, which refuses every call in this release. `true` needs `SOAR_ACTION_POLICY_FILE` to exist and parse, and out-of-band approval unless `SOAR_LAB_MODE=true`; otherwise the server refuses to start. A policy rule marked destructive also needs the second flag |
+| `SOAR_ACTION_POLICY_FILE` | — | capability input | your classification of manual actions ([example](config/action_policy.example.yaml), [schema](docs/action_policy.schema.json)). Required when `SOAR_ALLOW_ACTIONS=true`; a malformed file refuses to start. `.env.example` suggests `./config/action_policy.yaml` |
+| `SOAR_ALLOW_PLAYBOOK_DRAFT` / `_EXPORT` / `_CREATE` / `_MODIFY` / `_DEPLOY` / `_ENABLE` | `false` | reserved capability, Tier 4 | accepted and reported by `--check`; no tool uses them yet. `.env.example` sets `SOAR_ALLOW_PLAYBOOK_DRAFT=true` (the design baseline), so a copied file shows it under `capabilities`; it enables nothing |
+| `SOAR_ALLOW_SCRIPT_WRITES` | `false` | intentionally unsupported | script writes are a non-goal; `true` refuses to start |
+
+### Approval
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `SOAR_APPROVAL_MODE` | `out_of_band` | safety switch | `out_of_band` \| `in_band` \| `disabled`. Unrecognised ⇒ `out_of_band`. With `SOAR_ALLOW_ACTIONS=true`, `in_band` and `disabled` refuse to start unless `SOAR_LAB_MODE=true`. Only Tier ≥3 asks for approval, so without actions the mode has no effect |
+| `SOAR_REQUIRE_ACTION_CONFIRMATION` | `true` | safety switch | Tier-3 calls need approval. Garbage ⇒ `true`. `false` drops the approval for a Tier-3 action whose policy rule says `allow` (a `require_approval` rule still asks). It is **not** lab-gated, so leave it `true` |
+| `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION` | `true` | safety switch | the same for Tier 4; no Tier-4 tool exists yet |
+| `SOAR_APPROVAL_BROKER_PATH` | `approvals` | operational | the broker directory. Put it where the model and its client cannot write |
+| `SOAR_APPROVAL_PUBLIC_KEY_FILE` | — | operational | Ed25519 public key. Without it no approval can be verified, and every call that needs one is denied. A key that cannot be loaded, or is not Ed25519, refuses to start |
+| `SOAR_APPROVAL_TTL_SECONDS` | `900` | operational | request and signature lifetime, seconds (minimum 10) |
+
+The approver CLI also reads `SOAR_APPROVAL_PRIVATE_KEY_FILE` (or `--key`), in the
+approver's environment only. The server never reads that variable. Do not set it on
+the MCP host.
+
+### Blast-radius caps, audit and safety
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `SOAR_MAX_MUTATIONS_PER_CALL` | `1` | safety switch | clamped to 1, with a warning for any other value |
+| `SOAR_MAX_TIER2_PER_HOUR` / `SOAR_MAX_TIER3_PER_HOUR` | `25` / `5` | safety switch | sliding one-hour windows, persisted via the audit log; `0` permits none. Tier 1 is not capped |
+| `SOAR_AUDIT_LOG_PATH` | `audit.jsonl` | operational | hash-chained audit log; one file per server process |
+| `SOAR_AUDIT_REQUIRED` | `true` | safety switch | unwritable log ⇒ refuse to start. `false` starts anyway with reads only: mutations are still refused while no log is open |
+| `SOAR_KILL_SWITCH_FILE` | `HALT` | safety switch | while this file exists, every Tier ≥1 call is denied. Use an absolute path |
+| `SOAR_LOG_LEVEL` | `INFO` | operational | stderr logging (`DEBUG` … `CRITICAL`; unrecognised ⇒ `INFO`) |
+| `SOAR_SIM_MAX_INCIDENTS` | `25` | reserved | Phase 3 |
+| `SOAR_SNAPSHOT_DIR` | `snapshots` | reserved | Phase 4 |
+| `SOAR_PLAYBOOK_EXPORT_DIR` | `out/playbooks` | reserved | Phase 4 |
+
+### Catalog
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `SOAR_CATALOG_SOURCE` | `collections` | operational | where the catalog is read from. `collections`: the read-only collection endpoints, verified with a read-only key. `export`: selectable but **unavailable** (the configuration export is unverified: the one attempt was answered HTTP 403 and no export was obtained); every catalog load then fails with `catalog_unavailable`, nothing is sent, and there is no fallback. An unrecognised value warns and uses `collections` |
+| `SOAR_CATALOG_TTL_SECONDS` | `300` | operational | how long a loaded catalog is reused; `0` reloads on every read; at most `86400`. `soar_refresh_catalog` ignores it |
+
+### Transport
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `SOAR_MCP_TRANSPORT` | `stdio` | transport | `stdio` \| `streamable-http` (`http` accepted). Unrecognised ⇒ `stdio`. `--transport` overrides it and goes through the same checks |
+| `SOAR_MCP_HOST` / `SOAR_MCP_PORT` | `127.0.0.1` / `8090` | transport | HTTP bind; served at `/mcp` |
+| `SOAR_HTTP_AUTH_TOKEN` | — | transport | required for HTTP; sent as `Authorization: Bearer`, compared in constant time, redacted from logs. Exactly one token is accepted |
+| `SOAR_HTTP_ACKNOWLEDGE_EXPOSURE` | `false` | transport | required to bind `0.0.0.0` / `::` |
+
+### Lab only and deprecated
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `SOAR_LAB_MODE` | `false` | lab only | lab acknowledgement. On its own it changes nothing. It is what lets `SOAR_VERIFY_SSL=false` be accepted, and `in_band` / `disabled` approval when actions are enabled. Never in production |
+| `SOAR_ALLOW_WRITES` | — | deprecated | maps to the five Tier 1–2 flags only, with a warning, and never to `SOAR_ALLOW_ACTIONS`. Removed in the next minor version |
+
+### Command line
+
+| Command | What it does | Exit codes |
 |---|---|---|
-| `SOAR_BASE_URL` | — | `https://` URL of the appliance (plain `http://` only on loopback) |
-| `SOAR_ORG_ID` | — | organisation id (unparseable ⇒ connection disabled, with a warning) |
-| `SOAR_API_KEY_ID` / `SOAR_API_KEY_SECRET` | — | API key (Basic auth) |
-| `SOAR_VERIFY_SSL` | `true` | TLS verification. `false` is lab-only and refused without `SOAR_LAB_MODE=true`. Anything unrecognised refuses to start. (A CA-bundle path is still accepted here, deprecated.) See [TLS trust](#tls-trust) |
-| `SOAR_CA_BUNDLE` | — | PEM CA bundle for a private or self-signed CA. Empty ⇒ Python's default TLS trust configuration; set ⇒ the supplied bundle is used instead of it. Missing or not PEM ⇒ refuses to start |
-| `SOAR_TIMEOUT` | `30` | request timeout, seconds |
-| `SOAR_MAX_RESULTS` | `50` | page-size cap for search and for similar-incident candidates (max 500) |
-| `SOAR_ALLOW_COMMENTS` / `SOAR_ALLOW_ARTIFACTS` | `false` | Tier 1 |
-| `SOAR_ALLOW_INCIDENT_WRITES` / `SOAR_ALLOW_TASK_WRITES` / `SOAR_ALLOW_INCIDENT_CLOSE` | `false` | Tier 2 |
-| `SOAR_ALLOW_ACTIONS` / `SOAR_ALLOW_DESTRUCTIVE_ACTIONS` | `false` | Tier 3 |
-| `SOAR_ACTION_POLICY_FILE` | `./config/action_policy.yaml` | required to exist when `SOAR_ALLOW_ACTIONS=true` |
-| `SOAR_ALLOW_PLAYBOOK_DRAFT` / `_EXPORT` / `_CREATE` / `_MODIFY` / `_DEPLOY` / `_ENABLE` | `false` | Tier 4; accepted, no tools use them yet |
-| `SOAR_PLAYBOOK_EXPORT_DIR` | `out/playbooks` | reserved for Phase 4 |
-| `SOAR_ALLOW_SCRIPT_WRITES` | `false` | reserved; `true` refuses to start |
-| `SOAR_APPROVAL_MODE` | `out_of_band` | `out_of_band` \| `in_band` \| `disabled` (the latter two need `SOAR_LAB_MODE=true`) |
-| `SOAR_REQUIRE_ACTION_CONFIRMATION` / `SOAR_REQUIRE_PLAYBOOK_CONFIRMATION` | `true` | safety switches; garbage resolves to `true` |
-| `SOAR_APPROVAL_BROKER_PATH` | `approvals` | directory the model cannot reach |
-| `SOAR_APPROVAL_PUBLIC_KEY_FILE` | — | Ed25519 public key; without it no approval can be verified |
-| `SOAR_APPROVAL_TTL_SECONDS` | `900` | request and signature lifetime |
-| `SOAR_MAX_MUTATIONS_PER_CALL` | `1` | clamped to 1 |
-| `SOAR_MAX_TIER2_PER_HOUR` / `SOAR_MAX_TIER3_PER_HOUR` | `25` / `5` | sliding windows, persisted via the audit log |
-| `SOAR_SIM_MAX_INCIDENTS` | `25` | reserved for Phase 3 |
-| `SOAR_AUDIT_LOG_PATH` | `audit.jsonl` | hash-chained audit log |
-| `SOAR_AUDIT_REQUIRED` | `true` | unwritable log ⇒ refuse to start |
-| `SOAR_SNAPSHOT_DIR` | `snapshots` | reserved for Phase 4 |
-| `SOAR_KILL_SWITCH_FILE` | `HALT` | exists ⇒ every Tier ≥1 call is denied |
-| `SOAR_LOG_LEVEL` | `INFO` | stderr logging |
-| `SOAR_CATALOG_SOURCE` | `collections` | where the catalog is read from. `collections`: the read-only collection endpoints, verified with a read-only key. `export`: selectable but **unavailable** (the configuration export is unverified: the one attempt was answered HTTP 403 and no export was obtained); every catalog load then fails with `catalog_unavailable`, nothing is sent, and there is no fallback. An unrecognised value warns and uses `collections` |
-| `SOAR_CATALOG_TTL_SECONDS` | `300` | how long a loaded catalog is reused; `0` reloads on every read; at most `86400`. `soar_refresh_catalog` ignores it |
-| `SOAR_MCP_TRANSPORT` | `stdio` | `stdio` \| `streamable-http` |
-| `SOAR_MCP_HOST` / `SOAR_MCP_PORT` | `127.0.0.1` / `8090` | HTTP bind |
-| `SOAR_HTTP_AUTH_TOKEN` | — | required for HTTP; sent as `Authorization: Bearer` |
-| `SOAR_HTTP_ACKNOWLEDGE_EXPOSURE` | `false` | required to bind all interfaces |
-| `SOAR_LAB_MODE` | `false` | lab acknowledgement: permits `in_band`/`disabled` approval and `SOAR_VERIFY_SSL=false`, each only when also set explicitly; never in production |
-| `SOAR_ALLOW_WRITES` | — | **deprecated**; maps to the Tier 1–2 flags only and never to actions |
+| `qradar-soar-mcp` | serve over stdio (or `SOAR_MCP_TRANSPORT`); writes nothing to stdout but the protocol | 2 refused configuration |
+| `qradar-soar-mcp --transport stdio` (or `streamable-http`) | serve, overriding `SOAR_MCP_TRANSPORT` | as above |
+| `qradar-soar-mcp --check` | validate the configuration, send one `incidents/query_paged`, print a JSON report with no secrets (`capabilities`, `tls`, `audit`, `limits`, `approvals`, `ping`, …) | 0 reachable · 1 not configured or unreachable · 2 refused configuration |
+| `qradar-soar-mcp --version` | print the version | 0 |
+| `qradar-soar-approve keygen --private KEY --public PUB` | new Ed25519 keypair; refuses to overwrite either file | 0 · 1 a file exists |
+| `qradar-soar-approve list` | list requests and their state | 0 |
+| `qradar-soar-approve APR-… [--key KEY] [--approver NAME] [--ttl SECONDS]` (`approve` may be written before the reference) | print the plan, require the reference typed back, then sign or reject | 0 approved · 3 rejected · 1 no such request, or not pending · 2 malformed reference or no usable key |
+| `qradar-soar-audit verify [PATH]` | walk the hash chain (default `$SOAR_AUDIT_LOG_PATH`, else `./audit.jsonl`) | 0 intact · 1 broken, naming the first bad record |
 
-Command-line: `qradar-soar-mcp [--check] [--transport stdio|streamable-http]`,
-`qradar-soar-approve {keygen,list,approve}`, `qradar-soar-audit verify [path]`.
+`qradar-soar-approve --broker DIR` (before the subcommand) selects the broker
+directory; the default is `$SOAR_APPROVAL_BROKER_PATH`, else `./approvals`.
 
 ---
 
 ## SOAR API behaviours this client relies on
 
-Confidence marks follow `docs/design/05-SOAR-API-SURFACE.md`: ✅ documented
-and long-stable, encoded in the offline contract suite, **not yet verified by
-this repository against a live appliance**; ⚠️/❓ open, listed in
-[docs/open-questions.md](docs/open-questions.md) and not used.
+Every mark below is about **one** appliance, IBM QRadar SOAR `51.0.9.0.20848`, as
+recorded in [docs/soar-api-verified.md](docs/soar-api-verified.md). That record wins
+wherever it disagrees with this list.
 
-1. ✅ `handle_format=names` and `text_content_output_format=always_text` on
-   every request — ids become labels, rich text is flattened.
-2. ✅ `PATCH /incidents/{id}` is optimistic concurrency, not a merge: `version`
+- ✅ **verified live** on that version, by an owner-approved research run (status and
+  response shape; a write only where stated).
+- ⚠️ **documented, not exercised live**: the appliance's own API reference documents
+  it, and the offline contract model encodes it, but it is not yet verified live,
+  usually because checking it needs a write. The client relies on it with that caveat.
+- ❓ **unverified or unknown**: not relied on. The tool refuses, fails closed, or
+  reports "unknown". Open items are in [docs/open-questions.md](docs/open-questions.md).
+
+1. ✅ `handle_format=names` is sent on every request (except the two single-task
+   calls): select values such as `severity_code` and `phase_id` come back as label
+   strings (Q12). ⚠️ `text_content_output_format=always_text` is accepted everywhere,
+   but its effect was not observable: `description` was a plain string either way.
+2. ⚠️ `PATCH /incidents/{id}` is optimistic concurrency, not a merge: `version`
    plus `old_value`/`new_value` per field; an HTTP-200 `success: false` is
-   raised as `patch_rejected`, never swallowed.
-3. ✅ Custom fields live under `properties.<name>` (bare name in a PATCH,
-   `properties.<name>` in a filter).
-4. ✅ Listing is `POST /incidents/query_paged?return_level=normal`; conditions
-   inside one filter are ANDed, separate filters are ORed; `plan_status` is
-   `"A"` active / `"C"` closed.
-5. ✅ Closing sends `plan_status` + `resolution_id` + `resolution_summary`
-   together and SOAR rejects it if a close-required custom field is empty.
+   raised as `patch_rejected`, never swallowed. ✅ The incident carries `vers`. The
+   PatchDTO shape and the stale-version answer are documented, not exercised live.
+3. ✅ Custom fields are read under `properties.<name>`, and field definitions mark
+   them with `prefix: properties`. ⚠️ The bare name in a PATCH and `properties.<name>`
+   in a filter are not exercised live.
+4. ✅ Listing is `POST /incidents/query_paged?return_level=normal` (`return_level` is
+   optional; `normal` returns the full object), `create_date` is accepted as a sort
+   field, and an active incident's `plan_status` is `"A"`. ⚠️ Conditions inside one
+   filter are ANDed and separate filters are ORed, per the reference; the research key
+   saw no closed incident, so neither that nor `"C"` was distinguishable live (Q14).
+5. ⚠️ Closing sends `plan_status` + `resolution_id` + `resolution_summary`
+   together. ❓ Whether SOAR rejects a close with an empty close-required field, and
+   what the field token `close` enforces, were not tested (that needs a write;
+   `soar-api-verified.md` §3.2).
 6. ✅ Task status changes follow the contract verified on QRadar SOAR
    `51.0.9.0.20848` (`docs/soar-api-verified.md` §3.1), and only that: read the
    task with `GET /tasks/{id}`, send the **whole** object back with
@@ -559,29 +752,37 @@ this repository against a live appliance**; ⚠️/❓ open, listed in
    so only `id` and `name` are used and anything else fails closed. ❓ Invocation
    is unverified, so `soar_invoke_action` refuses every call before approval
    or any request.
-8. ✅ `GET /rest/session` may be forbidden to API keys; `--check` reports that
-   and does not fail on it.
-9. ⚠️ Attachment contents (`…/attachments/{aid}/contents`) are not fetched;
-   metadata only. ❓ Artifact hits and incident history are not used.
-10. ✅ The catalog is built from read-only collection calls verified on QRadar SOAR
+8. ✅ `GET /rest/session` answers 200 to an API key on this version, with no
+   permission data (Q9). `--check` reports the identity it names. A 403 or 404 from it
+   (other versions) is reported as `session: unavailable` and does not fail the check.
+9. ✅ The attachment-contents route was verified for one `text/plain` attachment
+   (Q7), but this server **never fetches** contents: metadata only. ❓ Artifact hits
+   and incident history are not used.
+10. ⚠️ `POST /incidents` (Q8), `POST /incidents/{id}/comments` and
+    `POST /incidents/{id}/artifacts` are documented by the appliance and modelled
+    offline; none was exercised live. That `discovered_date` is the one required field
+    of a new incident is the design's reading, not verified.
+11. ✅ The catalog is built from read-only collection calls verified on QRadar SOAR
     `51.0.9.0.20848` with a read-only key (`docs/soar-api-verified.md` Q1, Q4, Q5, §2):
     `GET` on `/rest/const`, `functions`, `functions/{id}`, `types/__function/fields`,
     `actions`, `scripts`, `workflows`, `message_destinations`, `incident_types`,
     `phases`, `groups`, `types` and `types/{incident,task,artifact}/fields`, and the
     criteria-only `POST /playbooks/query_paged` (a `GET` on the playbook collection
     answers 500). Data tables are the types with `type_id == 8`; function inputs are
-    `view_items` joined to the `__function` fields. ❓ The workflow object, installed
-    apps and the API key's own permission set have no verified source and are reported
-    as unknown, never as empty. ❓ The configuration export is unverified and not used.
-    ❓ Other SOAR versions are unverified.
+    `view_items` joined to the `__function` fields. A workflow's BPMN XML is
+    `content.xml` of its `GET /workflows` row; its structure was verified for one
+    workflow (`P2-04`, §3.3), and a key without workflow read is answered `403`.
+    ❓ Installed apps and the API key's own permission set have no verified source and
+    are reported as unknown, never as empty. ❓ The configuration export is unverified
+    and not used. ❓ Other SOAR versions are unverified.
 
-11. ✅ A script body is `script_text` of `GET /scripts/{id}` (`P2-00`, read-only key);
+12. ✅ A script body is `script_text` of `GET /scripts/{id}` (`P2-00`, read-only key);
     the list row carries none. It is one of the two calls the discovery tools add to the
-    catalog's (the other is item 12). ❓ How large a body SOAR returns, and
+    catalog's (the other is item 13). ❓ How large a body SOAR returns, and
     playbook-local scripts, are unverified. No request that creates, changes or deletes a
     script exists in this server (`tests/test_no_script_writes.py`).
 
-12. ✅ A single playbook is `GET /playbooks/{id}` (`P2-00`; `P2-05`, read-only key with
+13. ✅ A single playbook is `GET /playbooks/{id}` (`P2-00`; `P2-05`, read-only key with
     playbook read): the list row plus `content.xml` (standard BPMN 2.0) and
     `activation_details.activation_conditions`. A function call in it is the vendor
     `function` element's `uuid` attribute, observed to equal the called function's
@@ -593,16 +794,39 @@ this repository against a live appliance**; ⚠️/❓ open, listed in
 
 The REST surface `client/` may touch is exactly the set of calls listed in
 `docs/design/08-GREENFIELD-AMENDMENTS.md §4` and, for the catalog and discovery, `§25`,
-`§26` and `§30`, enforced
-by an AST test. Nothing else is called. `P2-00` and `P2-00b` checked this surface against a lab appliance
-(QRadar SOAR `51.0.9.0.20848`); `docs/soar-api-verified.md` records the sanitised
-evidence and wins wherever it disagrees with a mark above.
+`§26` and `§30`, enforced by an AST test. Nothing else is called.
+
+Two kinds of evidence stand behind the marks, and they are not the same thing:
+
+- **Offline contract model.** `tests/fake_soar.py` (with `respx`) models every call
+  above, and the whole test suite runs against it with no network. It shows that the
+  client sends what the design says and handles each answer it models. It cannot show
+  that SOAR behaves that way. In places it is stricter than the appliance (it requires
+  `return_level`, which SOAR does not).
+- **Live research runs.** `P2-00`, `P2-00b` and the `P2-03`, `P2-04` and `P2-05`
+  addenda read that surface on one lab appliance, `51.0.9.0.20848`, with
+  [`scripts/probe/`](scripts/probe/README.md), each run approved by the owner. Only one
+  kind of write was sent: four task-status `PUT`s on a disposable task.
+  `docs/soar-api-verified.md` records the evidence, with sanitised response shapes in
+  `tests/fixtures/soar/verified/`. These were one-off runs, not a test suite: the
+  `lab` test markers are registered, but no lab test exists yet, and nothing re-checks
+  a newer appliance automatically.
 
 ---
 
 ## Known limitations
 
-- No live-appliance verification yet (see above).
+- Live verification covers one appliance version (`51.0.9.0.20848`), the read surface
+  and the task-status write. Notes, artifacts, incident create, update and close are
+  tested offline only (see [Confidence in API claims](#confidence-in-api-claims)).
+  Try them first against a lab or disposable org.
+- The server cannot tell what its API key may do in SOAR. There is no start-up
+  permission probe, because no endpoint a read-only key can use reports a key's
+  permissions (Q6).
+- The out-of-band approval flow is built but not reachable: no tool in this release
+  asks for an approval (see [Approval model](#approval-model)).
+- Successful reads are not written to the audit log; denials and every mutation
+  attempt are. Tier-1 writes have no hourly cap and do not feed the circuit breaker.
 - `soar_find_similar_incidents` is an N+1 client-side composition over the
   most recent `SOAR_MAX_RESULTS` incidents, not a server-side search.
 - No manual action can be invoked: `soar_invoke_action` refuses every call as
@@ -632,8 +856,11 @@ evidence and wins wherever it disagrees with a mark above.
   values in the catalog). `SOAR_CATALOG_SOURCE=export` does not work.
   One load costs one request per function on top of the collections.
 - Discovery covers functions, scripts, message destinations, incident types, phases,
-  fields, data tables, rules and workflows. Playbooks are in the catalog but have no
-  tool yet; the Tier-4 flags are accepted and unused.
+  fields, data tables, rules, workflows and playbooks. It reads; nothing creates,
+  changes, exports, imports, enables or runs a playbook, workflow or script. The Tier-4
+  flags are accepted and unused. `soar_list_playbooks` cannot show which functions a
+  playbook calls (only `soar_get_playbook` reads that), and `soar_get_playbook` never
+  returns the playbook XML or the values its conditions compare with.
 - The workflow summary is verified against the structure of **one** workflow on
   51.0.9.0.20848 (a start event, one function call, one exclusive gateway, two end
   events). Other BPMN node types are listed with `type_observed: false` and their
@@ -659,7 +886,7 @@ evidence and wins wherever it disagrees with a mark above.
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Investigation + controlled actions + security architecture | **this release, v0.2.0** |
-| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); incident-type, phase, field and data-table discovery in (`P2-03`); rule and workflow discovery in (`P2-04`); the rest planned |
+| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); incident-type, phase, field and data-table discovery in (`P2-03`); rule and workflow discovery in (`P2-04`); playbook discovery in (`P2-05`); the rest (`P2-06`, `P2-07`) planned |
 | 3 | Playbook IR, validation, offline simulation | planned |
 | 4 | Compilation, export, import (always disabled) | planned |
 | 5 | Controlled enablement | planned |
