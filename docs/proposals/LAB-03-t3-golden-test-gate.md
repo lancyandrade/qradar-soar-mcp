@@ -1,6 +1,7 @@
 # LAB-03 — T3 Golden-Test Release Gate (proposed ticket)
 
-**Status:** proposed, not implemented. **Owner decision D21 (2026-10-30):** T3 golden
+**Status:** proposed, not implemented. **Scope pending D22 (open):** nothing in §3 –
+§9 is adopted until the owner decides D22 and approves the output list. **Owner decision D21 (2026-10-30):** T3 golden
 tests remain a mandatory release gate; no waiver is granted. `v0.2.0` is NO-GO until
 the T3 gate item is evidenced (and the T4/T5/T6 items, D14).
 
@@ -36,16 +37,18 @@ exists in `v0.2.0`: `src/qradar_soar_mcp/playbook/` is an empty package
 (`tests/test_repo_hygiene.py::test_future_phase_packages_hold_no_behaviour`). The
 baseline does **not** say what a golden test is for a Phase-1/2 release.
 
-So two readings are possible, and choosing one is the owner's call (proposed open
-question **D22**):
+So two readings are possible, and choosing one is the owner's call: open question
+**D22** ([`open-questions.md`](../open-questions.md)), **not decided**:
 
 - **(A) Phase-scoped.** T3 applies to the IR corpus; until Phase 3 there is nothing to
   golden-test. Under D21 this reading leaves the gate unmeetable for `v0.2.0`, and so
   it would need an amendment that D21 explicitly does not grant.
 - **(B) Release-scoped (proposed).** T3 is "golden-file tests of every deterministic,
   user-visible output this release produces", with the IR corpus of `P3-10` added in
-  Phase 3. This ticket specifies (B). The exact output list in §3 is a **proposal**:
-  the baseline does not name it, and it must be approved before implementation.
+  Phase 3. This ticket **details** (B) so the owner can judge it; it does **not**
+  adopt it. The exact output list in §3 is a **proposal**: the baseline does not name
+  it, and it must be approved before implementation. If the owner chooses (A), or
+  amends (B), §3 – §9 change accordingly.
 
 Nothing below is presented as a baseline requirement except what §1 quotes.
 

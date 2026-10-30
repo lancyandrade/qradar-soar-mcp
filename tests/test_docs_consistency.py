@@ -216,6 +216,7 @@ SPRINT1_DOCS = (
     "docs/runbooks/branch-protection.md",
     "docs/runbooks/artifact-hygiene.md",
     "docs/design/08-GREENFIELD-AMENDMENTS.md",
+    "docs/proposals/LAB-03-t3-golden-test-gate.md",
 )
 
 

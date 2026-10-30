@@ -82,8 +82,9 @@ a VM snapshot, permission to seed):
   at the approval gate / refusal and is audited as attempted.
 - Teardown of the seeded set; audit verify over the run.
 
-**LAB-04 — T6 against a mock AppHost** (named `LAB-03` in Sprint 1; renamed, 08 §33) (needs the owner: a mock AppHost host,
-the three logging functions installed in org 301 only, a way to read its call log):
+**LAB-04 — T6 against a mock AppHost.** Named `LAB-03` in Sprint 1 and renamed (08 §33).
+Needs the owner: a mock AppHost host, the three logging functions installed in org 301
+only, and a way to read its call log.
 
 `07 §7.4` lists nine assertions. With the D16 limitation (`soar_invoke_action` always
 returns `DENY_UNSUPPORTED`):
