@@ -821,9 +821,10 @@ Two kinds of evidence stand behind the marks, and they are not the same thing:
   [`scripts/probe/`](scripts/probe/README.md), each run approved by the owner. Only one
   kind of write was sent: four task-status `PUT`s on a disposable task.
   `docs/soar-api-verified.md` records the evidence, with sanitised response shapes in
-  `tests/fixtures/soar/verified/`. These were one-off runs, not a test suite: the
-  `lab` test markers are registered, but no lab test exists yet, and nothing re-checks
-  a newer appliance automatically.
+  `tests/fixtures/soar/verified/`. These were one-off runs, not a test suite. An
+  opt-in T4 read-only lab suite is scaffolded under `tests/lab/` but has **never run**;
+  no T5 or T6 test exists, and nothing re-checks a newer appliance automatically
+  ([lab-validation plan](docs/lab-validation-plan.md)).
 
 ---
 
@@ -904,9 +905,10 @@ Two kinds of evidence stand behind the marks, and they are not the same thing:
   hash and text extraction are deferred.
 - **Early Phase-2 discovery is included**: 16 read-only tools, for 36 tools in all.
 - **`v0.3.0` is not ready.** Phase 2 is incomplete.
-- The release gate has not passed. The lab tests (T4–T6) do not exist yet, and the
-  owner has not decided whether to waive them for this alpha
-  ([release-readiness audit](docs/release-readiness.md#10-verdict)).
+- The release gate has not passed. The lab tests (T4–T6) have not run, and the owner
+  decided not to waive them: the alpha is published only after they pass
+  ([release-readiness §13.3](docs/release-readiness.md#133-verdict),
+  [lab-validation plan](docs/lab-validation-plan.md)).
 
 What changed: [CHANGELOG.md](CHANGELOG.md). Release notes:
 [docs/releases/v0.2.0-alpha.md](docs/releases/v0.2.0-alpha.md).

@@ -49,5 +49,15 @@ Thumbs.db
 # Local logs
 *.log
 
+# Local development artefacts (SEC-14, docs/runbooks/artifact-hygiene.md).
+# Listed here, not only in a per-machine .git/info/exclude, so every clone ignores them.
+.playwright-mcp/
+.claude/settings.local.json
+.claude/worktrees/
+.local/
+*.sqlite
+*.db
+lab-evidence/
+
 # Review-loop scratch space (findings, trusted checkouts) on CI runners
 .review-loop/

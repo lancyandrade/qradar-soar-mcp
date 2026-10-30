@@ -340,6 +340,12 @@ not documented; if it reviews new pushes, `manual` mode needs no human step.
 
 ### 3.7 Branch protection for `main` (Settings → Rules → Rulesets → New branch ruleset)
 
+> **REL-03 (2026-10-29):** the reviewable ruleset bodies, check names, recovery
+> procedure and verification commands are in
+> [`branch-protection.md`](branch-protection.md). Apply its **phase 1** (CI only)
+> first; the ruleset below is its **phase 2**, for after the gate has published on a
+> PR. Requiring the gate before the App exists blocks every merge.
+
 `main` currently has no protection. Create a ruleset targeting the default
 branch with:
 
