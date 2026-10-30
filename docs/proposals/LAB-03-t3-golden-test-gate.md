@@ -122,10 +122,19 @@ whitespace), and marked `@pytest.mark.golden`:
   that writes expected files) or `--snapshot-update` for syrupy snapshots. CI never
   passes either flag; a test asserts that the CI workflow does not contain them.
 - A PR that changes any file under `tests/golden/` or `tests/__snapshots__/` must say why
-  in its description, and a human reads every changed expected file before merge. With
-  REL-03 phase 1 applied, the PR requirement and review-thread resolution enforce the
-  review step; a `CODEOWNERS` entry for `tests/golden/` is optional for a solo
-  maintainer.
+  in its description, and a human reads every changed expected file before merge.
+- **Under REL-03 phase 1 this review is a manual maintainer responsibility, not an
+  enforced control.** Phase 1 requires a pull request but 0 approvals and no code-owner
+  review (`docs/runbooks/rulesets/main-phase1.json`), so a PR with no review threads can
+  merge with regenerated expectations nobody read, and a regenerated expectation can
+  make an output regression pass CI. A test that only asserts the expected files are
+  present cannot detect that.
+- **Enforcement, once a second maintainer exists:** a `CODEOWNERS` entry for
+  `tests/golden/` and `tests/__snapshots__/`, and a ruleset change to
+  `require_code_owner_review: true` with `required_approving_review_count: 1`. Both are
+  owner decisions on repository settings and are **not** part of this ticket; until
+  then, the release-gate evidence of §9 must state that golden-file changes since the
+  last release were reviewed by hand, and by whom.
 - Changes to G1 (tool manifest), G3 (denials) and G6 (audit shape) are
   security-relevant and are listed in the changelog.
 - Procedure documented in `CONTRIBUTING.md`.
@@ -157,14 +166,17 @@ whitespace), and marked `@pytest.mark.golden`:
 5. Failure behaviour of §6 is tested: a changed output, a missing expected file, an
    orphan expected file and a planted sentinel each fail.
 6. Regeneration needs an explicit flag that CI never passes (asserted).
-7. The review procedure of §7 is in `CONTRIBUTING.md`.
+7. The review procedure of §7 is in `CONTRIBUTING.md`, and says plainly that under
+   REL-03 phase 1 it is a manual maintainer responsibility, not enforced by the ruleset.
 8. `check_no_secrets.py` and `check_artifact_hygiene.py` stay clean; packages unchanged
    (no golden files in the sdist or wheel).
 
 **Gate evidence** (recorded in `docs/release-readiness.md` for the release commit): the
 GitHub CI run id on the commit to be tagged, with `uv run pytest -m golden -q` output
 from that run showing *N passed, 0 skipped, 0 failed* and N ≥ the number of approved
-groups. Only then may the release documents say the T3 gate item is met.
+groups, plus a signed-off line naming who reviewed every golden-file change since the
+last release (while review is not enforced by a ruleset, §7). Only then may the release
+documents say the T3 gate item is met.
 
 ## 10. Out of scope
 
