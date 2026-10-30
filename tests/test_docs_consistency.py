@@ -209,7 +209,19 @@ def test_required_docs_exist_and_are_substantial(doc: str):
     assert len(path.read_text(encoding="utf-8")) > 1500, doc
 
 
-@pytest.mark.parametrize("doc", ("README.md", "SECURITY.md", *RELEASE_DOCS, *REQUIRED_DOCS))
+# Sprint 1 (REL-05, REL-03, LAB-01, SEC-14) documents: their links are checked too.
+SPRINT1_DOCS = (
+    "docs/release-readiness.md",
+    "docs/lab-validation-plan.md",
+    "docs/runbooks/branch-protection.md",
+    "docs/runbooks/artifact-hygiene.md",
+    "docs/design/08-GREENFIELD-AMENDMENTS.md",
+)
+
+
+@pytest.mark.parametrize(
+    "doc", ("README.md", "SECURITY.md", *RELEASE_DOCS, *REQUIRED_DOCS, *SPRINT1_DOCS)
+)
 def test_relative_links_resolve(doc: str):
     path = ROOT / doc
     text = path.read_text(encoding="utf-8")

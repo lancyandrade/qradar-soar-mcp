@@ -219,6 +219,18 @@ BLOCKED = [
     ("GET", f"https://{HOST}/rest/orgs/301/incidents/7"),
     ("GET", "https://apphost.example.com/rest/session"),
     ("GET", f"https://{HOST}/elsewhere"),
+    # Final review of PR #22: wrong org without a trailing slash, the org list, plain
+    # HTTP (credentials in clear), another port, traversal and encoded separators.
+    ("GET", f"https://{HOST}/rest/orgs/301"),
+    ("GET", f"https://{HOST}/rest/orgs"),
+    ("GET", f"http://{HOST}/rest/session"),
+    ("GET", f"https://{HOST}:8443/rest/session"),
+    ("GET", f"https://{HOST}/rest/orgs/201/%2E%2E/301/incidents"),
+    ("GET", f"https://{HOST}/rest/orgs/201%2F..%2F301/incidents"),
+    ("GET", f"https://{HOST}/rest/orgs/201/x%5C..%5C301"),
+    ("GET", f"https://{HOST}/rest/users"),
+    ("OPTIONS", f"https://{HOST}/rest/session"),
+    ("POST", f"https://{HOST}/rest/orgs/201/incidents/query_paged/"),
 ]
 
 
@@ -333,3 +345,36 @@ async def test_runtimes_sharing_a_state_dir_write_one_verifiable_chain(tmp_path:
     assert records[1]["prev_hash"] == records[0]["hash"]
     result = verify(audit)
     assert result.ok and result.records == 2
+
+
+async def test_read_only_transport_honours_an_explicit_target_port():
+    inner = _Recorder()
+    guard = ReadOnlyTransport(inner, host=HOST, org_id=201, port=8443)
+    async with httpx.AsyncClient(transport=guard) as client:
+        assert (await client.get(f"https://{HOST}:8443/rest/session")).status_code == 200
+        with pytest.raises(LabWriteBlocked):
+            await client.get(f"https://{HOST}/rest/session")  # 443 is not the target
+    assert inner.seen == [("GET", "/rest/session")]
+
+
+def test_target_port_comes_from_the_base_url_and_must_be_valid():
+    assert resolve(T4, LabTier.READ_ONLY).port == 443
+    explicit = {**T4, "SOAR_TEST_BASE_URL": f"https://{HOST}:8443"}
+    assert resolve(explicit, LabTier.READ_ONLY).port == 8443
+    _refused({**T4, "SOAR_TEST_BASE_URL": f"https://{HOST}:99999"}, LabTier.READ_ONLY, "port")
+
+
+@pytest.mark.parametrize("tier", list(LabTier))
+def test_the_lab_runtime_never_uses_the_servers_own_credentials(tier: LabTier, tmp_path: Path):
+    """No fallback to production credentials: the server's own SOAR_* values (here a
+    different host, org and key) never reach the lab runtime environment."""
+    production = {
+        "SOAR_BASE_URL": "https://prod.example.com",
+        "SOAR_ORG_ID": "999",
+        "SOAR_API_KEY_ID": "prod-key",
+        "SOAR_API_KEY_SECRET": "prod-secret-value",
+    }
+    target = resolve(FULL[tier], tier, runtime_env=production)
+    env = target.runtime_env(tmp_path)
+    assert not set(production.values()) & set(env.values())
+    assert env["SOAR_API_KEY_SECRET"] in (SECRET, WRITE_SECRET)

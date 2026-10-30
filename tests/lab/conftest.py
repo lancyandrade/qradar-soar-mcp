@@ -99,7 +99,9 @@ async def t4_runtime(
     env = lab_target.runtime_env(t4_state_dir)
     settings = Settings.load(env)
     inner = httpx.AsyncHTTPTransport(verify=build_trust(settings).httpx_verify)
-    guard = ReadOnlyTransport(inner, host=lab_target.host, org_id=lab_target.org_id)
+    guard = ReadOnlyTransport(
+        inner, host=lab_target.host, org_id=lab_target.org_id, port=lab_target.port
+    )
     rt = Runtime.build(env, transport="stdio", http_transport=guard)
     if not rt.usable:
         await guard.aclose()

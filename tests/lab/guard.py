@@ -61,6 +61,11 @@ class LabTarget:
     ca_bundle: str | None = None
     mock_apphost_url: str | None = None
 
+    @property
+    def port(self) -> int:
+        """The appliance port: explicit in ``SOAR_TEST_BASE_URL`` or the HTTPS default."""
+        return urlsplit(self.base_url).port or 443
+
     def runtime_env(self, state_dir: Path) -> dict[str, str]:
         """The complete server environment for a lab run.
 
@@ -97,6 +102,10 @@ def _host_of(url: str, var: str, *, allow_http: bool = False) -> str:
         raise LabRefusedError(f"{var} must not carry a query or fragment")
     if not parts.hostname:
         raise LabRefusedError(f"{var} has no host")
+    try:
+        parts.port  # noqa: B018 - urlsplit validates the port lazily
+    except ValueError:
+        raise LabRefusedError(f"{var} has an invalid port") from None
     return parts.hostname.lower().rstrip(".")
 
 
@@ -242,31 +251,49 @@ class LabWriteBlocked(httpx.TransportError):
     """Raised by :class:`ReadOnlyTransport` instead of sending a request."""
 
 
-class ReadOnlyTransport(httpx.AsyncBaseTransport):
-    """T4's wire-level guard: anything but a read to the one lab host never leaves.
+# Org-less reads the client makes (client/base.py ``ping``, client/discovery.py).
+_ORGLESS_READS = frozenset({"/rest/session", "/rest/const"})
+# Percent-encoded dot, slash or backslash: a server that decodes them could resolve a
+# path outside the one checked here.
+_ENCODED_SEPARATOR = re.compile(r"%(2e|2f|5c)", re.IGNORECASE)
 
-    Allowed: ``GET``/``HEAD`` under ``/rest/`` on ``host``, and ``POST`` to the two
-    verified search endpoints (``incidents``/``playbooks`` ``query_paged``) of
-    ``org_id``. Everything else raises :class:`LabWriteBlocked` **before** the inner
-    transport sees it, and is recorded in ``blocked``.
+
+class ReadOnlyTransport(httpx.AsyncBaseTransport):
+    """T4's wire-level guard: anything but a read to the one lab target never leaves.
+
+    Allowed, and nothing else: ``https`` to exactly ``host``:``port``; ``GET``/``HEAD``
+    on ``/rest/session``, ``/rest/const`` or a path under ``/rest/orgs/<org_id>/``; and
+    ``POST`` to the two verified search endpoints (``incidents``/``playbooks``
+    ``query_paged``) of ``org_id``. A path with a ``.``/``..`` segment, a backslash or a
+    percent-encoded dot, slash or backslash is refused. Everything else raises
+    :class:`LabWriteBlocked` **before** the inner transport sees it, and is recorded in
+    ``blocked``.
     """
 
-    def __init__(self, inner: httpx.AsyncBaseTransport, *, host: str, org_id: int) -> None:
+    def __init__(
+        self, inner: httpx.AsyncBaseTransport, *, host: str, org_id: int, port: int = 443
+    ) -> None:
         self._inner = inner
         self._host = host
+        self._port = port
         self._org = str(org_id)
         self.sent: list[tuple[str, str]] = []
         self.blocked: list[tuple[str, str]] = []
 
     def allows(self, request: httpx.Request) -> bool:
-        if (request.url.host or "").lower() != self._host:
+        url = request.url
+        if url.scheme != "https" or (url.host or "").lower() != self._host:
             return False
-        path = request.url.path
-        if not path.startswith("/rest/"):
+        if (url.port or 443) != self._port:
+            return False
+        raw_path = url.raw_path.split(b"?", 1)[0].decode("ascii", errors="replace")
+        path = url.path
+        if _ENCODED_SEPARATOR.search(raw_path) or "\\" in path:
+            return False
+        if any(segment in (".", "..") for segment in path.split("/")):
             return False
         if request.method in ("GET", "HEAD"):
-            org = re.match(r"^/rest/orgs/(\d+)/", path)
-            return org is None or org.group(1) == self._org
+            return path in _ORGLESS_READS or path.startswith(f"/rest/orgs/{self._org}/")
         match = _READ_POSTS.match(path)
         return request.method == "POST" and match is not None and match.group(1) == self._org
 
