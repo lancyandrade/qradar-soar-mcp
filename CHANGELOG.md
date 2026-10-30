@@ -212,6 +212,11 @@ of 2026-10-29 (REL-05, [08 §32](docs/design/08-GREENFIELD-AMENDMENTS.md#32-rel-
 - The P1-15 attachment-processing deferral and the D4 limitation (invocation refuses,
   approval broker unreachable) are **accepted as alpha scope**. Neither feature is
   implemented.
+- **T3 golden tests are mandatory and missing** (owner decision D21, 2026-10-30; no waiver). No test
+  carries the `golden` marker yet; the proposed work is LAB-03
+  ([docs/proposals/LAB-03-t3-golden-test-gate.md](docs/proposals/LAB-03-t3-golden-test-gate.md)).
+- A T6 run that only shows every action being refused is evidence of correct rejection, not of
+  successful execution or approval enforcement (D20); full T6 needs every `07 §7.4` step.
 - GitHub CI green on the commit to be tagged.
 - **REL-04** (tag-triggered CI release build) is open. Until it lands, no wheel, sdist
   or other build artefact is attached to a release or published, and nothing is

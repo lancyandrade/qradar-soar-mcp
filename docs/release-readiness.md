@@ -520,7 +520,7 @@ ruleset).
 
 ### 13.2 Owner decisions (REL-05)
 
-Recorded in 08 §32 and `open-questions.md` D14 – D21:
+Recorded in 08 §32 – §33 and `open-questions.md` D14 – D22:
 
 | Decision | Outcome |
 |---|---|
@@ -531,14 +531,14 @@ Recorded in 08 §32 and `open-questions.md` D14 – D21:
 | Release format | Source-only pre-release, after every mandatory gate (D18). |
 | SEC-14 artefact hygiene | Exclude, retain audit evidence, human-only cleanup (D19): [`runbooks/artifact-hygiene.md`](runbooks/artifact-hygiene.md). |
 | P1-08 hourly-cap audit deviation | Recorded as an AC amendment, 08 §32.1, and pinned by a test. |
-| T6 while invocation refuses | **Open** (D20). |
-| T3 (`golden`) has no test | **Open** (D21). |
+| T6 while invocation refuses | **Decided 2026-10-30** (D20, 08 §33): a denial-only run is evidence of correct rejection only; full T6 needs every `07 §7.4` criterion. |
+| T3 (`golden`) has no test | **Decided 2026-10-30** (D21, 08 §33): T3 stays mandatory, no waiver; [`LAB-03`](proposals/LAB-03-t3-golden-test-gate.md) proposed; scope question D22 open. |
 
 ### 13.3 Verdict
 
 | Release | Verdict | What is missing |
 |---|---|---|
-| **`v0.2.0`** | **NO-GO** | T4 green against the lab; T5 green in a disposable organisation (org 301); T6 green against a mock AppHost (and D20 decided); T3 evidenced or accepted as vacuous (D21); `qradar-soar-audit verify` clean over that run; a human read of the `security/` diff (07 §7.5). Recommended before tagging: REL-03 applied. The lab work is planned in [`lab-validation-plan.md`](lab-validation-plan.md) (LAB-01). |
+| **`v0.2.0`** | **NO-GO** | T4 green against the lab; T5 green in a disposable organisation (org 301); T6 green against a mock AppHost (all `07 §7.4` steps; a denial-only run is partial evidence, D20); T3 golden tests green in CI (D21, LAB-03, D22 open); `qradar-soar-audit verify` clean over that run; a human read of the `security/` diff (07 §7.5). Recommended before tagging: REL-03 applied. The lab work is planned in [`lab-validation-plan.md`](lab-validation-plan.md) (LAB-01). |
 | **`v0.3.0`** | **NO-GO** | unchanged (§10) |
 
 No tag, release, version change or repository setting is made by this change.

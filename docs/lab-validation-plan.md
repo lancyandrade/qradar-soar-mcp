@@ -12,7 +12,7 @@ it matters:
 
 | Gate item (`07 §7.5`) | Tier | Where it runs (`07 §2`, §7.1–7.2) | Exact requirement |
 |---|---|---|---|
-| All T1–T3 green in CI | T1 unit, T2 `contract`, T3 `golden` | CI, offline | T1 and T2 met today (GitHub CI on every push and PR). **T3: no test carries the `golden` marker** (there are snapshot tests only; the golden corpus is `P3-10`, Phase 3), so T3 is green only vacuously; whether that satisfies the gate is open question D21 |
+| All T1–T3 green in CI | T1 unit, T2 `contract`, T3 `golden` | CI, offline | T1 and T2 met today (GitHub CI on every push and PR). **T3: no test carries the `golden` marker** (there are snapshot tests only; the golden corpus is `P3-10`, Phase 3), so T3 is **unmet**: D21 (2026-10-30) keeps T3 mandatory with no waiver; work in [`LAB-03`](proposals/LAB-03-t3-golden-test-gate.md), scope open in D22 |
 | T4 green against the lab | `lab` | real SOAR, **read-only key**, org `201` ("existing lab data — read-only tests only", never reset) | nightly / pre-release |
 | T5 green in org 301 | `lab_write` | real SOAR, **disposable org** `301` (`MCP-TEST`), seeded and torn down per run (§7.3); snapshot the VM before every run (§7.1) | pre-release, manual trigger |
 | T6 green against the mock AppHost | `lab_destructive` | real SOAR + **mock AppHost** (`resilient-circuits` app whose `fn_edr_isolate_endpoint`, `fn_firewall_block_ip`, `fn_disable_account` only log); the real AppHost is **never** targeted (§7.1) | pre-release, manual, **never in CI** |
@@ -29,7 +29,7 @@ configuration runs green offline on a fresh clone. The scaffolding keeps that.
 |---|---|---|---|
 | **Offline** (T1–T3, and the guard tests of §5) | none; `respx` + `FakeSoar`; anything else is an error | anyone, CI | `tests/` except `tests/lab/` |
 | **Read-only live** (T4) | one lab SOAR host, read-only key, org 201; writes are blocked on the wire | an operator who opts in | `tests/lab/test_t4_read_only.py` (scaffolded, never run) |
-| **Isolated mutation** (T5, T6) | a disposable org (T5) and additionally a mock AppHost (T6) | an operator who opts in, after a VM snapshot | **not written**: LAB-02, LAB-03 |
+| **Isolated mutation** (T5, T6) | a disposable org (T5) and additionally a mock AppHost (T6) | an operator who opts in, after a VM snapshot | **not written**: LAB-02, LAB-04 |
 
 ## 3. T4 — lab read-only (scaffolded)
 
@@ -82,8 +82,9 @@ a VM snapshot, permission to seed):
   at the approval gate / refusal and is audited as attempted.
 - Teardown of the seeded set; audit verify over the run.
 
-**LAB-03 — T6 against a mock AppHost** (needs the owner: a mock AppHost host,
-the three logging functions installed in org 301 only, a way to read its call log):
+**LAB-04 — T6 against a mock AppHost.** Named `LAB-03` in Sprint 1 and renamed (08 §33).
+Needs the owner: a mock AppHost host, the three logging functions installed in org 301
+only, and a way to read its call log.
 
 `07 §7.4` lists nine assertions. With the D16 limitation (`soar_invoke_action` always
 returns `DENY_UNSUPPORTED`):
@@ -101,8 +102,12 @@ returns `DENY_UNSUPPORTED`):
 | 9 audit chain verifies, every denial present | yes |
 
 Whether a T6 run that proves the refusal (zero calls at the mock AppHost) is enough for
-`v0.2.0`, or invocation (`P1-INV-01`) must land first, is open question **D20**. Until
-the owner decides, the T6 gate is not met.
+`v0.2.0`, or invocation (`P1-INV-01`) must land first, was open question **D20**.
+**Decided 2026-10-30 (08 §33):** a denial-only T6 run counts as evidence that
+unsupported invocation is correctly rejected, and only that. It does not show successful
+execution or approval enforcement, so full T6 is not complete until every §7.4 step
+passes or the criteria are amended. Release documents call such a run "T6 (denial
+path only)".
 
 ## 5. Guards on every live test
 
