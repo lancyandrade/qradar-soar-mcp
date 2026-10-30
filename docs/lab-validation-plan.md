@@ -59,10 +59,12 @@ research saw `403` for workflows and playbooks with a narrower key (open questio
 D11, D12); a `403` in T4 fails the test rather than being skipped.
 
 The wire guard (`tests/lab/guard.py`, `ReadOnlyTransport`) sits under the SOAR client.
-It sends only `GET`/`HEAD` under `/rest/` on the one lab host and `POST` to the two
-verified search endpoints (`incidents/query_paged`, `playbooks/query_paged`) of the
-configured org. Anything else raises before it reaches the network, so T4 cannot write
-even if a code path regressed. A read-only API key is still required: the guard is a
+It sends only HTTPS to exactly the configured host and port: `GET`/`HEAD` on
+`/rest/session`, `/rest/const` or under `/rest/orgs/<configured org>/`, and `POST` to the
+two verified search endpoints (`incidents/query_paged`, `playbooks/query_paged`) of
+that org. Plain HTTP, another port or org, the org list, `.`/`..` segments and
+percent-encoded dots, slashes or backslashes are refused. Anything else raises before it
+reaches the network, so T4 cannot write or wander even if a code path regressed. A read-only API key is still required: the guard is a
 second line, not the first.
 
 ## 4. T5 and T6 — what is left (not implemented)
