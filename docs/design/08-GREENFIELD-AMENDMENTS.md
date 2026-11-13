@@ -1669,7 +1669,10 @@ section gives a deny-everything policy with no entries.
 ### 34.3 Untrusted names
 
 Anyone who can create a rule names it, so names are data. A name is written only as a YAML
-scalar by `yaml.safe_dump` and never into a comment; comments hold only this module's text,
+scalar by `yaml.safe_dump` and never into a comment (an entry holding a Unicode line break, U+0085, U+2028 or U+2029, is dumped with non-ASCII
+characters escaped, because PyYAML can emit them raw and does not read U+0085 back, and the
+dump is indented by splitting on `
+` only); comments hold only this module's text,
 numbers and a keyword from `KEYWORD_TIERS`. The SOAR version in the header is written only
 if it is a plain token, else as `unknown`. The finished text is parsed back with
 `yaml.safe_load` and validated by `ActionPolicy.from_mapping`, and the command refuses it

@@ -179,9 +179,20 @@ def _plain(value: str) -> str:
     return value if _PLAIN_TOKEN.fullmatch(value) else "unknown"
 
 
+# Characters YAML treats as line breaks besides "\n" and "\r". PyYAML can emit them raw
+# inside a quoted scalar (and does not read U+0085 back unchanged), so a document holding
+# one is dumped with every non-ASCII character escaped instead.
+_UNICODE_LINE_BREAKS = frozenset("\x85\u2028\u2029")
+
+
 def _dump(document: Any) -> str:
-    return yaml.safe_dump(
+    text = yaml.safe_dump(
         document, sort_keys=False, allow_unicode=True, default_flow_style=False, width=4096
+    )
+    if _UNICODE_LINE_BREAKS.isdisjoint(text):
+        return text
+    return yaml.safe_dump(
+        document, sort_keys=False, allow_unicode=False, default_flow_style=False, width=4096
     )
 
 
@@ -200,7 +211,8 @@ def _entry_text(entry: _Entry) -> str:
         "destructive": True,
         "reason": SCAFFOLD_REASON,
     }
-    for line in _dump([body]).splitlines():
+    # Split on "\n" only: str.splitlines() also splits on characters inside a scalar.
+    for line in _dump([body]).removesuffix("\n").split("\n"):
         lines.append(f"  {line}")
     return "\n".join(lines) + "\n"
 

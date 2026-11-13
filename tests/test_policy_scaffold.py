@@ -170,6 +170,24 @@ def test_hostile_names_round_trip_as_names_and_never_reach_a_comment():
         assert not any(f in line for f in fragments), line
 
 
+@pytest.mark.parametrize("sep", ["\u2028", "\u2029", "\x85", "\x0b", "\x0c", "\x1c"])
+def test_an_isolated_unicode_line_break_in_a_name_round_trips(sep: str):
+    # Alone (no character that forces PyYAML's escaped style), str.splitlines() would split
+    # the scalar, and U+0085 does not read back from PyYAML's raw output at all.
+    names = [f"a{sep}b", f"Block{sep}IP {sep} now", f"café{sep}x"]
+    result = build_scaffold(with_rules([rule(i, n) for i, n in enumerate(names, 1)]))
+    policy = parsed(result.text)
+    assert_denies_everything(policy)
+    assert [e.match.name for e in policy.document.actions] == sorted(names, key=str.lower)
+    for name in names:
+        assert policy.classify(action_name=name).rule == name
+
+
+def test_names_without_a_unicode_line_break_stay_readable():
+    text = build_scaffold(with_rules([rule(1, "café ✓")])).text
+    assert "café ✓" in text
+
+
 def test_header_writes_an_unexpected_soar_version_as_unknown():
     catalog = lab_catalog().model_copy(update={"soar_version": "51\n- match: {id: 1}"})
     text = build_scaffold(catalog).text
