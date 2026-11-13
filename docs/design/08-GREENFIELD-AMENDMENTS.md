@@ -1618,3 +1618,85 @@ Consequences:
   every call (D16).
 - The owner named the T3 ticket `LAB-03`; the T6 mock-AppHost work that the lab plan had
   called `LAB-03` is renamed `LAB-04`.
+
+## 34. P2-06 — `qradar-soar-policy scaffold`
+
+`06 P2-06` asks for a CLI that "enumerates every action/function in the catalog and emits
+a policy file with **everything denied at Tier 5** plus a suggested tier and the reason".
+Implemented as `qradar-soar-policy scaffold` (`src/qradar_soar_mcp/cli_policy.py`) over a
+pure builder (`src/qradar_soar_mcp/security/policy_scaffold.py`). No tool, REST call,
+capability flag or setting is added; `src/qradar_soar_mcp/security/action_policy.py` and
+the policy schema are unchanged.
+
+### 34.1 What it reads
+
+- `--catalog FILE`: a catalog JSON document in the schema of `Catalog.to_json` (§25),
+  validated strictly by `Catalog.from_json` and limited to 50 MB. Offline.
+- Without `--catalog`: the catalog is loaded from SOAR with the connection in the
+  environment, through the backend `SOAR_CATALOG_SOURCE` names (§25). That is the load
+  `soar_refresh_catalog` performs: the verified read-only requests of `client.discovery`
+  and nothing else. The `export` backend refuses as it does in the server.
+
+Entries come from the catalog's `rules` section: the `actions` API of `05 §2`, which holds
+the manual actions an incident offers. `ActionPolicy.classify` matches an action by its
+name or id, so that is what an entry carries. If the `rules` section is not `loaded` (it is
+`unverified` or `not_observable`), the command refuses: an empty section that could not be
+read says nothing, and a scaffold built from it would look complete. A `loaded` but empty
+section gives a deny-everything policy with no entries.
+
+### 34.2 What it writes
+
+- `default: {tier: 5, decision: deny}`, and one entry per action, each `tier: 5`,
+  `decision: deny`, **`destructive: true`** and a fixed `reason`. `destructive: true` is
+  this ticket's choice, not the baseline's: an operator who edits only `tier` and
+  `decision` still hits the `SOAR_ALLOW_DESTRUCTIVE_ACTIONS` gate until they turn it off
+  for that action.
+- Names are matched the way `classify` matches them (stripped, any case), so actions whose
+  names are equal under that comparison share one entry; a comment says how many. An
+  action whose name is empty after stripping gets an `id` entry, because `match.name` may
+  not be empty.
+- The **suggested tier** and its reason are a YAML comment above each entry, never a
+  value: a fixed keyword list in the name (`KEYWORD_TIERS`; highest tier first, word
+  boundaries, any case), and Tier 5 when no keyword is recognised (`02 §1.1`, unknown ⇒
+  maximum). Tier 0 is never suggested. A suggestion says nothing about what an action does.
+- Entries are sorted by name, then id, so the same catalog always gives the same text.
+- **Functions get no entry.** A policy classifies actions; a function is never invoked by
+  name through this server, and an entry named after a function would only match an action
+  that happens to share its name. This is a reading of "action/function" in the ticket:
+  functions are enumerated (their count is in the header and the command's report) but not
+  classified. Recorded as owner choice D23 (b).
+
+### 34.3 Untrusted names
+
+Anyone who can create a rule names it, so names are data. A name is written only as a YAML
+scalar by `yaml.safe_dump` and never into a comment (an entry holding a Unicode line break, U+0085, U+2028 or U+2029, is dumped with non-ASCII
+characters escaped, because PyYAML can emit them raw and does not read U+0085 back, and the
+dump is indented by splitting on `
+` only); comments hold only this module's text,
+numbers and a keyword from `KEYWORD_TIERS`. The SOAR version in the header is written only
+if it is a plain token, else as `unknown`. The finished text is parsed back with
+`yaml.safe_load` and validated by `ActionPolicy.from_mapping`, and the command refuses it
+unless it defaults to Tier 5 / deny, its entries' matches read back exactly equal, in
+order, to the names and ids written, every entry is Tier 5 / deny / destructive, and it
+fits `MAX_POLICY_BYTES`.
+
+### 34.4 Never over an existing file
+
+`--output PATH` is created with `open(..., "x")` (`O_CREAT | O_EXCL`), so an existing file
+or a symlink at that path (dangling or not) is never written through, and the check and
+the create are one step. The text is built and checked before the file is created: a
+refused scaffold leaves nothing behind, and a write that fails after the create
+(a full disk) removes the partial file it created. `--output -` writes the text to stdout as UTF-8;
+the report line always goes to stderr. Exit codes: `0` written, `1` no catalog, no
+scaffold, or the file exists, `2` refused configuration (live mode only).
+
+### 34.5 Acceptance criteria
+
+| AC | Evidence (`tests/test_policy_scaffold.py`) |
+|---|---|
+| valid against the policy schema and denies everything | parsed by `ActionPolicy`; validated against `docs/action_policy.schema.json`; every entry and the default are Tier 5 / deny; every classification from an unedited scaffold, catalog action or not, is Tier 5 / deny |
+| a server with an unedited scaffold reaches SOAR for reads and denies every action | `test_server_with_the_unedited_scaffold_reads_and_denies_every_action`: `SOAR_ALLOW_ACTIONS=true` with the scaffold as `SOAR_ACTION_POLICY_FILE`; `soar_get_incident` succeeds; `soar_list_incident_actions` shows every action matched by its own entry at Tier 5 / deny; `soar_invoke_action` is refused for every action and sends nothing |
+| never writes over an existing policy file | existing file unchanged; symlink (live and dangling) not followed; a file that appears between the early check and the create wins |
+
+The suggested-tier keyword list, `destructive: true`, the treatment of functions and
+whether this lands in the `0.2.0` section of the changelog are owner choices (D23).
