@@ -53,6 +53,7 @@ dev = [
 qradar-soar-mcp = "qradar_soar_mcp.cli:main"
 qradar-soar-approve = "qradar_soar_mcp.cli_approve:main"
 qradar-soar-audit = "qradar_soar_mcp.cli_audit:main"
+qradar-soar-policy = "qradar_soar_mcp.cli_policy:main"
 
 [project.urls]
 Homepage = "https://github.com/lancyandrade/qradar-soar-mcp"
