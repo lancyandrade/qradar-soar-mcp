@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     from qradar_soar_mcp.client.attachments import AttachmentsClient
     from qradar_soar_mcp.client.comments import CommentsClient
     from qradar_soar_mcp.client.discovery import DiscoveryClient
+    from qradar_soar_mcp.client.history import HistoryClient
     from qradar_soar_mcp.client.incidents import IncidentsClient
     from qradar_soar_mcp.client.org import OrgClient
     from qradar_soar_mcp.client.tasks import TasksClient
@@ -416,6 +417,12 @@ class SoarClient:
         from qradar_soar_mcp.client.discovery import DiscoveryClient
 
         return self._accessor("discovery", DiscoveryClient)  # type: ignore[no-any-return]
+
+    @property
+    def history(self) -> HistoryClient:
+        from qradar_soar_mcp.client.history import HistoryClient
+
+        return self._accessor("history", HistoryClient)  # type: ignore[no-any-return]
 
     # ------------------------------------------------------------ lifecycle
     async def aclose(self) -> None:

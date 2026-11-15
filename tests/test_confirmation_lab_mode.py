@@ -363,6 +363,6 @@ def test_no_new_mutation_or_tier4_tool():
         ("soar_update_incident", 2),
         ("soar_update_task_status", 2),
     ]
-    assert len(TOOL_REGISTRY) == 36
+    assert len(TOOL_REGISTRY) == 37  # P2-07 added a read (soar_analyse_incident_response)
     assert not [n for n, s in TOOL_REGISTRY.items() if s.tier >= Tier.AUTOMATION]
     assert {n for n, s in TOOL_REGISTRY.items() if s.unsupported} == {"soar_invoke_action"}

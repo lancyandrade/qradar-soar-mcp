@@ -124,7 +124,7 @@ D13).
 | P2-04 rules, workflows | COMPLETE (one workflow observed) | `test_workflow_summary.py`, `test_discovery_rules_workflows.py`; live structure on 2026-10-23 | uuid resolution by exact equality only (D11) |
 | P2-05 playbooks | COMPLETE (one playbook observed) | `test_discovery_playbooks.py`; `verified_on: 51.0.9.0.20848` | owner choices open (D12) |
 | P2-06 policy scaffold CLI | COMPLETE *(added after this audit, §12.2)* | `qradar-soar-policy scaffold`, `test_policy_scaffold.py` | owner choices open (D23) |
-| P2-07 historical-response analysis | **NOT STARTED** | no `soar_analyse_incident_response` | history is live-readable; execution rows were zero on the lab (B, "Past function results") |
+| P2-07 historical-response analysis | COMPLETE *(added after this audit, §12.3)* | `soar_analyse_incident_response`, `test_response_analysis.py` | which rules/playbooks fired is not observable (execution and workflow-instance rows never seen); owner choices D24 (a)–(c) |
 
 ---
 
@@ -366,7 +366,7 @@ No `v0.2.0` tag, release or version change is made by this PR.
 | 5 | **TAG v0.2.0** (tag + source-code pre-release, no attachments) | 1, 4 (2 recommended) | owner |
 | 5a | **Attach build artefacts to a release** (optional, later) | 3, 4a | CI-built only |
 | 6 | ~~**P2-06** — `qradar-soar-policy scaffold` (deny-all Tier-5 scaffold, schema-valid, never overwrites)~~ **Done (§12.2)** | catalog (P2-02, P2-04 done) | offline-buildable from the committed catalog fixture |
-| 7 | **P2-07** — `soar_analyse_incident_response` | P2-04, P1-15 | history reads are live-verified; execution rows were empty on the lab, so degradation is mandatory |
+| 7 | ~~**P2-07** — `soar_analyse_incident_response`~~ **Done (§12.3)** | P2-04, P1-15 | history reads are live-verified; execution rows were empty on the lab, so degradation is mandatory |
 | 8 | **D10 decision / P2-03b** — settle `required` semantics; align `soar_describe_incident_fields` | owner approval for a static read or a close experiment | |
 | 9 | **LAB-01** — `tests/lab/` T4 read-only suite against a lab (`SOAR_TEST_BASE_URL`) | lab access | `07 §7` |
 | 10 | **LAB-02** — mock AppHost + T5 (org 301) for Tier-1/2 writes, closing M-1 | LAB-01, disposable org | |
@@ -513,8 +513,26 @@ scaffold as `SOAR_ACTION_POLICY_FILE` (reads succeed, every action Tier 5 / deny
 
 **Not changed:** no MCP tool, REST call, capability flag, setting, policy schema or
 permission rule. The `v0.2.0` verdict and the Phase-2 verdict for `v0.3.0` (§10, §13.3) are
-unchanged: P2-07 is not started and P2-00, P2-01 and P2-03 stay partial. The changelog and
-release notes still list P2-06 as not started, pending D23 (d).
+unchanged: P2-00, P2-01 and P2-03 stay partial. With D23 (d) (2026-11-15) P2-06 is
+listed under `[Unreleased]` in the changelog; the `0.2.0` section and release notes are
+unchanged.
+
+### 12.3 P2-07 — `soar_analyse_incident_response`
+
+**Change:** a 37th tool (Tier 0) compares 1–10 past incidents: resolution, status,
+severity, phase, types, tasks, and from incident history the revision count and the names
+of changed fields. Two reads are added to the client surface, in `client/history.py` only:
+`GET /incidents/{id}/history` and `GET /incidents/{id}/workflow_instances` (verified 200,
+Q8). Which rules or playbooks fired is reported as not observable. Design: 08 §35; owner
+decisions D23 (d), D24.
+
+**Evidence:** `tests/test_response_analysis.py` (five incidents within the 40,000-character
+budget; ten with 200 tasks each cut to it; 403/404/500 and a timeout on history degrade per
+incident); `tests/test_client_surface_ast.py` (`HISTORY_CALLS`).
+
+**Not changed:** no write, capability flag or setting. `v0.2.0` stays the audited 36 tools
+(P2-06 and P2-07 are under `[Unreleased]`). The `v0.3.0` verdict is unchanged while the
+partial ACs of P2-00, P2-01 and P2-03 stand.
 
 
 ---

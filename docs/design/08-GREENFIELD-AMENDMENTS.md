@@ -1700,3 +1700,83 @@ scaffold, or the file exists, `2` refused configuration (live mode only).
 
 The suggested-tier keyword list, `destructive: true`, the treatment of functions and
 whether this lands in the `0.2.0` section of the changelog are owner choices (D23).
+
+## 35. P2-07 — `soar_analyse_incident_response`
+
+`06 P2-07` asks for a tool that, for a set of historical incidents, summarises "which
+rules/playbooks fired, which tasks were used, typical resolution", with the AC "returns a
+comparative summary for ≥ 5 incidents within the token budget; degrades gracefully when
+history endpoints are unavailable". Implemented as `soar_analyse_incident_response`
+(`src/qradar_soar_mcp/tools/response_analysis.py`, Tier 0, no flag) over a new client
+module, `src/qradar_soar_mcp/client/history.py`. The owner chose, on 2026-11-15, both the
+reads below and the release placement (D23 (d), D24).
+
+### 35.1 REST surface: two reads added
+
+| Method | Path | Evidence (`docs/soar-api-verified.md` Q8) | What is read |
+|---|---|---|---|
+| GET | `incidents/{id}/history` | 200; seven `*_history` keys, only `incident_detail_history` seen with rows | per row of `incident_detail_history`: `revision_number`, `date`, `diffs[].name`. Never `new_val`, `old_val` or `user`. For the other six keys only whether they hold data |
+| GET | `incidents/{id}/workflow_instances` | 200, `{"entities": []}` | the number of entities; no row is parsed |
+
+Both live in `client/history.py` only and are enforced by
+`tests/test_client_surface_ast.py` (`HISTORY_CALLS`). Not added: the newsfeed (principals
+and artifact values), `POST /playbooks/execution/query_paged` (approved once, for one
+exact body), the execution activities, `POST /workflow_instances/{inc_id}/query_paged`,
+and every other history route.
+
+### 35.2 What the tool returns
+
+For 1 to 10 distinct positive incident ids, read one incident at a time
+(`GET /incidents/{id}`, `GET /incidents/{id}/tasks`, then the two reads above):
+
+- per incident: `plan_status`, `phase_id`, `severity_code`, `incident_type_ids`,
+  `resolution_id`, `create_date`, `end_date`, `end_minus_create_ms`, its tasks (name,
+  status, phase, required), and `history` / `workflow_instances` views with a `state` of
+  `loaded`, `unverified` or `unavailable` (with the error code);
+- a `comparison` over every row, before any cut: counts of resolutions, plan statuses,
+  severities, phases and types; task names by the number of incidents they appear in;
+  changed field names by the number of incidents; min / median / max of
+  `end_minus_create_ms`; the history and workflow-instance states;
+- `not_observable`: fixed text saying that which rules and playbooks fired, and function
+  results, are not observable on the verified API.
+
+No description, resolution summary, history value or user is returned.
+`end_minus_create_ms` is `end_date - create_date` and is named as that: what `end_date`
+holds on a closed incident was never observed (P2-00b had no closed incident), so it is
+not called a time to close. One incident is accepted; the comparison is then of one.
+
+### 35.3 Degradation and budget
+
+- A history or workflow-instance read that fails (403, 404, 500, timeout, connection,
+  malformed, too large) becomes `{"state": "unavailable", "error": <code>}` for that
+  incident; a body in another shape becomes `unverified`. The rest stands. Authentication,
+  configuration and rate-limit errors are not degraded: they fail the call, because they
+  say nothing about one incident's history and hiding them would make the answer look
+  complete.
+- Every value shown is bounded: the incident `id` is the id asked for, not the body's own
+  value; names are cut to 300 characters and comparison keys to 100; at most 25 incident
+  types per incident; a task status longer than 10 characters, a float or a structured
+  value is shown as null. The id list is length-checked before any element is looked at.
+- The incident and task reads do not degrade: an incident that cannot be read fails the
+  call, because a comparison that silently drops incidents would misstate what it
+  compares.
+- Budget 40,000 characters of the JSON answer (`ANALYSIS_BUDGET_CHARS`), measured as the
+  pipeline returns it; per-incident task lists and changed-field lists start at 50 and
+  are halved until it fits (`omitted` counts what was cut); the call refuses with
+  `response_too_large` if one task and one field per incident is still too much.
+
+### 35.4 Acceptance criteria
+
+| AC | Evidence (`tests/test_response_analysis.py`) |
+|---|---|
+| comparative summary for ≥ 5 incidents within the budget | five incidents compared; ten incidents with 200 tasks each cut to the budget with the comparison computed over every task |
+| degrades when history endpoints are unavailable | 403, 404 and 500 on history and workflow instances, and a read timeout: per-incident `unavailable` with the code, the rest of the answer intact |
+
+The offline fake (`tests/fake_soar.py`) serves both routes with the verified shape and
+synthetic rows.
+
+### 35.5 Release placement
+
+With D23 (d) the `0.2.0` changelog section and release notes stay the audited 36 tools.
+P2-06 and P2-07 are listed under `[Unreleased]`, and `tests/test_docs_consistency.py`
+counts the release documents against the registry less the tools named there.

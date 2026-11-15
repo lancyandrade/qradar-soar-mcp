@@ -11,7 +11,21 @@ implementation ([08 §1](docs/design/08-GREENFIELD-AMENDMENTS.md#1-premise-corre
 
 ## [Unreleased]
 
-Nothing yet. Changes merged after the `v0.2.0` tag is created go here.
+Changes merged after the `v0.2.0` release-readiness audit. They are on `main` but are
+**not part of `0.2.0`**, which stays the audited 36 tools (owner decision D23 (d),
+[08 §35](docs/design/08-GREENFIELD-AMENDMENTS.md#35-p2-07--soar_analyse_incident_response)).
+
+### Added
+
+- **`qradar-soar-policy scaffold` (P2-06):** writes an action policy that denies every
+  catalog action (each entry Tier 5 / `deny` / `destructive: true`) with a suggested tier
+  as a comment, never over an existing file
+  ([08 §34](docs/design/08-GREENFIELD-AMENDMENTS.md#34-p2-06--qradar-soar-policy-scaffold)).
+- **`soar_analyse_incident_response` (P2-07, Tier 0):** 1–10 past incidents side by side:
+  resolution, status, severity, phase, types, tasks and history revision counts with
+  changed field names, plus a comparison. Adds two verified reads,
+  `GET /incidents/{id}/history` and `GET /incidents/{id}/workflow_instances`. Which rules
+  or playbooks ran is not observable on the verified API and is not claimed.
 
 ## [0.2.0] - Pending (alpha)
 

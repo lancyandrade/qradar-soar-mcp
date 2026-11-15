@@ -339,6 +339,17 @@ def _phase_one_tools() -> set[str]:
     return {row[0].strip("`") for row in _table_rows(table) if row[0].startswith("`soar_")}
 
 
+def _unreleased_tools() -> set[str]:
+    """Tools added after the v0.2.0 audit: listed under ``## [Unreleased]``, not in 0.2.0
+    (owner decision D23 (d), 08 §35)."""
+    return set(re.findall(r"`(soar_[a-z_]+)`", _block(_read(CHANGELOG), "## [Unreleased]")))
+
+
+def _released_tools() -> set[str]:
+    """The tools of the 0.2.0 release documents: the registry less the unreleased ones."""
+    return set(TOOL_REGISTRY) - _unreleased_tools()
+
+
 def _block(text: str, heading: str) -> str:
     """From ``heading`` up to the next heading of the same or a higher level."""
     level = len(heading) - len(heading.lstrip("#"))
@@ -359,15 +370,15 @@ def _version() -> str:
 
 
 def test_tool_counts_match_the_registry():
-    phase_one = _phase_one_tools()
-    phase_two = set(TOOL_REGISTRY) - phase_one
-    assert phase_one <= set(TOOL_REGISTRY)
-    assert (len(phase_one), len(phase_two), len(TOOL_REGISTRY)) == (20, 16, 36)
-    claim = f"{len(TOOL_REGISTRY)} MCP tools: {len(phase_one)} Phase-1 and {len(phase_two)} Phase-2"
+    phase_one, released = _phase_one_tools(), _released_tools()
+    phase_two = released - phase_one
+    assert phase_one <= released
+    assert (len(phase_one), len(phase_two), len(released)) == (20, 16, 36)
+    claim = f"{len(released)} MCP tools: {len(phase_one)} Phase-1 and {len(phase_two)} Phase-2"
     for doc in RELEASE_DOCS:
         assert claim in _flat(_read(doc)), doc
     status = _flat(_section(README, "## Release status"))
-    assert f"{len(phase_two)} read-only tools, for {len(TOOL_REGISTRY)} tools in all" in status
+    assert f"{len(phase_two)} read-only tools, for {len(released)} tools in all" in status
 
 
 def test_changelog_lists_every_tool_under_its_phase():
@@ -376,7 +387,7 @@ def test_changelog_lists_every_tool_under_its_phase():
     one = set(re.findall(r"`(soar_[a-z_]+)`", _block(release, "#### Phase 1: ")))
     two = set(re.findall(r"`(soar_[a-z_]+)`", _block(release, "#### Early Phase 2: ")))
     assert one == phase_one
-    assert two == set(TOOL_REGISTRY) - phase_one
+    assert two == _released_tools() - phase_one
     assert f"#### Phase 1: {len(one)} tools" in release
     assert f"#### Early Phase 2: {len(two)} discovery tools" in release
 
@@ -390,7 +401,18 @@ def test_release_notes_tool_table_is_the_registry():
         assert phase, group
         listed[phase.group(1)] |= set(re.findall(r"`(soar_[a-z_]+)`", tools))
     assert listed["Phase 1"] == phase_one
-    assert listed["Phase 2"] == set(TOOL_REGISTRY) - phase_one
+    assert listed["Phase 2"] == _released_tools() - phase_one
+
+
+def test_unreleased_tools_are_registered_and_not_in_the_release():
+    """D23 (d): what lands after the v0.2.0 audit is listed under [Unreleased] only."""
+    unreleased = _unreleased_tools()
+    assert unreleased <= set(TOOL_REGISTRY)
+    assert unreleased == {"soar_analyse_incident_response"}  # P2-07
+    release = _block(_read(CHANGELOG), f"## [{_version()}]")
+    notes = _section(_read(RELEASE_NOTES), "## 2. What is included")
+    for name in unreleased:
+        assert f"`{name}`" not in release and f"`{name}`" not in notes, name
 
 
 def test_version_references_are_consistent():

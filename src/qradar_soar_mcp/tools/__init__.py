@@ -5,6 +5,7 @@ from qradar_soar_mcp.tools import (  # noqa: F401  (registration)
     discovery,
     incidents,
     investigation,
+    response_analysis,
 )
 from qradar_soar_mcp.tools.registry import (
     TOOL_REGISTRY,

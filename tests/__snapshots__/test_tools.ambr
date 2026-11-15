@@ -130,6 +130,33 @@
       }),
       'tier': 1,
     }),
+    'soar_analyse_incident_response': dict({
+      'annotations': dict({
+        'destructive_hint': False,
+        'idempotent_hint': False,
+        'open_world_hint': True,
+        'read_only_hint': True,
+        'title': 'soar_analyse_incident_response',
+      }),
+      'capability': None,
+      'input_schema': dict({
+        'properties': dict({
+          'incident_ids': dict({
+            'items': dict({
+              'type': 'integer',
+            }),
+            'title': 'Incident Ids',
+            'type': 'array',
+          }),
+        }),
+        'required': list([
+          'incident_ids',
+        ]),
+        'title': 'soar_analyse_incident_responseArguments',
+        'type': 'object',
+      }),
+      'tier': 0,
+    }),
     'soar_assign_incident': dict({
       'annotations': dict({
         'destructive_hint': False,
