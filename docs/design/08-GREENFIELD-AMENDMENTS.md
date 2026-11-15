@@ -1733,10 +1733,23 @@ For 1 to 10 distinct positive incident ids, read one incident at a time
   `resolution_id`, `create_date`, `end_date`, `end_minus_create_ms`, its tasks (name,
   status, phase, required), and `history` / `workflow_instances` views with a `state` of
   `loaded`, `unverified` or `unavailable` (with the error code);
-- a `comparison` over every row, before any cut: counts of resolutions, plan statuses,
-  severities, phases and types; task names by the number of incidents they appear in;
-  changed field names by the number of incidents; min / median / max of
-  `end_minus_create_ms`; the history and workflow-instance states;
+- history counts say what was read, never more: `revisions_parsed` is the number of rows
+  of `incident_detail_history` that could be read, `rows_total` every row SOAR returned,
+  `unparsed_rows` and `rows_cut` (more than 10,000 rows) why they differ, and `complete`
+  is true only when every row was parsed and none was cut. Dates and changed fields are
+  over the parsed revisions only;
+- a `comparison` over every row, before any cut: how many incidents carry each
+  resolution, plan status, severity, phase and type; task names and changed field names
+  by the number of incidents they appear in; min / median / max of
+  `end_minus_create_ms`; the history and workflow-instance states, and how many loaded
+  histories are complete. Every ranked entry is `{value, incidents, truncated,
+  ambiguous_display}`: task names are grouped on the full name (stripped, any case) and
+  field names on the full name, before anything is cut for display, so distinct values
+  that share a prefix are never merged; `value` is cut to 100 characters for display,
+  `truncated` says so, and `ambiguous_display` marks entries whose displayed text equals
+  another's. Resolution, status, severity, phase and type values are grouped on the
+  per-incident value, which is cut at 300 characters first: two such values that differ
+  only after their first 300 characters are counted as one;
 - `not_observable`: fixed text saying that which rules and playbooks fired, and function
   results, are not observable on the verified API.
 

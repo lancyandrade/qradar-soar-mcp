@@ -50,7 +50,8 @@ class HistoryRevision:
 @dataclass(frozen=True, slots=True)
 class IncidentHistory:
     shape_verified: bool
-    revisions: tuple[HistoryRevision, ...] = ()
+    revisions: tuple[HistoryRevision, ...] = ()  # the rows that could be read
+    total_rows: int = 0  # every row of incident_detail_history, read or not
     unparsed_rows: int = 0  # detail rows without the verified fields
     other_sections_with_data: tuple[str, ...] = ()  # known keys holding data, not parsed
     rows_cut: bool = False
@@ -98,6 +99,7 @@ def parse_history(body: Any) -> IncidentHistory:
     return IncidentHistory(
         shape_verified=True,
         revisions=tuple(revisions),
+        total_rows=len(rows or []),
         unparsed_rows=unparsed,
         other_sections_with_data=others,
         rows_cut=len(rows or []) > MAX_DETAIL_ROWS,

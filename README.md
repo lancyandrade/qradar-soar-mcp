@@ -100,7 +100,7 @@ failure.
 | `soar_get_incident` | 0 | — | one incident, projected; custom fields only on request |
 | `soar_get_incident_full` | 0 | — | incident + tasks + artifacts + notes + attachment metadata, under a size budget |
 | `soar_find_similar_incidents` | 0 | — | recent incidents sharing artifact values (client-side composition) |
-| `soar_analyse_incident_response` | 0 | — | 1–10 past incidents side by side (P2-07, unreleased): resolution, status, severity, phase, types, tasks, and from `GET /incidents/{id}/history` the revision count and the names of changed fields (no values, no users); a comparison across them; `end_date − create_date` labelled as such. Which rules or playbooks ran is **not observable** and not claimed; workflow instances are only counted. History reads that fail are reported per incident; 40,000-character budget |
+| `soar_analyse_incident_response` | 0 | — | 1–10 past incidents side by side (P2-07, unreleased): resolution, status, severity, phase, types, tasks, and from `GET /incidents/{id}/history` the revisions parsed, the total rows and whether the history was read in full, and the names of changed fields (no values, no users); a comparison across them, grouped on full names with truncated or look-alike entries flagged; `end_date − create_date` labelled as such. Which rules or playbooks ran is **not observable** and not claimed; workflow instances are only counted. History reads that fail are reported per incident; 40,000-character budget |
 | `soar_list_artifacts` | 0 | — | artifacts on an incident |
 | `soar_list_tasks` | 0 | — | tasks on an incident |
 | `soar_list_comments` | 0 | — | notes, flattened with `parent_id` |

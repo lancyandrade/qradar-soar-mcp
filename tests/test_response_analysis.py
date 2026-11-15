@@ -75,6 +75,10 @@ async def analyse(fake: FakeSoar, tmp_path: Path, ids: Any) -> dict[str, Any]:
         await rt.aclose()
 
 
+def counts(entries: list[dict[str, Any]]) -> dict[str, int]:
+    return {e["value"]: e["incidents"] for e in entries}
+
+
 def calls(fake: FakeSoar) -> list[tuple[str, str]]:
     return [(r.method, r.path.split("/rest/orgs/201", 1)[-1]) for r in fake.requests]
 
@@ -91,15 +95,27 @@ async def test_five_incidents_are_compared_within_the_budget(fake: FakeSoar, tmp
     assert [i["id"] for i in data["incidents"]] == ids
     comparison = data["comparison"]
     assert comparison["incidents"] == 5
-    assert comparison["resolution_id"] == {"Resolved": 2, "Duplicate": 2, "(none)": 1}
-    assert comparison["plan_status"] == {"C": 4, "A": 1}
-    assert comparison["tasks_in_incidents"][0] == {"name": "Confirm with user", "incidents": 5}
-    assert comparison["changed_fields_in_incidents"] == {
+    assert counts(comparison["resolution_id"]) == {"Resolved": 2, "Duplicate": 2, "(none)": 1}
+    assert counts(comparison["plan_status"]) == {"C": 4, "A": 1}
+    assert comparison["tasks_in_incidents"][0] == {
+        "value": "Confirm with user",
+        "incidents": 5,
+        "truncated": False,
+        "ambiguous_display": False,
+    }
+    assert counts(comparison["changed_fields_in_incidents"]) == {
         "phase_id": 5,
         "plan_status": 5,
         "resolution_id": 5,
         "severity_code": 5,
     }
+    assert comparison["history_complete"] == {"complete": 5, "incomplete": 0}
+    history = data["incidents"][1]["history"]
+    assert (history["revisions_parsed"], history["rows_total"], history["complete"]) == (
+        2,
+        2,
+        True,
+    )
     durations = comparison["end_minus_create_ms"]
     assert durations == {"n": 4, "min": 3_600_000, "median": 9_000_000, "max": 14_400_000}
     assert comparison["history_states"] == {"loaded": 5}
@@ -143,7 +159,7 @@ async def test_history_endpoints_unavailable_degrade_per_incident(
     assert all(v["workflow_instances"]["state"] == "unavailable" for v in views.values())
     comparison = out["data"]["comparison"]
     assert comparison["history_states"] == {"loaded": 3, "unavailable": 2}
-    assert comparison["changed_fields_in_incidents"]["phase_id"] == 3
+    assert counts(comparison["changed_fields_in_incidents"])["phase_id"] == 3
     assert comparison["resolution_id"]  # the rest of the answer stands
 
 
@@ -341,8 +357,9 @@ async def test_odd_incident_bodies_stay_bounded(fake: FakeSoar, tmp_path: Path):
     assert view["severity_code"] is None and view["resolution_id"] is None
     assert all(t["status"] is None for t in view["tasks"])
     assert SENTINEL not in json.dumps(out)
-    for key in out["data"]["comparison"]["incident_type_ids"]:
-        assert len(key) <= 130  # 100 characters plus the truncation marker
+    for entry in out["data"]["comparison"]["incident_type_ids"]:
+        assert len(entry["value"]) <= 130  # 100 characters plus the truncation marker
+        assert entry["truncated"] is entry["value"].startswith("type ")
 
 
 async def test_an_auth_failure_on_workflow_instances_fails_the_call(fake: FakeSoar, tmp_path: Path):
@@ -363,3 +380,75 @@ async def test_odd_types_and_workflow_bodies_are_reported_not_parsed(
     assert view["incident_type_ids"] == []
     assert view["workflow_instances"]["state"] == "unverified"
     assert "count" not in view["workflow_instances"]
+
+
+# ------------------------------------------------- partial history, long names
+
+
+async def test_partially_parsed_history_is_marked_incomplete(fake: FakeSoar, tmp_path: Path):
+    ids = add_incidents(fake, 2)
+    rows = fake.history[43]["incident_detail_history"]
+    rows.append({"diffs": "not a list", "date": 1, "revision_number": 3})
+    out = await analyse(fake, tmp_path, ids)
+    history = out["data"]["incidents"][1]["history"]
+    assert history["revisions_parsed"] == 2 and history["rows_total"] == 3
+    assert history["unparsed_rows"] == 1 and history["complete"] is False
+    assert "revisions" not in history  # never a count that looks like the whole history
+    comparison = out["data"]["comparison"]
+    assert comparison["history_complete"] == {"complete": 1, "incomplete": 1}
+
+
+async def test_a_history_cut_at_the_row_limit_is_incomplete(
+    fake: FakeSoar, tmp_path: Path, monkeypatch
+):
+    from qradar_soar_mcp.client import history as history_module
+
+    monkeypatch.setattr(history_module, "MAX_DETAIL_ROWS", 1)
+    out = await analyse(fake, tmp_path, add_incidents(fake, 2))
+    history = out["data"]["incidents"][0]["history"]
+    assert (history["revisions_parsed"], history["rows_total"]) == (1, 2)
+    assert history["rows_cut"] is True and history["complete"] is False
+
+
+async def test_tasks_with_a_shared_long_prefix_are_not_merged(fake: FakeSoar, tmp_path: Path):
+    ids = add_incidents(fake, 3, tasks_each=0)
+    prefix = "Contain host " + "x" * 400
+    for inc_id in ids[1:]:
+        # Same length, so even the truncation markers match and only the flag tells them apart.
+        for n, suffix in enumerate(("alpha", "bravo")):
+            task_id = 2_000_000 + inc_id * 10 + n
+            fake.tasks[task_id] = {
+                "id": task_id,
+                "inc_id": inc_id,
+                "name": f"{prefix} {suffix}",
+                "status": "C",
+                "phase_id": "Respond",
+                "required": False,
+            }
+    out = await analyse(fake, tmp_path, ids)
+    entries = [
+        e
+        for e in out["data"]["comparison"]["tasks_in_incidents"]
+        if e["value"].startswith("Contain host")
+    ]
+    assert len(entries) == 2  # alpha and bravo stay distinct although they display alike
+    assert all(e["incidents"] == 2 for e in entries)
+    assert all(e["truncated"] and e["ambiguous_display"] for e in entries)
+
+
+async def test_changed_fields_with_a_shared_prefix_are_not_merged(fake: FakeSoar, tmp_path: Path):
+    ids = add_incidents(fake, 2)
+    long_a, long_b = "f" * 150 + "_a", "f" * 150 + "_b"
+    for inc_id in ids:
+        fake.history[inc_id]["incident_detail_history"][0]["diffs"] = [
+            {"name": long_a},
+            {"name": long_b},
+        ]
+    out = await analyse(fake, tmp_path, ids)
+    entries = [
+        e
+        for e in out["data"]["comparison"]["changed_fields_in_incidents"]
+        if e["value"].startswith("fff")
+    ]
+    assert len(entries) == 2 and all(e["incidents"] == 2 for e in entries)
+    assert all(e["truncated"] and e["ambiguous_display"] for e in entries)
