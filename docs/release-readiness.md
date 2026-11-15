@@ -64,7 +64,7 @@ REL-04 is still open, so this verdict is unchanged.)* `v0.3.0` — **NO-GO**: Ph
 | Registered tools | 36 (`tests/__snapshots__/test_tools.ambr`): 20 Phase-1 (08 §3), `soar_refresh_catalog` (P2-01), 5 × P2-02, 4 × P2-03, 4 × P2-04, 2 × P2-05 | snapshot + `test_readme_tool_table_is_the_registry` |
 | Mutating tools | 7 (Tier 1: 2, Tier 2: 5) plus `soar_invoke_action` (Tier 3, always refuses) | `tests/test_permission_matrix.py`, `tests/test_confirmation_lab_mode.py` |
 | Tier-4 tools | none (flags accepted, unused) | 08 §31, threat model §6 |
-| CLI entry points | `qradar-soar-mcp`, `qradar-soar-approve`, `qradar-soar-audit` | `pyproject.toml [project.scripts]`; `qradar-soar-policy` (P2-06) does not exist |
+| CLI entry points | `qradar-soar-mcp`, `qradar-soar-approve`, `qradar-soar-audit` | `pyproject.toml [project.scripts]`; `qradar-soar-policy` (P2-06) added after this audit (§12.2) |
 | Packages with behaviour | `client/`, `security/`, `tools/`, `catalog/`; `playbook/` is an empty skeleton (Phase 3) | `test_future_phase_packages_hold_no_behaviour` |
 | Live-verified appliance | one: `51.0.9.0.20848` | `docs/soar-api-verified.md` |
 | Lab-marked tests | **none**; markers `lab`, `lab_write`, `lab_destructive` are registered only | `pyproject.toml`, grep of `tests/` |
@@ -123,7 +123,7 @@ D13).
 | P2-03 types, phases, fields, datatables | **PARTIAL** | `test_discovery_types_fields.py` | close-required not met as a verified flag (08 §28.3, **D10 open**); `soar_describe_incident_fields` still derives `close_required` from the unverified baseline reading |
 | P2-04 rules, workflows | COMPLETE (one workflow observed) | `test_workflow_summary.py`, `test_discovery_rules_workflows.py`; live structure on 2026-10-23 | uuid resolution by exact equality only (D11) |
 | P2-05 playbooks | COMPLETE (one playbook observed) | `test_discovery_playbooks.py`; `verified_on: 51.0.9.0.20848` | owner choices open (D12) |
-| P2-06 policy scaffold CLI | **NOT STARTED** | no `qradar-soar-policy` entry point or module | — |
+| P2-06 policy scaffold CLI | COMPLETE *(added after this audit, §12.2)* | `qradar-soar-policy scaffold`, `test_policy_scaffold.py` | owner choices open (D23) |
 | P2-07 historical-response analysis | **NOT STARTED** | no `soar_analyse_incident_response` | history is live-readable; execution rows were zero on the lab (B, "Past function results") |
 
 ---
@@ -365,7 +365,7 @@ No `v0.2.0` tag, release or version change is made by this PR.
 | 4a | ~~**REL-06** — sdist `only-include` allow-list + archive-content test (no `.claude/`, worktrees, logs, `automation/`, `.github/`)~~ **Done (§12)** | — | `pyproject.toml` packaging config + one test; **required before any build artefact is distributed** |
 | 5 | **TAG v0.2.0** (tag + source-code pre-release, no attachments) | 1, 4 (2 recommended) | owner |
 | 5a | **Attach build artefacts to a release** (optional, later) | 3, 4a | CI-built only |
-| 6 | **P2-06** — `qradar-soar-policy scaffold` (deny-all Tier-5 scaffold, schema-valid, never overwrites) | catalog (P2-02, P2-04 done) | offline-buildable from the committed catalog fixture |
+| 6 | ~~**P2-06** — `qradar-soar-policy scaffold` (deny-all Tier-5 scaffold, schema-valid, never overwrites)~~ **Done (§12.2)** | catalog (P2-02, P2-04 done) | offline-buildable from the committed catalog fixture |
 | 7 | **P2-07** — `soar_analyse_incident_response` | P2-04, P1-15 | history reads are live-verified; execution rows were empty on the lab, so degradation is mandatory |
 | 8 | **D10 decision / P2-03b** — settle `required` semantics; align `soar_describe_incident_fields` | owner approval for a static read or a close experiment | |
 | 9 | **LAB-01** — `tests/lab/` T4 read-only suite against a lab (`SOAR_TEST_BASE_URL`) | lab access | `07 §7` |
@@ -497,6 +497,24 @@ gitleaks was not run locally (binary not installed); it runs in CI.
 - No application code, MCP tool, REST call, SOAR client behaviour, permission,
   approval, audit or redaction rule changed. No version bump, tag, release or PyPI
   upload was made.
+
+### 12.2 P2-06 — `qradar-soar-policy scaffold`
+
+**Change:** a new entry point, `qradar-soar-policy scaffold --output PATH [--catalog FILE]`,
+writes an action policy that denies every action of the catalog's `rules` section (each
+entry Tier 5 / `deny` / `destructive: true`, default Tier 5 / `deny`) with a suggested tier
+as a comment. It reads a catalog JSON file, or loads the catalog from SOAR through the
+configured backend (read-only). The output is created exclusively and is parsed back and
+validated before it is written. Design and AC mapping: 08 §34; owner choices: D23.
+
+**Evidence:** `tests/test_policy_scaffold.py`, including a server run with the unedited
+scaffold as `SOAR_ACTION_POLICY_FILE` (reads succeed, every action Tier 5 / deny,
+`soar_invoke_action` refused, nothing sent).
+
+**Not changed:** no MCP tool, REST call, capability flag, setting, policy schema or
+permission rule. The `v0.2.0` verdict and the Phase-2 verdict for `v0.3.0` (§10, §13.3) are
+unchanged: P2-07 is not started and P2-00, P2-01 and P2-03 stay partial. The changelog and
+release notes still list P2-06 as not started, pending D23 (d).
 
 
 ---

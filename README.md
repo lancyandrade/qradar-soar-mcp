@@ -710,6 +710,7 @@ the MCP host.
 | `qradar-soar-approve list` | list requests and their state | 0 |
 | `qradar-soar-approve APR-… [--key KEY] [--approver NAME] [--ttl SECONDS]` (`approve` may be written before the reference) | print the plan, require the reference typed back, then sign or reject | 0 approved · 3 rejected · 1 no such request, or not pending · 2 malformed reference or no usable key |
 | `qradar-soar-audit verify [PATH]` | walk the hash chain (default `$SOAR_AUDIT_LOG_PATH`, else `./audit.jsonl`) | 0 intact · 1 broken, naming the first bad record |
+| `qradar-soar-policy scaffold --output PATH [--catalog FILE]` | write an action policy with one Tier-5 / `deny` / `destructive` entry per catalog action (the `rules` section) and a suggested tier as a comment, for a human to edit; reads a catalog JSON file, or else loads the catalog from SOAR with the environment's connection (read-only); creates `PATH` exclusively and never writes over a file or through a symlink; `-` writes to stdout ([08 §34](docs/design/08-GREENFIELD-AMENDMENTS.md#34-p2-06--qradar-soar-policy-scaffold)) | 0 written · 1 no catalog, no scaffold, or `PATH` exists · 2 refused configuration |
 
 `qradar-soar-approve --broker DIR` (before the subcommand) selects the broker
 directory; the default is `$SOAR_APPROVAL_BROKER_PATH`, else `./approvals`.
@@ -918,7 +919,7 @@ What changed: [CHANGELOG.md](CHANGELOG.md). Release notes:
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Investigation + controlled actions + security architecture | **v0.2.0 (alpha, pending publication)**; complete in code with documented deferrals |
-| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); incident-type, phase, field and data-table discovery in (`P2-03`); rule and workflow discovery in (`P2-04`); playbook discovery in (`P2-05`); the rest (`P2-06`, `P2-07`) planned |
+| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); incident-type, phase, field and data-table discovery in (`P2-03`); rule and workflow discovery in (`P2-04`); playbook discovery in (`P2-05`); the action-policy scaffold CLI in (`P2-06`); `P2-07` planned |
 | 3 | Playbook IR, validation, offline simulation | planned |
 | 4 | Compilation, export, import (always disabled) | planned |
 | 5 | Controlled enablement | planned |
