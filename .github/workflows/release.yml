@@ -11,7 +11,10 @@
 #             fixed SOURCE_DATE_EPOCH, then scripts/check_release_dist.py checks
 #             tag == version and every archive member against the REL-06
 #             allow-list and writes SHA256SUMS. Build provenance is attested.
-#   release - re-checks the sums and creates a DRAFT pre-release with the two
+#   release - runs in the protected `release` environment, so it waits for a
+#             required reviewer (verify refuses to go on if the environment is
+#             missing, has no reviewer, or deploys anything but v* tags). It
+#             re-checks the sums and creates a DRAFT pre-release with the two
 #             archives and SHA256SUMS attached. A human reviews and publishes it.
 #
 # Security notes:
@@ -69,6 +72,28 @@ jobs:
           runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&status=success" --jq '.total_count')"
           [[ "$runs" =~ ^[1-9][0-9]*$ ]] \
             || { echo "no successful ci push run on $GITHUB_SHA; tag a main commit CI has passed" >&2; exit 1; }
+      # The release job runs in the `release` environment. A job that names a missing
+      # environment makes GitHub create it with no protection, so refuse to go on
+      # unless it exists, needs a human reviewer, and deploys only `v*` tags.
+      - name: The release environment needs a reviewer and allows only v* tags
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          envurl="repos/$GITHUB_REPOSITORY/environments/release"
+          reviewers="$(gh api "$envurl" \
+            --jq '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers | length] | add // 0')" \
+            || { echo "environment 'release' is missing or unreadable; see docs/runbooks/release.md" >&2; exit 1; }
+          [[ "$reviewers" =~ ^[1-9][0-9]*$ ]] \
+            || { echo "environment 'release' has no required reviewer" >&2; exit 1; }
+          custom="$(gh api "$envurl" --jq '.deployment_branch_policy.custom_branch_policies // false')"
+          [[ "$custom" == "true" ]] \
+            || { echo "environment 'release' must use custom deployment policies (v* tags only)" >&2; exit 1; }
+          policies="$(gh api --paginate "$envurl/deployment-branch-policies?per_page=100" \
+            --jq '.branch_policies[] | "\(.type // "branch"):\(.name)"')"
+          [[ "$policies" == "tag:v*" ]] \
+            || { echo "environment 'release' policies must be exactly tag:v*, found: $policies" >&2; exit 1; }
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           python-version: "3.12"
@@ -143,6 +168,8 @@ jobs:
     name: create a draft pre-release
     needs: build
     runs-on: ubuntu-latest
+    # Waits for a required reviewer's approval (D25 (d)); `verify` checked the rules.
+    environment: release
     permissions:
       contents: write
     steps:
@@ -175,7 +202,9 @@ jobs:
           {
             echo "Draft created by the release workflow from tag $TAG (commit $GITHUB_SHA)."
             echo "Built in CI from a clean checkout; not published to PyPI."
-            echo "See CHANGELOG.md and docs/releases/ before publishing."
+            echo "Before publishing, work through the checklist in docs/runbooks/release.md."
+            echo "A source-only release (v0.2.0, D25 (e)) must have these three assets"
+            echo "deleted from the draft first."
             echo
             echo "SHA-256:"
             echo '```'

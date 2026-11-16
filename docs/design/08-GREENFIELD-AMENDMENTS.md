@@ -1818,6 +1818,15 @@ documented way to build release artefacts. Procedure:
   PyPI or any index.
 - **Privilege:** top-level `contents: read`; `id-token`/`attestations: write` only in
   `build`; `contents: write` only in `release`, which runs no repository code.
+- **Human approval (PR #27 review, D25 (d)):** `release` runs in the `release`
+  environment, so it waits for a required reviewer. GitHub creates a missing
+  environment unprotected when a job first names it, so `verify` fails the run unless
+  the environment exists, has a required reviewer, uses custom deployment policies and
+  allows exactly `tag:v*`. The environment is a repository setting for the owner to
+  create (`docs/runbooks/release.md` §2); until then every tag run stops in `verify`.
+- **Publication:** the draft's notes point at the runbook's publication checklist,
+  whose asset item removes the CI-built archives from a source-only release
+  (`v0.2.0`, D25 (e)).
 
 ### 36.2 Change to an existing guard
 
@@ -1834,6 +1843,9 @@ owner drops attestation (D25 (a)), the entry goes with it.
 locked build, the draft-only flags, the absence of `--clobber`/`gh release upload` and
 of any index upload, and the checker's behaviour on synthetic archives (extra, missing,
 forbidden, link, traversal and out-of-prefix members; bad tags; stray files).
-`tests/test_packaging.py` runs the checker over the real archives. The workflow itself
-has **not run on GitHub**; the tag trigger, attestation and release creation are first
-exercised by the first tag push. Owner choices: D25.
+`tests/test_packaging.py` runs the checker over the real archives. The environment check is
+pinned there too. The workflow itself has **not completed a real tag-triggered run**;
+the tag trigger, the environment read and approval wait, attestation and release
+creation are first exercised by the first owner-authorised tag push, a separate
+acceptance milestone after merge. Merging REL-04 creates no tag, publishes no release
+and waives no lab gate. Owner choices: D25.

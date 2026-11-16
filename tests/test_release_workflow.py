@@ -71,6 +71,38 @@ def test_jobs_run_in_order_with_least_privilege():
     assert DOC["concurrency"]["cancel-in-progress"] is False
 
 
+def test_only_the_release_job_runs_in_the_protected_environment():
+    """D25 (d): `release` waits for a reviewer; no other job names an environment."""
+    jobs = DOC["jobs"]
+    assert jobs["release"]["environment"] == "release"
+    assert "environment" not in jobs["verify"] and "environment" not in jobs["build"]
+
+
+def test_verify_refuses_an_unprotected_release_environment_before_building():
+    """A missing environment would be created unprotected, so verify fails closed."""
+    steps = _steps("verify")
+    names = [s.get("name", "") for s in steps]
+    idx = names.index("The release environment needs a reviewer and allows only v* tags")
+    first_uv = next(i for i, s in enumerate(steps) if "setup-uv" in str(s.get("uses", "")))
+    assert idx < first_uv
+    run = steps[idx]["run"]
+    assert run.startswith("set -euo pipefail")
+    assert 'envurl="repos/$GITHUB_REPOSITORY/environments/release"' in run
+    assert 'select(.type == "required_reviewers") | .reviewers | length' in run
+    assert '[[ "$reviewers" =~ ^[1-9][0-9]*$ ]]' in run
+    assert ".deployment_branch_policy.custom_branch_policies // false" in run
+    assert '[[ "$custom" == "true" ]]' in run
+    assert "$envurl/deployment-branch-policies" in run
+    assert '[[ "$policies" == "tag:v*" ]]' in run
+    assert steps[idx]["env"] == {"GH_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}
+
+
+def test_draft_notes_point_at_the_publication_checklist():
+    runs = _runs("release")
+    assert "checklist in docs/runbooks/release.md" in runs
+    assert "deleted from the draft first" in runs
+
+
 def test_no_expression_is_interpolated_into_a_shell_script():
     for job in DOC["jobs"]:
         for step in _steps(job):

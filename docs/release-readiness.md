@@ -541,7 +541,8 @@ partial ACs of P2-00, P2-01 and P2-03 stand.
 push run succeeded is verified again (every local gate), built with `uv build
 --no-build-isolation` (the locked hatchling) from a clean, credential-free checkout,
 checked by `scripts/check_release_dist.py` (tag = version, REL-06 member allow-list,
-`SHA256SUMS`), attested, and attached to a **draft** pre-release. Nothing goes to PyPI;
+`SHA256SUMS`), attested, and, after a required reviewer approves the protected `release`
+environment, attached to a **draft** pre-release. Nothing goes to PyPI;
 an existing release is never touched. Design: 08 §36; procedure:
 [`runbooks/release.md`](runbooks/release.md); owner choices: D25.
 
@@ -550,8 +551,9 @@ synthetic archives); `tests/test_packaging.py::test_release_checker_accepts_the_
 locally (Windows 11, uv 0.11.14) `uv build --no-build-isolation` and the checker pass on
 `0.2.0`, and the `ci` run query returns one successful push run for `bd6115b`.
 
-**Not verified:** the workflow has not run on GitHub (tag trigger, attestation, release
-creation). **Not changed:** the `v0.2.0` verdict (NO-GO, §13.3) and its source-only
+**Not verified:** the workflow has not completed a real tag-triggered run (tag trigger,
+environment read and approval, attestation, release creation); the `release`
+environment is not created yet (owner, D25 (d)), so a tag run stops in `verify`. **Not changed:** the `v0.2.0` verdict (NO-GO, §13.3) and its source-only
 distribution plan; producing archives in CI does not distribute them.
 
 

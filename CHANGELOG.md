@@ -31,8 +31,9 @@ Changes merged after the `v0.2.0` release-readiness audit. They are on `main` bu
 
 - **Release workflow (REL-04):** a `vX.Y.Z` tag on a `main` commit with green CI is
   re-verified, built in CI with the locked backend, checked against the sdist/wheel
-  allow-list, given `SHA256SUMS` and a build-provenance attestation, and attached to a
-  **draft** pre-release. Nothing is uploaded to PyPI
+  allow-list, given `SHA256SUMS` and a build-provenance attestation, and, after a
+  reviewer approves the protected `release` environment, attached to a **draft**
+  pre-release. Nothing is uploaded to PyPI
   ([docs/runbooks/release.md](docs/runbooks/release.md)).
 
 ## [0.2.0] - Pending (alpha)
