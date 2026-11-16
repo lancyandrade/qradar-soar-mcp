@@ -100,6 +100,7 @@ failure.
 | `soar_get_incident` | 0 | — | one incident, projected; custom fields only on request |
 | `soar_get_incident_full` | 0 | — | incident + tasks + artifacts + notes + attachment metadata, under a size budget |
 | `soar_find_similar_incidents` | 0 | — | recent incidents sharing artifact values (client-side composition) |
+| `soar_analyse_incident_response` | 0 | — | 1–10 past incidents side by side (P2-07, unreleased): resolution, status, severity, phase, types, tasks, and from `GET /incidents/{id}/history` the revisions parsed, the total rows and whether the history was read in full, and the names of changed fields (no values, no users); a comparison across them, grouped on full names with truncated or look-alike entries flagged; `end_date − create_date` labelled as such. Which rules or playbooks ran is **not observable** and not claimed; workflow instances are only counted. History reads that fail are reported per incident; 40,000-character budget |
 | `soar_list_artifacts` | 0 | — | artifacts on an incident |
 | `soar_list_tasks` | 0 | — | tasks on an incident |
 | `soar_list_comments` | 0 | — | notes, flattened with `parent_id` |
@@ -803,12 +804,18 @@ wherever it disagrees with this list.
     `uuid` (`docs/soar-api-verified.md` §3.4). A key without playbook read, or without
     function read, is answered `403`. ❓ One draft playbook with one call was observed;
     other node kinds, manual activation and other SOAR versions are unverified.
+14. ✅ `GET /incidents/{id}/history` and `GET /incidents/{id}/workflow_instances` answer
+    200 (`P2-00`, read-only key; `docs/soar-api-verified.md` Q8). Of the history object only
+    `incident_detail_history` was seen with rows, and only its revision numbers, dates
+    and changed field names are read. ❓ Workflow instances returned no row, so their
+    rows are counted, never parsed; playbook-execution rows were never observed, so which
+    rules or playbooks ran is not claimed (08 §35).
 
 ### Confidence in API claims
 
 The REST surface `client/` may touch is exactly the set of calls listed in
 `docs/design/08-GREENFIELD-AMENDMENTS.md §4` and, for the catalog and discovery, `§25`,
-`§26` and `§30`, enforced by an AST test. Nothing else is called.
+`§26` and `§30`, and for incident history `§35`, enforced by an AST test. Nothing else is called.
 
 Two kinds of evidence stand behind the marks, and they are not the same thing:
 
@@ -919,7 +926,7 @@ What changed: [CHANGELOG.md](CHANGELOG.md). Release notes:
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Investigation + controlled actions + security architecture | **v0.2.0 (alpha, pending publication)**; complete in code with documented deferrals |
-| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); incident-type, phase, field and data-table discovery in (`P2-03`); rule and workflow discovery in (`P2-04`); playbook discovery in (`P2-05`); the action-policy scaffold CLI in (`P2-06`); `P2-07` planned |
+| 2 | Verify the API surface against a lab; playbook/rule/workflow/function discovery | API verified (`P2-00`, `P2-00b`); catalog foundation in (`P2-01`); function, script and message-destination discovery in (`P2-02`); incident-type, phase, field and data-table discovery in (`P2-03`); rule and workflow discovery in (`P2-04`); playbook discovery in (`P2-05`); the action-policy scaffold CLI in (`P2-06`); historical-response analysis in (`P2-07`); P2-06 and P2-07 are after the `v0.2.0` audit and listed under `[Unreleased]` |
 | 3 | Playbook IR, validation, offline simulation | planned |
 | 4 | Compilation, export, import (always disabled) | planned |
 | 5 | Controlled enablement | planned |

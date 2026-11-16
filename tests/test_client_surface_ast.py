@@ -24,6 +24,8 @@ Enforced by AST inspection:
 * P2-05 (08 §30) adds exactly one call, ``GET playbooks/{id}``, the single playbook object
   verified on 51.0.9.0.20848; the playbook query stays the only POST, and no other
   playbook path (export, import, execution, clone, change logs) appears.
+* P2-07 (08 §35) adds two reads, ``GET incidents/{id}/history`` and ``GET
+  incidents/{id}/workflow_instances``, in ``history.py`` only, and nothing else there.
 """
 
 from __future__ import annotations
@@ -77,8 +79,15 @@ DISCOVERY_CALLS = {
     ("POST", "playbooks/query_paged"),
     ("GET", "playbooks/{id}"),  # P2-05 (08 §30): the single playbook, on demand
 }
+# 08 §35 (P2-07): the two incident-history reads of docs/soar-api-verified.md Q8, for
+# soar_analyse_incident_response. history.py only.
+HISTORY_MODULE = "history.py"
+HISTORY_CALLS = {
+    ("GET", "incidents/{id}/history"),
+    ("GET", "incidents/{id}/workflow_instances"),
+}
 PHASE_ONE_CALLS = frozenset(ALLOWED_CALLS)
-ALLOWED_CALLS |= DISCOVERY_CALLS
+ALLOWED_CALLS |= DISCOVERY_CALLS | HISTORY_CALLS
 ALLOWED_ORG_SUFFIXES = {path for _, path in ALLOWED_CALLS if not path.startswith("/rest/")}
 ALLOWED_ABSOLUTE = {path for _, path in ALLOWED_CALLS if path.startswith("/rest/")}
 # Contradicted on 51.0.9.0.20848 (docs/soar-api-verified.md §3, D1/D3/D4).
@@ -137,13 +146,13 @@ def _is_http_receiver(node: ast.AST, module: str) -> bool:
 
 
 def _calls(
-    only: str | None = None, skip: str | None = None
+    only: str | None = None, skip: tuple[str, ...] = ()
 ) -> tuple[set[tuple[str, str]], list[str]]:
     """Every (method, path) the client sends, and the call sites it could not resolve."""
     pairs: set[tuple[str, str]] = set()
     unresolved: list[str] = []
     for path, tree in _modules():
-        if (only is not None and path.name != only) or path.name == skip:
+        if (only is not None and path.name != only) or path.name in skip:
             continue
         for fn in ast.walk(tree):
             if not isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -289,12 +298,12 @@ def test_no_forbidden_http_verbs_anywhere_in_client():
 
 
 def test_no_phase_two_paths_or_words():
-    """Outside ``discovery.py`` the Phase-1 rule is unchanged."""
+    """Outside ``discovery.py`` and ``history.py`` the Phase-1 rule is unchanged."""
     banned = re.compile(
         r"table_data|/functions|/playbooks|/scripts|/workflows|rest/const|configurations|/contents|/history"
     )
     for path in sorted(CLIENT_DIR.glob("*.py")):
-        if path.name == DISCOVERY_MODULE:
+        if path.name in (DISCOVERY_MODULE, HISTORY_MODULE):
             continue
         text = path.read_text(encoding="utf-8")
         for lineno, line in enumerate(text.splitlines(), 1):
@@ -313,8 +322,38 @@ def test_the_discovery_module_makes_exactly_the_verified_reads():
 
 
 def test_the_phase_one_modules_gained_no_call():
-    pairs, _ = _calls(skip=DISCOVERY_MODULE)
+    pairs, _ = _calls(skip=(DISCOVERY_MODULE, HISTORY_MODULE))
     assert pairs == PHASE_ONE_CALLS
+
+
+# ---------------------------------------------------------------- P2-07 history
+def test_the_history_module_makes_exactly_the_two_verified_reads():
+    pairs, unresolved = _calls(only=HISTORY_MODULE)
+    assert unresolved == []
+    assert pairs == HISTORY_CALLS
+    text = (CLIENT_DIR / HISTORY_MODULE).read_text(encoding="utf-8")
+    tree = ast.parse(text)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in {"post", "patch", "patch_object", "put", "request"}, node.attr
+    docstring = ast.get_docstring(tree) or ""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            literal = node.value
+            if literal.strip() == docstring.strip() or "\n" in literal:
+                continue
+            for word in ("newsfeed", "execution", "artifacts/", "playbooks", "query_paged"):
+                assert word not in literal, f"history.py names {word!r}: {literal!r}"
+
+
+def test_no_other_module_names_a_history_path():
+    for path in sorted(CLIENT_DIR.glob("*.py")):
+        if path.name == HISTORY_MODULE:
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.strip().startswith("#") or '"""' in line:
+                continue
+            assert "workflow_instances" not in line, f"{path.name}:{lineno}"
 
 
 def test_discovery_is_read_only_and_names_no_unverified_or_privileged_call():

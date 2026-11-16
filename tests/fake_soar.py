@@ -107,6 +107,58 @@ class Recorded:
     json: Any
 
 
+HISTORY_KEYS = (
+    "artifact_history",
+    "attachment_history",
+    "data_type_history",
+    "incident_detail_history",
+    "milestone_history",
+    "record_count_history",
+    "task_history",
+)
+
+
+def empty_history() -> dict[str, Any]:
+    return dict.fromkeys(HISTORY_KEYS)
+
+
+def synthetic_history() -> dict[str, Any]:
+    """Two revisions in the verified row shape; values and users are synthetic."""
+
+    def diff(name: str, new: Any) -> dict[str, Any]:
+        return {
+            "name": name,
+            "type": "text",
+            "new_val": new,
+            "old_val": {"format": "text", "null": True},
+        }
+
+    out = empty_history()
+    out["incident_detail_history"] = [
+        {
+            "create": True,
+            "delete": False,
+            "date": 1_700_000_000_000,
+            "revision_number": 1,
+            "object_id": 42,
+            "object_name": "incident",
+            "user": "analyst@soar.example.internal",
+            "diffs": [diff("severity_code", "High"), diff("phase_id", "Respond")],
+        },
+        {
+            "create": False,
+            "delete": False,
+            "date": 1_700_000_360_000,
+            "revision_number": 2,
+            "object_id": 42,
+            "object_name": "incident",
+            "user": "analyst@soar.example.internal",
+            "diffs": [diff("plan_status", "C"), diff("resolution_id", "Resolved")],
+        },
+    ]
+    return out
+
+
 class FakeSoar:
     def __init__(self, *, session_status: int = 403) -> None:
         self.org_id = ORG_ID
@@ -132,6 +184,11 @@ class FakeSoar:
         }
         self.users: list[dict[str, Any]] = cols["users"]
         self.discovery: dict[str, Any] = build_payloads()
+        # P2-07 (08 §35): the verified history shape (soar-api-verified.md Q8) with
+        # synthetic rows; only incident_detail_history holds any. Workflow instances: the
+        # one verified answer, no rows. Set per incident to model other answers.
+        self.history: dict[int, Any] = {42: synthetic_history()}
+        self.workflow_instances: dict[int, Any] = {}
         self.session_status = session_status
         self.faults: list[tuple[str, re.Pattern[str], Fault]] = []
         self.requests: list[Recorded] = []
@@ -310,6 +367,17 @@ class FakeSoar:
             if method == "PATCH":
                 return self._patch_incident(inc, body)
             return self._error(405, "method not allowed")
+
+        m = re.fullmatch(r"/incidents/(\d+)/(history|workflow_instances)", rest)
+        if m:
+            inc_id, kind = int(m.group(1)), m.group(2)
+            if inc_id not in self.incidents:
+                return self._error(404, "incident not found")
+            if method != "GET":
+                return self._error(405, "method not allowed")
+            if kind == "history":
+                return self._json(200, self.history.get(inc_id, empty_history()))
+            return self._json(200, self.workflow_instances.get(inc_id, {"entities": []}))
 
         if re.fullmatch(r"/incidents/\d+/actions", rest) and method == "GET":
             # Verified on 51.0.9.0.20848: undocumented there, and it answers 500.

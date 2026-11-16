@@ -55,6 +55,7 @@ APPROVED_TOOLS = {
     "soar_get_workflow": 0,
     "soar_list_playbooks": 0,
     "soar_get_playbook": 0,
+    "soar_analyse_incident_response": 0,
     "soar_add_comment": 1,
     "soar_add_artifact": 1,
     "soar_create_incident": 2,
