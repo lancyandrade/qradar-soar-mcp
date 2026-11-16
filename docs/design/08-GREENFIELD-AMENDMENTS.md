@@ -1793,3 +1793,47 @@ synthetic rows.
 With D23 (d) the `0.2.0` changelog section and release notes stay the audited 36 tools.
 P2-06 and P2-07 are listed under `[Unreleased]`, and `tests/test_docs_consistency.py`
 counts the release documents against the registry less the tools named there.
+
+## 36. REL-04 — release artefacts are built only by a tag-triggered workflow
+
+Release-readiness H-5 had two halves: the sdist took whatever was on disk (fixed by the
+REL-06 allow-list, §12.1 of the readiness record) and artefacts were built by hand from a
+working copy. REL-04 closes the second: `.github/workflows/release.yml` is now the only
+documented way to build release artefacts. Procedure:
+[`docs/runbooks/release.md`](../runbooks/release.md).
+
+### 36.1 Design
+
+- **Trigger:** a pushed tag matching `v*`; the first step refuses anything but
+  `vX.Y.Z`. No `workflow_dispatch`, no branch or pull-request trigger.
+- **What may be built:** a commit on `main` on which the `ci` workflow succeeded as a
+  push (queried with `actions: read`); every local gate runs again before the build.
+- **How:** a credential-free, clean checkout; `uv sync --locked`; `uv build
+  --no-build-isolation` with the hatchling pinned in `uv.lock`; `SOURCE_DATE_EPOCH`
+  from the commit; `scripts/check_release_dist.py` (tag = `pyproject` version =
+  `__version__`, the REL-06 member allow-list, `SHA256SUMS`); build-provenance
+  attestation.
+- **Output:** a **draft** GitHub pre-release with the sdist, the wheel and
+  `SHA256SUMS`. It fails rather than touch an existing release. Nothing is uploaded to
+  PyPI or any index.
+- **Privilege:** top-level `contents: read`; `id-token`/`attestations: write` only in
+  `build`; `contents: write` only in `release`, which runs no repository code.
+
+### 36.2 Change to an existing guard
+
+`tests/test_review_loop_workflows.py::test_only_the_fix_job_can_mint_oidc_tokens`
+allowed one OIDC-minting job (the review loop's `fix`). Attestation needs
+`id-token: write`, so the guard is now an explicit two-entry allow-set
+(`review-loop.yml`/`fix`, `release.yml`/`build`); any other job still fails it. If the
+owner drops attestation (D25 (a)), the entry goes with it.
+
+### 36.3 Evidence and limits
+
+`tests/test_release_workflow.py` pins trigger, job order, per-job permissions, no
+`${{ }}` in `run:`, no kept credentials, no checkout in `release`, the gates, the
+locked build, the draft-only flags, the absence of `--clobber`/`gh release upload` and
+of any index upload, and the checker's behaviour on synthetic archives (extra, missing,
+forbidden, link, traversal and out-of-prefix members; bad tags; stray files).
+`tests/test_packaging.py` runs the checker over the real archives. The workflow itself
+has **not run on GitHub**; the tag trigger, attestation and release creation are first
+exercised by the first tag push. Owner choices: D25.

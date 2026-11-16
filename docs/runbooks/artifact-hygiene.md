@@ -24,7 +24,8 @@ canary files in place. The one residual path is an **untracked file under
 would take. Hatch reads `.gitignore` only, so a file hidden by `.git/info/exclude` or a
 global excludes file is still packed (release-readiness H-5). The check below fails on
 such a file whatever git's other exclude sources say, and REL-04 (release artefacts
-built only in CI from a clean checkout) closes the path.
+built only in CI from a clean checkout that fails on any untracked file,
+[`release.md`](release.md)) closes the path for releases.
 
 ## 2. The check
 

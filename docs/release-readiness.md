@@ -50,8 +50,9 @@ Evidence levels used throughout:
 > that audit.
 
 **Verdict (REL-01, superseded):** `v0.2.0` — **CONDITIONAL GO** as an alpha: a GitHub tag + pre-release of the source code only, with no manually built binary, wheel or sdist attached (§9, §10). Build
-artefacts are not distributed until REL-06 and REL-04 land. *(Update: REL-06 has landed, §12;
-REL-04 is still open, so this verdict is unchanged.)* `v0.3.0` — **NO-GO**: Phase 2 is not complete.
+artefacts are not distributed until REL-06 and REL-04 land. *(Update: REL-06 has landed, §12.1;
+REL-04 is implemented, §12.4, but has not run on GitHub, and whether `v0.2.0` carries its
+archives is open (D25 (e)), so this verdict is unchanged.)* `v0.3.0` — **NO-GO**: Phase 2 is not complete.
 
 ---
 
@@ -287,7 +288,7 @@ was found unsafe.
 | H-2 | No `CHANGELOG.md` and no release notes | v0.2.0 | The `0.2.0` package also contains 16 Phase-2 tools; without a changelog the version misdescribes the content and the deferrals of §7 are not attached to the release |
 | H-3 | `main` has no branch protection and no ruleset | all | CI is advisory: a PR that drops a permission check fails `P1-13` but can still be merged. This weakens the `07 §1` principle in practice |
 | H-4 | Phase 2 incomplete: P2-06, P2-07 not started; P2-00, P2-01, P2-03 partial | v0.3.0 | `06` gate rule |
-| H-5 | The sdist takes whatever is on disk and not in `.gitignore`: built from this working copy it held `.claude/settings.local.json`, a stale worktree and browser logs (§5) | any distributed sdist or wheel; not the §9 tag-only pre-release | A hand-built sdist could ship local tool configuration. Fix (separate ticket REL-06): an `only-include` allow-list for the sdist plus a test over the built archive, and build release artefacts only in CI from a clean checkout (REL-04). **Remediated (sdist part) by REL-06, §12**; the CI-only build (REL-04) is still open |
+| H-5 | The sdist takes whatever is on disk and not in `.gitignore`: built from this working copy it held `.claude/settings.local.json`, a stale worktree and browser logs (§5) | any distributed sdist or wheel; not the §9 tag-only pre-release | A hand-built sdist could ship local tool configuration. Fix (separate ticket REL-06): an `only-include` allow-list for the sdist plus a test over the built archive, and build release artefacts only in CI from a clean checkout (REL-04). **Remediated (sdist part) by REL-06, §12**; the CI-only build is implemented by REL-04 (§12.4), not yet run on GitHub |
 
 ### Medium
 
@@ -360,7 +361,7 @@ No `v0.2.0` tag, release or version change is made by this PR.
 |---|---|---|---|
 | 1 | **REL-02** — `CHANGELOG.md` + release notes for `v0.2.0` | this audit | docs only; lists Phase-1 contract, 16 Phase-2 tools, every §7 deferral, verified appliance version |
 | 2 | **REL-03** — protect `main` (required CI checks, no force-push, PR required) | — | repository settings, owner action |
-| 3 | **REL-04** — tag-triggered release workflow: `uv build`, SHA-256 sums, artefact upload, optional attestation; no PyPI | REL-02 | CI only |
+| 3 | ~~**REL-04** — tag-triggered release workflow: `uv build`, SHA-256 sums, artefact upload, optional attestation; no PyPI~~ **Done (§12.4)**; first real run is the first tag push; owner choices D25 | REL-02 | CI only |
 | 4 | **REL-05** — owner decision record: waive `07 §7.5` lab gates for the alpha, or schedule LAB-01 first | — | 08 entry |
 | 4a | ~~**REL-06** — sdist `only-include` allow-list + archive-content test (no `.claude/`, worktrees, logs, `automation/`, `.github/`)~~ **Done (§12)** | — | `pyproject.toml` packaging config + one test; **required before any build artefact is distributed** |
 | 5 | **TAG v0.2.0** (tag + source-code pre-release, no attachments) | 1, 4 (2 recommended) | owner |
@@ -533,6 +534,25 @@ incident); `tests/test_client_surface_ast.py` (`HISTORY_CALLS`).
 **Not changed:** no write, capability flag or setting. `v0.2.0` stays the audited 36 tools
 (P2-06 and P2-07 are under `[Unreleased]`). The `v0.3.0` verdict is unchanged while the
 partial ACs of P2-00, P2-01 and P2-03 stand.
+
+### 12.4 REL-04 — tag-triggered CI release build (remediates the rest of H-5)
+
+**Change:** `.github/workflows/release.yml`. A `vX.Y.Z` tag on a `main` commit whose `ci`
+push run succeeded is verified again (every local gate), built with `uv build
+--no-build-isolation` (the locked hatchling) from a clean, credential-free checkout,
+checked by `scripts/check_release_dist.py` (tag = version, REL-06 member allow-list,
+`SHA256SUMS`), attested, and attached to a **draft** pre-release. Nothing goes to PyPI;
+an existing release is never touched. Design: 08 §36; procedure:
+[`runbooks/release.md`](runbooks/release.md); owner choices: D25.
+
+**Evidence:** `tests/test_release_workflow.py` (workflow properties and the checker on
+synthetic archives); `tests/test_packaging.py::test_release_checker_accepts_the_real_archives`;
+locally (Windows 11, uv 0.11.14) `uv build --no-build-isolation` and the checker pass on
+`0.2.0`, and the `ci` run query returns one successful push run for `bd6115b`.
+
+**Not verified:** the workflow has not run on GitHub (tag trigger, attestation, release
+creation). **Not changed:** the `v0.2.0` verdict (NO-GO, §13.3) and its source-only
+distribution plan; producing archives in CI does not distribute them.
 
 
 ---

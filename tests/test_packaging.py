@@ -267,6 +267,22 @@ def wheel_from_sdist(sdist: Path, tmp_path_factory: pytest.TempPathFactory) -> P
     return _hatchling_build("wheel", root, tmp_path_factory.mktemp("wheel-from-sdist"))
 
 
+def test_release_checker_accepts_the_real_archives(sdist: Path, wheel: Path, tmp_path: Path):
+    """REL-04: scripts/check_release_dist.py passes the archives these tests approve."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "check_release_dist", ROOT / "scripts" / "check_release_dist.py"
+    )
+    assert spec is not None and spec.loader is not None
+    crd = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(crd)
+    shutil.copyfile(sdist, tmp_path / sdist.name)
+    shutil.copyfile(wheel, tmp_path / wheel.name)
+    crd.check(ROOT, tmp_path, f"v{VERSION}", write_sums=True)
+    assert len((tmp_path / crd.SUMS_NAME).read_text(encoding="utf-8").splitlines()) == 2
+
+
 def test_sdist_builds_an_equivalent_wheel(wheel_from_sdist: Path, wheel: Path):
     assert set(_wheel_members(wheel_from_sdist)) == set(_wheel_members(wheel))
 
