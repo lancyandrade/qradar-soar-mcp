@@ -138,7 +138,7 @@ def test_release_is_a_draft_pre_release_that_never_overwrites():
     lookup = 'repos/$GITHUB_REPOSITORY/releases?per_page=100"'
     assert "gh api --paginate" in runs and lookup in runs
     assert "select(.tag_name == env.TAG)" in runs
-    assert runs.index(lookup) < runs.index("gh release create")
+    assert runs.index(lookup) < runs.index('gh release create "$TAG"')
     for flag in ("--draft", "--prerelease", "--verify-tag"):
         assert flag in runs, flag
     for forbidden in ("--clobber", "gh release upload", "gh release edit", "--latest"):
