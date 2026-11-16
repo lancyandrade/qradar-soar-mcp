@@ -133,6 +133,12 @@ def test_release_is_a_draft_pre_release_that_never_overwrites():
     runs = _runs("release")
     assert "sha256sum --check --strict SHA256SUMS" in runs
     assert "gh release create" in runs
+    # --draft bypasses gh's own existing-release check, so the step looks first,
+    # drafts included, and the lookup comes before the create.
+    lookup = 'repos/$GITHUB_REPOSITORY/releases?per_page=100"'
+    assert "gh api --paginate" in runs and lookup in runs
+    assert "select(.tag_name == env.TAG)" in runs
+    assert runs.index(lookup) < runs.index("gh release create")
     for flag in ("--draft", "--prerelease", "--verify-tag"):
         assert flag in runs, flag
     for forbidden in ("--clobber", "gh release upload", "gh release edit", "--latest"):

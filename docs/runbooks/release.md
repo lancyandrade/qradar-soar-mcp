@@ -25,9 +25,10 @@ Not done, by design:
   `tests/test_release_workflow.py` fails if one is added.
 - **Nothing is published.** The release is a draft, which only users with write access
   can see. A human reads it and publishes it.
-- **Nothing is overwritten.** If a release for the tag already exists,
-  `gh release create` fails and nothing changes; the workflow never uploads to,
-  edits or replaces an existing release.
+- **Nothing is overwritten or duplicated.** Before creating anything, `release` lists
+  the repository's releases, drafts included, and fails if one already has the tag
+  (`gh release create --draft` skips its own check, so it is not relied on). The
+  workflow never uploads to, edits or replaces an existing release.
 
 ## 2. Cutting a release
 

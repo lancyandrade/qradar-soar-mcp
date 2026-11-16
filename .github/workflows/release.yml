@@ -165,6 +165,13 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          # gh release create skips its own existing-release check when --draft is
+          # passed, so look for any release on this tag, drafts included (a
+          # contents: write token lists drafts). Any API error fails the step.
+          existing="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.tag_name == env.TAG) | .id')"
+          [[ -z "$existing" ]] \
+            || { echo "a release for $TAG already exists (ids: $existing); delete it first" >&2; exit 1; }
           {
             echo "Draft created by the release workflow from tag $TAG (commit $GITHUB_SHA)."
             echo "Built in CI from a clean checkout; not published to PyPI."
