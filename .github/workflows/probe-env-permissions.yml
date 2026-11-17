@@ -1,0 +1,53 @@
+# REL-04 probe (throwaway branch, never merged): can a GITHUB_TOKEN read
+# environments and deployment branch policies with actions: read, and not
+# without it? Prints HTTP status codes and counts only.
+name: probe-env-permissions
+
+on:
+  push:
+    branches: [probe/rel-04-env-permissions]
+
+permissions:
+  contents: read
+
+jobs:
+  with-actions-read:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Probe
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          code() { curl -s -o /tmp/body -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/$1"; }
+          echo "own list environments: $(code "repos/$GITHUB_REPOSITORY/environments")"
+          echo "own get environment release: $(code "repos/$GITHUB_REPOSITORY/environments/release")"
+          echo "own list policies release: $(code "repos/$GITHUB_REPOSITORY/environments/release/deployment-branch-policies")"
+          echo "public get env astral-sh/uv release-gate: $(code "repos/astral-sh/uv/environments/release-gate")"
+          jq -c '{reviewers: ([.protection_rules[]? | select(.type == "required_reviewers") | .reviewers | length] | add // 0), custom: (.deployment_branch_policy.custom_branch_policies // false)}' /tmp/body || true
+          echo "public list policies astral-sh/uv release-gate: $(code "repos/astral-sh/uv/environments/release-gate/deployment-branch-policies")"
+          jq -c '[.branch_policies[]? | "\(.type // "branch"):\(.name)"]' /tmp/body || true
+
+  without-actions-read:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Probe
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          code() { curl -s -o /tmp/body -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/$1"; }
+          echo "own list environments: $(code "repos/$GITHUB_REPOSITORY/environments")"
+          echo "own get environment release: $(code "repos/$GITHUB_REPOSITORY/environments/release")"
+          echo "own list policies release: $(code "repos/$GITHUB_REPOSITORY/environments/release/deployment-branch-policies")"
+          echo "public get env astral-sh/uv release-gate: $(code "repos/astral-sh/uv/environments/release-gate")"
+          jq -c '{reviewers: ([.protection_rules[]? | select(.type == "required_reviewers") | .reviewers | length] | add // 0), custom: (.deployment_branch_policy.custom_branch_policies // false)}' /tmp/body || true
+          echo "public list policies astral-sh/uv release-gate: $(code "repos/astral-sh/uv/environments/release-gate/deployment-branch-policies")"
+          jq -c '[.branch_policies[]? | "\(.type // "branch"):\(.name)"]' /tmp/body || true
