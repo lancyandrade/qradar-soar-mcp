@@ -7,22 +7,35 @@ tagged commit, before anything is uploaded. It fails (exit 1) unless:
   and ``qradar_soar_mcp.__version__``;
 * the directory holds exactly one sdist and one wheel for that name and version (plus
   the ``.gitignore`` uv writes into its output directory, nothing else);
-* every archive member is on the REL-06 allow-list: the git-tracked files of the
-  package, the build config, readme and licence in the sdist, the package and
-  ``dist-info`` in the wheel; no forbidden component or suffix, no absolute path, no
-  ``..``, no link or device member.
+* **paths and structure:** every archive member is on the REL-06 allow-list: the
+  git-tracked files of the package, the build config, readme and licence in the sdist,
+  the package and ``dist-info`` in the wheel; no forbidden component or suffix, no
+  absolute path, no ``..``, no link or device member;
+* **content:** every member copied from the source is byte-for-byte the file git holds
+  at ``--ref`` (default ``HEAD``; the workflow passes the tagged commit): in the sdist
+  everything but ``PKG-INFO``, in the wheel every package file and the licence. The
+  generated files are checked for what they must say: ``PKG-INFO`` and ``METADATA``
+  name the project and version, ``entry_points.txt`` holds exactly the
+  ``[project.scripts]`` of ``pyproject.toml``, and ``RECORD`` lists every other wheel
+  member exactly once with its correct SHA-256 and size.
+
+Not checked: the rest of the generated metadata (for example the dependency list in
+``METADATA``), which hatchling derives from the checked ``pyproject.toml``.
 
 With ``--write-sums`` it then writes ``SHA256SUMS`` (``sha256sum`` format, one line
 per archive) into the directory. Output names members and files only, never content.
 The allow-list constants mirror ``tests/test_packaging.py``; a test keeps them equal.
 
-    uv run python scripts/check_release_dist.py --dist dist --tag v0.2.0 --write-sums
+    uv run python scripts/check_release_dist.py --dist dist --tag v0.2.0 --ref HEAD --write-sums
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import base64
+import configparser
+import email.parser
 import hashlib
 import re
 import subprocess
@@ -31,6 +44,7 @@ import tarfile
 import tomllib
 import zipfile
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_DIR = "src/qradar_soar_mcp"
@@ -65,14 +79,72 @@ class DistError(Exception):
     """A release build directory that must not be uploaded."""
 
 
-def project_metadata(root: Path) -> tuple[str, str]:
-    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+def _git(root: Path, *args: str) -> bytes:
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        ["git", *args],  # noqa: S607 - git from PATH
+        cwd=root,
+        check=True,
+        capture_output=True,
+    ).stdout
+
+
+class Source:
+    """The files an archive must reproduce: git's blobs at ``ref``, or the working tree.
+
+    ``ref=None`` reads the working tree (the packaging tests build from it). A release
+    passes the tagged commit, so a file that differs from that commit cannot pass.
+    """
+
+    def __init__(self, root: Path, ref: str | None) -> None:
+        self.root = root
+        self.ref = ref
+        self._cache: dict[str, bytes] = {}
+
+    def read(self, rel: str) -> bytes:
+        if rel not in self._cache:
+            if self.ref is None:
+                self._cache[rel] = (self.root / rel).read_bytes()
+            else:
+                try:
+                    self._cache[rel] = _git(self.root, "cat-file", "blob", f"{self.ref}:{rel}")
+                except subprocess.CalledProcessError as exc:
+                    raise DistError(f"{rel} is not in git at {self.ref!r}") from exc
+        return self._cache[rel]
+
+    def text(self, rel: str) -> str:
+        return self.read(rel).decode("utf-8")
+
+    def package_files(self) -> frozenset[str]:
+        if self.ref is None:
+            out = _git(self.root, "ls-files", "-z", "--", PACKAGE_DIR)
+        else:
+            out = _git(self.root, "ls-tree", "-r", "-z", "--name-only", self.ref, "--", PACKAGE_DIR)
+        files = frozenset(p for p in out.decode("utf-8").split("\0") if p)
+        if not files:
+            raise DistError("git lists no tracked package files")
+        return files
+
+
+def _project(source: Source) -> dict[str, Any]:
+    project = tomllib.loads(source.text("pyproject.toml")).get("project")
+    if not isinstance(project, dict):
+        raise DistError("pyproject.toml has no [project] table")
+    return project
+
+
+def project_metadata(root: Path, ref: str | None = None) -> tuple[str, str]:
+    project = _project(Source(root, ref))
     return str(project["name"]), str(project["version"])
 
 
-def package_version(root: Path) -> str:
+def project_scripts(source: Source) -> dict[str, str]:
+    scripts = _project(source).get("scripts", {})
+    return {str(k): str(v) for k, v in scripts.items()}
+
+
+def package_version(root: Path, ref: str | None = None) -> str:
     """``__version__`` read statically from the package (nothing is imported)."""
-    tree = ast.parse((root / PACKAGE_DIR / "__init__.py").read_text(encoding="utf-8"))
+    tree = ast.parse(Source(root, ref).text(f"{PACKAGE_DIR}/__init__.py"))
     for node in tree.body:
         if (
             isinstance(node, ast.Assign)
@@ -84,18 +156,8 @@ def package_version(root: Path) -> str:
     raise DistError(f"{PACKAGE_DIR}/__init__.py has no literal __version__")
 
 
-def tracked_package_files(root: Path) -> frozenset[str]:
-    out = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        ["git", "ls-files", "-z", "--", PACKAGE_DIR],  # noqa: S607 - git from PATH, fixed argv
-        cwd=root,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-    files = frozenset(p for p in out.split("\0") if p)
-    if not files:
-        raise DistError("git lists no tracked package files")
-    return files
+def tracked_package_files(root: Path, ref: str | None = None) -> frozenset[str]:
+    return Source(root, ref).package_files()
 
 
 def check_versions(tag: str | None, version: str, init_version: str) -> None:
@@ -131,8 +193,22 @@ def _compare(archive: str, names: list[str], expected: set[str]) -> None:
         raise DistError(f"{archive}: unexpected {unexpected}, missing {missing}")
 
 
-def check_sdist(path: Path, dist: str, version: str, package_files: frozenset[str]) -> None:
+def _check_same(archive: str, member: str, data: bytes, source: Source, rel: str) -> None:
+    if data != source.read(rel):
+        raise DistError(f"{archive}: {member} differs from {rel} in the source")
+
+
+def _check_core_metadata(archive: str, member: str, data: bytes, name: str, version: str) -> None:
+    headers = email.parser.BytesHeaderParser().parsebytes(data)
+    if headers.get_all("Name") != [name] or headers.get_all("Version") != [version]:
+        raise DistError(f"{archive}: {member} does not name {name} {version}")
+
+
+def check_sdist(
+    path: Path, dist: str, name: str, version: str, package_files: frozenset[str], source: Source
+) -> None:
     prefix = f"{dist}-{version}/"
+    contents: dict[str, bytes] = {}
     names: list[str] = []
     with tarfile.open(path, "r:gz") as tar:
         for member in tar.getmembers():
@@ -144,23 +220,86 @@ def check_sdist(path: Path, dist: str, version: str, package_files: frozenset[st
             if member.isfile():
                 _check_name(rel, path.name)
                 names.append(rel)
+                handle = tar.extractfile(member)
+                if handle is None:
+                    raise DistError(f"{path.name}: unreadable member {rel!r}")
+                contents[rel] = handle.read()
     _compare(path.name, names, set(SDIST_TOP_LEVEL | package_files))
+    for rel, data in sorted(contents.items()):
+        if rel == "PKG-INFO":
+            _check_core_metadata(path.name, rel, data, name, version)
+        else:
+            _check_same(path.name, rel, data, source, rel)
 
 
-def check_wheel(path: Path, dist: str, version: str, package_files: frozenset[str]) -> None:
-    with zipfile.ZipFile(path) as whl:
-        infos = whl.infolist()
+def _record_digest(data: bytes) -> str:
+    raw = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=")
+    return "sha256=" + raw.decode("ascii")
+
+
+def _check_record(archive: str, record: str, contents: dict[str, bytes], dist_info: str) -> None:
+    """RECORD lists every other member once with its SHA-256 and size, itself unhashed."""
+    seen: dict[str, tuple[str, str]] = {}
+    for line in record.splitlines():
+        if not line:
+            continue
+        parts = line.rsplit(",", 2)
+        if len(parts) != 3:
+            raise DistError(f"{archive}: malformed RECORD line")
+        member, digest, size = parts
+        if member in seen:
+            raise DistError(f"{archive}: RECORD lists {member!r} twice")
+        seen[member] = (digest, size)
+    record_name = f"{dist_info}/RECORD"
+    if seen.pop(record_name, None) != ("", ""):
+        raise DistError(f"{archive}: RECORD must list itself without a hash")
+    expected = {m for m in contents if m != record_name}
+    if set(seen) != expected:
+        listed, omitted = sorted(set(seen) - expected), sorted(expected - set(seen))
+        raise DistError(f"{archive}: RECORD lists {listed}, omits {omitted}")
+    for member, (digest, size) in sorted(seen.items()):
+        data = contents[member]
+        if digest != _record_digest(data) or size != str(len(data)):
+            raise DistError(f"{archive}: RECORD hash or size wrong for {member!r}")
+
+
+def _check_entry_points(archive: str, data: bytes, scripts: dict[str, str]) -> None:
+    parser = configparser.ConfigParser(interpolation=None, delimiters=("=",))
+    parser.optionxform = str  # type: ignore[assignment,method-assign]
+    parser.read_string(data.decode("utf-8"))
+    if parser.sections() != ["console_scripts"]:
+        raise DistError(f"{archive}: entry_points.txt sections {parser.sections()}")
+    if dict(parser["console_scripts"]) != scripts:
+        raise DistError(f"{archive}: entry_points.txt differs from [project.scripts]")
+
+
+def check_wheel(
+    path: Path, dist: str, name: str, version: str, package_files: frozenset[str], source: Source
+) -> None:
+    contents: dict[str, bytes] = {}
     names: list[str] = []
-    for info in infos:
-        # The high 16 bits of external_attr hold the Unix mode; 0o120000 is a symlink.
-        if (info.external_attr >> 16) & 0o170000 == 0o120000:
-            raise DistError(f"{path.name}: symlink member {info.filename!r}")
-        _check_name(info.filename, path.name)
-        names.append(info.filename)
+    with zipfile.ZipFile(path) as whl:
+        for info in whl.infolist():
+            # The high 16 bits of external_attr hold the Unix mode; 0o120000 is a symlink.
+            if (info.external_attr >> 16) & 0o170000 == 0o120000:
+                raise DistError(f"{path.name}: symlink member {info.filename!r}")
+            _check_name(info.filename, path.name)
+            names.append(info.filename)
+            contents[info.filename] = whl.read(info)
     dist_info = f"{dist}-{version}.dist-info"
     expected = {p.removeprefix("src/") for p in package_files}
     expected |= {f"{dist_info}/{f}" for f in WHEEL_DIST_INFO}
     _compare(path.name, names, expected)
+    for member, data in sorted(contents.items()):
+        if not member.startswith(f"{dist_info}/"):
+            _check_same(path.name, member, data, source, f"src/{member}")
+    licence = f"{dist_info}/licenses/LICENSE"
+    _check_same(path.name, licence, contents[licence], source, "LICENSE")
+    _check_core_metadata(path.name, "METADATA", contents[f"{dist_info}/METADATA"], name, version)
+    scripts = project_scripts(source)
+    _check_entry_points(path.name, contents[f"{dist_info}/entry_points.txt"], scripts)
+    record = contents[f"{dist_info}/RECORD"].decode("utf-8")
+    _check_record(path.name, record, contents, dist_info)
 
 
 def release_files(dist_dir: Path, dist: str, version: str) -> tuple[Path, Path]:
@@ -186,14 +325,18 @@ def sha256sums(paths: list[Path]) -> str:
     return "".join(lines)
 
 
-def check(root: Path, dist_dir: Path, tag: str | None, write_sums: bool) -> list[Path]:
-    name, version = project_metadata(root)
-    check_versions(tag, version, package_version(root))
+def check(
+    root: Path, dist_dir: Path, tag: str | None, write_sums: bool, ref: str | None = None
+) -> list[Path]:
+    """Check ``dist_dir`` against the source at ``ref`` (``None``: the working tree)."""
+    source = Source(root, ref)
+    name, version = project_metadata(root, ref)
+    check_versions(tag, version, package_version(root, ref))
     dist = name.replace("-", "_")
-    package_files = tracked_package_files(root)
+    package_files = source.package_files()
     sdist, wheel = release_files(dist_dir, dist, version)
-    check_sdist(sdist, dist, version, package_files)
-    check_wheel(wheel, dist, version, package_files)
+    check_sdist(sdist, dist, name, version, package_files, source)
+    check_wheel(wheel, dist, name, version, package_files, source)
     if write_sums:
         (dist_dir / SUMS_NAME).write_text(sha256sums([sdist, wheel]), encoding="utf-8")
     return [sdist, wheel]
@@ -203,11 +346,22 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dist", type=Path, required=True, help="the uv build output directory")
     parser.add_argument("--tag", help="the release tag; must be v<pyproject version>")
+    parser.add_argument(
+        "--ref", default="HEAD", help="the commit the archives must reproduce (default HEAD)"
+    )
     parser.add_argument("--write-sums", action="store_true", help=f"write {SUMS_NAME}")
     args = parser.parse_args(argv)
     try:
-        files = check(ROOT, args.dist, args.tag, args.write_sums)
-    except (DistError, OSError, tarfile.TarError, zipfile.BadZipFile) as exc:
+        files = check(ROOT, args.dist, args.tag, args.write_sums, ref=args.ref)
+    except (
+        DistError,
+        OSError,
+        UnicodeDecodeError,
+        configparser.Error,
+        subprocess.CalledProcessError,
+        tarfile.TarError,
+        zipfile.BadZipFile,
+    ) as exc:
         sys.stderr.write(f"check_release_dist: FAIL: {exc}\n")
         return 1
     names = ", ".join(p.name for p in files)

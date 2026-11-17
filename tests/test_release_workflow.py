@@ -150,8 +150,9 @@ def test_build_uses_the_locked_backend_on_a_clean_checkout():
     assert "uv build --no-build-isolation" in runs
     assert "SOURCE_DATE_EPOCH" in runs
     assert (
-        'scripts/check_release_dist.py --dist "$RUNNER_TEMP/dist" --tag "$TAG" --write-sums' in runs
-    )
+        'scripts/check_release_dist.py --dist "$RUNNER_TEMP/dist" --tag "$TAG" '
+        '--ref "$GITHUB_SHA" --write-sums'
+    ) in runs
     names = [s.get("name", "") for s in _steps("build")]
     assert names.index("uv build with the locked hatchling") < next(
         i for i, n in enumerate(names) if n.startswith("Check tag, version")
@@ -208,23 +209,76 @@ DIST = NAME.replace("-", "_")
 PACKAGE_FILES = crd.tracked_package_files(ROOT)
 
 
-def _write_sdist(path: Path, extra: tuple[str, ...] = (), drop: str | None = None) -> None:
+DIST_INFO = f"{DIST}-{VERSION}.dist-info"
+SCRIPTS = crd.project_scripts(crd.Source(ROOT, None))
+
+
+def _pkg_info(version: str = VERSION) -> bytes:
+    return f"Metadata-Version: 2.4\nName: {NAME}\nVersion: {version}\n".encode()
+
+
+def _entry_points(scripts: dict[str, str] = SCRIPTS) -> bytes:
+    body = "".join(f"{k} = {v}\n" for k, v in scripts.items())
+    return f"[console_scripts]\n{body}".encode()
+
+
+def _write_sdist(
+    path: Path,
+    extra: tuple[str, ...] = (),
+    drop: str | None = None,
+    override: dict[str, bytes] | None = None,
+) -> None:
+    """An sdist with the working tree's bytes (what `ref=None` compares against)."""
     prefix = f"{DIST}-{VERSION}/"
     names = sorted((crd.SDIST_TOP_LEVEL | PACKAGE_FILES) - {drop}) + list(extra)
+    override = override or {}
     with tarfile.open(path, "w:gz") as tar:
         for rel in names:
+            if rel in override:
+                data = override[rel]
+            elif rel == "PKG-INFO":
+                data = _pkg_info()
+            elif (ROOT / rel).is_file():
+                data = (ROOT / rel).read_bytes()
+            else:
+                data = b"x"
             info = tarfile.TarInfo(prefix + rel)
-            info.size = 1
-            tar.addfile(info, io.BytesIO(b"x"))
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
 
 
-def _write_wheel(path: Path, extra: tuple[str, ...] = ()) -> None:
-    dist_info = f"{DIST}-{VERSION}.dist-info"
-    names = {p.removeprefix("src/") for p in PACKAGE_FILES}
-    names |= {f"{dist_info}/{f}" for f in crd.WHEEL_DIST_INFO}
+def _wheel_contents() -> dict[str, bytes]:
+    contents = {p.removeprefix("src/"): (ROOT / p).read_bytes() for p in PACKAGE_FILES}
+    contents[f"{DIST_INFO}/METADATA"] = _pkg_info()
+    contents[f"{DIST_INFO}/WHEEL"] = b"Wheel-Version: 1.0\nRoot-Is-Purelib: true\n"
+    contents[f"{DIST_INFO}/entry_points.txt"] = _entry_points()
+    contents[f"{DIST_INFO}/licenses/LICENSE"] = (ROOT / "LICENSE").read_bytes()
+    return contents
+
+
+def _record(contents: dict[str, bytes]) -> bytes:
+    lines = [
+        f"{m},{crd._record_digest(d)},{len(d)}"
+        for m, d in contents.items()
+        if m != f"{DIST_INFO}/RECORD"
+    ]
+    return ("\n".join([*lines, f"{DIST_INFO}/RECORD,,"]) + "\n").encode()
+
+
+def _write_wheel(
+    path: Path,
+    extra: tuple[str, ...] = (),
+    override: dict[str, bytes] | None = None,
+    record: bytes | None = None,
+) -> None:
+    """A wheel whose RECORD is correct for its members unless `record` is given."""
+    contents = _wheel_contents()
+    contents.update({rel: b"x" for rel in extra})
+    contents.update(override or {})
+    contents[f"{DIST_INFO}/RECORD"] = record if record is not None else _record(contents)
     with zipfile.ZipFile(path, "w") as whl:
-        for rel in sorted(names) + list(extra):
-            whl.writestr(rel, "x")
+        for rel, data in contents.items():
+            whl.writestr(rel, data)
 
 
 @pytest.fixture
@@ -348,3 +402,119 @@ def test_cli_reports_failure_without_writing_sums(dist: Path, capsys: pytest.Cap
     assert not (dist / crd.SUMS_NAME).exists()
     assert crd.main(["--dist", str(dist), "--tag", f"v{VERSION}", "--write-sums"]) == 0
     assert (dist / crd.SUMS_NAME).is_file()
+
+
+# ------------------------------------------------------------ checker: content
+
+A_MODULE = f"{crd.PACKAGE_DIR}/__init__.py"
+
+
+def test_sdist_file_that_differs_from_the_source_is_refused(dist: Path):
+    tampered = (ROOT / A_MODULE).read_bytes() + b"\n# injected\n"
+    _write_sdist(dist / f"{DIST}-{VERSION}.tar.gz", override={A_MODULE: tampered})
+    with pytest.raises(crd.DistError, match="differs from"):
+        crd.check(ROOT, dist, None, write_sums=False)
+
+
+def test_sdist_build_config_that_differs_from_the_source_is_refused(dist: Path):
+    tampered = (ROOT / "pyproject.toml").read_bytes().replace(b"\n", b"\r\n")
+    _write_sdist(dist / f"{DIST}-{VERSION}.tar.gz", override={"pyproject.toml": tampered})
+    with pytest.raises(crd.DistError, match=r"pyproject\.toml differs"):
+        crd.check(ROOT, dist, None, write_sums=False)
+
+
+def test_sdist_pkg_info_for_another_version_is_refused(dist: Path):
+    _write_sdist(dist / f"{DIST}-{VERSION}.tar.gz", override={"PKG-INFO": _pkg_info("9.9.9")})
+    with pytest.raises(crd.DistError, match="PKG-INFO does not name"):
+        crd.check(ROOT, dist, None, write_sums=False)
+
+
+def test_wheel_file_that_differs_from_the_source_is_refused_even_with_a_good_record(
+    dist: Path,
+):
+    member = A_MODULE.removeprefix("src/")
+    tampered = (ROOT / A_MODULE).read_bytes() + b"\n# injected\n"
+    _write_wheel(dist / f"{DIST}-{VERSION}-py3-none-any.whl", override={member: tampered})
+    with pytest.raises(crd.DistError, match="differs from"):
+        crd.check(ROOT, dist, None, write_sums=False)
+
+
+def test_wheel_licence_that_differs_from_the_source_is_refused(dist: Path):
+    _write_wheel(
+        dist / f"{DIST}-{VERSION}-py3-none-any.whl",
+        override={f"{DIST_INFO}/licenses/LICENSE": b"not the licence\n"},
+    )
+    with pytest.raises(crd.DistError, match="LICENSE differs"):
+        crd.check(ROOT, dist, None, write_sums=False)
+
+
+def test_wheel_metadata_for_another_version_is_refused(dist: Path):
+    _write_wheel(
+        dist / f"{DIST}-{VERSION}-py3-none-any.whl",
+        override={f"{DIST_INFO}/METADATA": _pkg_info("9.9.9")},
+    )
+    with pytest.raises(crd.DistError, match="METADATA does not name"):
+        crd.check(ROOT, dist, None, write_sums=False)
+
+
+def test_wheel_entry_points_must_be_exactly_the_project_scripts(dist: Path):
+    extra = {**SCRIPTS, "backdoor": "qradar_soar_mcp.server:main"}
+    _write_wheel(
+        dist / f"{DIST}-{VERSION}-py3-none-any.whl",
+        override={f"{DIST_INFO}/entry_points.txt": _entry_points(extra)},
+    )
+    with pytest.raises(crd.DistError, match=r"differs from \[project\.scripts\]"):
+        crd.check(ROOT, dist, None, write_sums=False)
+
+
+def test_wheel_record_with_a_wrong_hash_is_refused(dist: Path):
+    contents = _wheel_contents()
+    member = A_MODULE.removeprefix("src/")
+    bad = dict(contents)
+    bad[member] = b"something else"
+    record = _record(bad)  # hashes a different body than the one stored
+    _write_wheel(dist / f"{DIST}-{VERSION}-py3-none-any.whl", record=record)
+    with pytest.raises(crd.DistError, match="RECORD hash or size wrong"):
+        crd.check(ROOT, dist, None, write_sums=False)
+
+
+def test_wheel_record_that_omits_a_member_is_refused(dist: Path):
+    contents = _wheel_contents()
+    member = A_MODULE.removeprefix("src/")
+    record = _record({m: d for m, d in contents.items() if m != member})
+    _write_wheel(dist / f"{DIST}-{VERSION}-py3-none-any.whl", record=record)
+    with pytest.raises(crd.DistError, match="omits"):
+        crd.check(ROOT, dist, None, write_sums=False)
+
+
+def test_wheel_record_must_list_itself_unhashed(dist: Path):
+    contents = _wheel_contents()
+    lines = [f"{m},{crd._record_digest(d)},{len(d)}" for m, d in contents.items()]
+    _write_wheel(
+        dist / f"{DIST}-{VERSION}-py3-none-any.whl",
+        record=("\n".join(lines) + "\n").encode(),
+    )
+    with pytest.raises(crd.DistError, match="RECORD must list itself"):
+        crd.check(ROOT, dist, None, write_sums=False)
+
+
+def test_source_at_a_ref_reads_git_blobs_and_refuses_unknown_paths():
+    source = crd.Source(ROOT, "HEAD")
+    assert source.read("pyproject.toml").startswith(b"[build-system]")
+    with pytest.raises(crd.DistError, match="is not in git at 'HEAD'"):
+        source.read("no/such/file.txt")
+    assert f"{crd.PACKAGE_DIR}/__init__.py" in source.package_files()
+
+
+def test_cli_compares_against_head_by_default(dist: Path, monkeypatch: pytest.MonkeyPatch):
+    seen: dict[str, object] = {}
+
+    def fake_check(root: Path, d: Path, tag: str | None, write: bool, ref: str | None = None):
+        seen["ref"] = ref
+        return []
+
+    monkeypatch.setattr(crd, "check", fake_check)
+    assert crd.main(["--dist", str(dist)]) == 0
+    assert seen["ref"] == "HEAD"
+    assert crd.main(["--dist", str(dist), "--ref", "abc123"]) == 0
+    assert seen["ref"] == "abc123"

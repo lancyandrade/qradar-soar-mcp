@@ -1849,3 +1849,25 @@ the tag trigger, the environment read and approval wait, attestation and release
 creation are first exercised by the first owner-authorised tag push, a separate
 acceptance milestone after merge. Merging REL-04 creates no tag, publishes no release
 and waives no lab gate. Owner choices: D25.
+
+### 36.4 Second review of PR #27 (2026-11-17)
+
+- **Token permissions (P1).** GitHub's per-permission table lists reads of an
+  environment and its deployment branch policies under *Actions: read* for installation
+  tokens (writes need *Administration*). A throwaway read-only probe on branch
+  `probe/rel-04-env-permissions` (run `44057891024`, never merged) confirmed it with
+  real workflow tokens: this repository's environment list read 200 and the missing
+  `release` environment 404, both with and without `actions: read`, and a public
+  repository's protected environment read 200 with its reviewer count and policies. No
+  redesign or extra privilege was needed. Evidence: runbook §6.
+- **First run (P2).** Runbook §7 gives the acceptance procedure: an optional rehearsal
+  in a disposable public repository with negative checks (no environment; existing
+  draft) and a positive run, then the first real run only when the owner authorises
+  a release, with explicit accept and reject criteria.
+- **Archive integrity (P2).** The checker was a path and structure check only. It now
+  also compares every copied member byte for byte with the git blob at `--ref` (the
+  workflow passes the tagged commit), checks `Name`/`Version` in `PKG-INFO` and
+  `METADATA`, requires `entry_points.txt` to equal `[project.scripts]`, and verifies
+  every `RECORD` hash and size. The remaining generated metadata is not compared field
+  by field (runbook §4). `LICENSE` and `py.typed` are pinned to LF in `.gitattributes`
+  so a Windows build reproduces the commit's bytes.

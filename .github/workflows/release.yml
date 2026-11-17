@@ -10,7 +10,8 @@
 #             unpinned backend is fetched), the wheel built from the sdist, a
 #             fixed SOURCE_DATE_EPOCH, then scripts/check_release_dist.py checks
 #             tag == version and every archive member against the REL-06
-#             allow-list and writes SHA256SUMS. Build provenance is attested.
+#             allow-list, and that every copied file equals the tagged commit's
+#             blob, and writes SHA256SUMS. Build provenance is attested.
 #   release - runs in the protected `release` environment, so it waits for a
 #             required reviewer (verify refuses to go on if the environment is
 #             missing, has no reviewer, or deploys anything but v* tags). It
@@ -144,10 +145,10 @@ jobs:
           SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           export SOURCE_DATE_EPOCH
           uv build --no-build-isolation --out-dir "$RUNNER_TEMP/dist"
-      - name: Check tag, version and every archive member; write SHA256SUMS
+      - name: Check tag, version, every archive member and its content; write SHA256SUMS
         env:
           TAG: ${{ github.ref_name }}
-        run: uv run python scripts/check_release_dist.py --dist "$RUNNER_TEMP/dist" --tag "$TAG" --write-sums
+        run: uv run python scripts/check_release_dist.py --dist "$RUNNER_TEMP/dist" --tag "$TAG" --ref "$GITHUB_SHA" --write-sums
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:

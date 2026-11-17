@@ -12,6 +12,10 @@
 .gitignore text eol=lf
 .gitattributes text eol=lf
 .python-version text eol=lf
+# Packaged into the sdist and wheel: LF on every OS, so a build matches the commit
+# byte for byte (REL-04, scripts/check_release_dist.py).
+LICENSE text eol=lf
+py.typed text eol=lf
 
 # Windows-native scripts
 *.ps1 text eol=crlf
