@@ -149,11 +149,15 @@ def test_no_static_anthropic_credential_is_referenced_anywhere():
 
 
 def test_only_the_fix_job_can_mint_oidc_tokens():
+    """OIDC: the loop's fix job, and REL-04's build job for build-provenance attestation."""
+    allowed = {("review-loop.yml", "fix"), ("release.yml", "build")}
+    minting = set()
     for path in ALL:
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))
         for name, job in doc["jobs"].items():
             if (job.get("permissions") or {}).get("id-token") == "write":
-                assert (path.name, name) == ("review-loop.yml", "fix")
+                minting.add((path.name, name))
+    assert minting <= allowed, minting - allowed
 
 
 def test_loop_is_off_unless_explicitly_enabled():

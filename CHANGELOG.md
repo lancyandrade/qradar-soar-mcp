@@ -27,6 +27,15 @@ Changes merged after the `v0.2.0` release-readiness audit. They are on `main` bu
   `GET /incidents/{id}/history` and `GET /incidents/{id}/workflow_instances`. Which rules
   or playbooks ran is not observable on the verified API and is not claimed.
 
+### Build
+
+- **Release workflow (REL-04):** a `vX.Y.Z` tag on a `main` commit with green CI is
+  re-verified, built in CI with the locked backend, checked against the sdist/wheel
+  allow-list, given `SHA256SUMS` and a build-provenance attestation, and, after a
+  reviewer approves the protected `release` environment, attached to a **draft**
+  pre-release. Nothing is uploaded to PyPI
+  ([docs/runbooks/release.md](docs/runbooks/release.md)).
+
 ## [0.2.0] - Pending (alpha)
 
 **Status: alpha, pending publication.** This section describes `main` as it stands; no
@@ -232,9 +241,10 @@ of 2026-10-29 (REL-05, [08 §32](docs/design/08-GREENFIELD-AMENDMENTS.md#32-rel-
 - A T6 run that only shows every action being refused is evidence of correct rejection, not of
   successful execution or approval enforcement (D20); full T6 needs every `07 §7.4` step.
 - GitHub CI green on the commit to be tagged.
-- **REL-04** (tag-triggered CI release build) is open. Until it lands, no wheel, sdist
-  or other build artefact is attached to a release or published, and nothing is
-  uploaded to PyPI.
+- **REL-04** (tag-triggered CI release build) is in place but has not yet run on GitHub.
+  It only creates a draft; for this source-only alpha no wheel, sdist or other build
+  artefact is published with the release unless the owner decides otherwise (D25 (e)),
+  and nothing is uploaded to PyPI.
 - Recommended before tagging: protect `main` with required CI checks (REL-03; the
   configuration is prepared for review in
   [docs/runbooks/branch-protection.md](docs/runbooks/branch-protection.md), not applied).

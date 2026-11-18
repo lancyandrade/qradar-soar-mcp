@@ -1,0 +1,217 @@
+# REL-04: build release artefacts in CI only, from a clean checkout of a tag.
+#
+# A tag push `v<major>.<minor>.<patch>` runs three jobs:
+#   verify  - the tagged commit is on main, the `ci` workflow (gitleaks over the
+#             full history, the test matrix, pip-audit) succeeded on it as a push
+#             to main, and the gates run again here (lint, types, tests with both
+#             coverage floors, tree secret scan, artefact hygiene, dependency
+#             audit). Nothing is built until this is green.
+#   build   - `uv build` with the locked hatchling (no build isolation, so no
+#             unpinned backend is fetched), the wheel built from the sdist, a
+#             fixed SOURCE_DATE_EPOCH, then scripts/check_release_dist.py checks
+#             tag == version and every archive member against the REL-06
+#             allow-list, and that every copied file equals the tagged commit's
+#             blob, and writes SHA256SUMS. Build provenance is attested.
+#   release - runs in the protected `release` environment, so it waits for a
+#             required reviewer (verify refuses to go on if the environment is
+#             missing, has no reviewer, or deploys anything but v* tags). It
+#             re-checks the sums and creates a DRAFT pre-release with the two
+#             archives and SHA256SUMS attached. A human reviews and publishes it.
+#
+# Security notes:
+# * Nothing is published to PyPI or any other index; there is no publish step.
+# * The release is always a draft: it is invisible to the public until the owner
+#   publishes it. It never replaces an existing release or asset - if a release
+#   for the tag exists, `gh release create` fails and nothing changes.
+# * Top-level permissions are read-only; each job widens only what it needs.
+#   Only `release` can write contents, and it checks out and runs no repository
+#   code: it handles the artefacts the `build` job produced in this run.
+# * Expressions never reach a shell script; values go through env:.
+# * Checkouts do not keep credentials.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: verify the tagged commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tag is v<major>.<minor>.<patch> and its commit is on main
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+          [[ "$REF_TYPE" == "tag" ]] || { echo "not a tag push" >&2; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "tag $TAG is not vX.Y.Z" >&2; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main \
+            || { echo "tagged commit $GITHUB_SHA is not on main" >&2; exit 1; }
+      - name: The ci workflow succeeded on the tagged commit (push to main)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&status=success" --jq '.total_count')"
+          [[ "$runs" =~ ^[1-9][0-9]*$ ]] \
+            || { echo "no successful ci push run on $GITHUB_SHA; tag a main commit CI has passed" >&2; exit 1; }
+      # The release job runs in the `release` environment. A job that names a missing
+      # environment makes GitHub create it with no protection, so refuse to go on
+      # unless it exists, needs a human reviewer, and deploys only `v*` tags.
+      - name: The release environment needs a reviewer and allows only v* tags
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          envurl="repos/$GITHUB_REPOSITORY/environments/release"
+          reviewers="$(gh api "$envurl" \
+            --jq '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers | length] | add // 0')" \
+            || { echo "environment 'release' is missing or unreadable; see docs/runbooks/release.md" >&2; exit 1; }
+          [[ "$reviewers" =~ ^[1-9][0-9]*$ ]] \
+            || { echo "environment 'release' has no required reviewer" >&2; exit 1; }
+          custom="$(gh api "$envurl" --jq '.deployment_branch_policy.custom_branch_policies // false')"
+          [[ "$custom" == "true" ]] \
+            || { echo "environment 'release' must use custom deployment policies (v* tags only)" >&2; exit 1; }
+          policies="$(gh api --paginate "$envurl/deployment-branch-policies?per_page=100" \
+            --jq '.branch_policies[] | "\(.type // "branch"):\(.name)"')"
+          [[ "$policies" == "tag:v*" ]] \
+            || { echo "environment 'release' policies must be exactly tag:v*, found: $policies" >&2; exit 1; }
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked --extra dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest -q --cov=qradar_soar_mcp --cov-report=term-missing --cov-fail-under=80
+        env:
+          SOAR_BASE_URL: ""
+      - name: security/ coverage floor (95%)
+        run: uv run coverage report --include="src/qradar_soar_mcp/security/*" --fail-under=95
+      - name: No private addresses, internal hostnames, keys or tokens in the tree
+        run: uv run python scripts/check_no_secrets.py
+      - name: Artefact hygiene (sensitive paths ignored by a tracked .gitignore)
+        run: uv run python scripts/check_artifact_hygiene.py
+      - name: Export the locked third-party requirements (project excluded)
+        run: uv export --locked --extra dev --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/requirements-audit.txt"
+      - name: pip-audit --strict over the locked set
+        run: uv run pip-audit --strict --desc --disable-pip --require-hashes -r "$RUNNER_TEMP/requirements-audit.txt"
+
+  build:
+    name: build and check the artefacts
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked --extra dev
+      - name: The checkout is clean (no untracked or modified file)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dirty="$(git status --porcelain --untracked-files=all --ignored=no)"
+          [[ -z "$dirty" ]] || { echo "checkout is not clean:" >&2; echo "$dirty" >&2; exit 1; }
+      - name: uv build with the locked hatchling
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          uv build --no-build-isolation --out-dir "$RUNNER_TEMP/dist"
+      - name: Check tag, version, every archive member and its content; write SHA256SUMS
+        env:
+          TAG: ${{ github.ref_name }}
+        run: uv run python scripts/check_release_dist.py --dist "$RUNNER_TEMP/dist" --tag "$TAG" --ref "$GITHUB_SHA" --write-sums
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            ${{ runner.temp }}/dist/*.tar.gz
+            ${{ runner.temp }}/dist/*.whl
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-dist
+          path: |
+            ${{ runner.temp }}/dist/*.tar.gz
+            ${{ runner.temp }}/dist/*.whl
+            ${{ runner.temp }}/dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: create a draft pre-release
+    needs: build
+    runs-on: ubuntu-latest
+    # Waits for a required reviewer's approval (D25 (d)); `verify` checked the rules.
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-dist
+          path: dist
+      - name: Exactly the checked files, and their sums match
+        shell: bash
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          count="$(find . -mindepth 1 | wc -l)"
+          [[ "$count" == "3" ]] || { echo "expected 3 files, found $count" >&2; exit 1; }
+          sha256sum --check --strict SHA256SUMS
+      - name: Create the draft pre-release (fails if one exists)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # gh release create skips its own existing-release check when --draft is
+          # passed, so look for any release on this tag, drafts included (a
+          # contents: write token lists drafts). Any API error fails the step.
+          existing="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.tag_name == env.TAG) | .id')"
+          [[ -z "$existing" ]] \
+            || { echo "a release for $TAG already exists (ids: $existing); delete it first" >&2; exit 1; }
+          {
+            echo "Draft created by the release workflow from tag $TAG (commit $GITHUB_SHA)."
+            echo "Built in CI from a clean checkout; not published to PyPI."
+            echo "Before publishing, work through the checklist in docs/runbooks/release.md."
+            echo "A source-only release (v0.2.0, D25 (e)) must have these three assets"
+            echo "deleted from the draft first."
+            echo
+            echo "SHA-256:"
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" dist/*.tar.gz dist/*.whl dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --draft --prerelease \
+            --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
