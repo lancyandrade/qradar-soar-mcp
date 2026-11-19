@@ -115,9 +115,11 @@ def test_g9_error_shapes(golden_update: bool):
 
 @pytest.mark.golden
 async def test_outputs_are_byte_stable(tmp_path: Path):
-    """LAB-03 §9 criterion 3: 100 renderings in one process are byte-identical."""
+    """LAB-03 §9 criterion 3: 100 renderings in one process are byte-identical, for every
+    golden output (G1 included: each rendering builds a fresh runtime and MCP server)."""
     first_manifest = canonical(await tool_manifest(tmp_path))
-    assert canonical(await tool_manifest(tmp_path)) == first_manifest
+    for run in range(DETERMINISM_RUNS):
+        assert canonical(await tool_manifest(tmp_path)) == first_manifest, f"G1 run {run}"
     for produce in (catalog_summary, error_shapes):
         first = canonical(produce())
         assert all(canonical(produce()) == first for _ in range(DETERMINISM_RUNS)), produce
