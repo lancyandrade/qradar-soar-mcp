@@ -258,6 +258,7 @@ comes from the design baseline only.
 | `client/org.py` `FieldDef.close_required` | property `required == "close"` | removed |
 | `client/org.py` `FieldDef.to_dict` | `"close_required": bool` | removed; `"required"` raw token unchanged |
 | `tools/incidents.py` `soar_describe_incident_fields` | docstring "whether required at close" | raw token, plus the same `required_semantics` block as `soar_list_fields` |
+| `tools/incidents.py` `soar_close_incident` description (Tier 2; found by the PR #29 CI diff) | "Custom fields the org requires at close … SOAR rejects the close if one is empty" | which fields SOAR requires at close is unverified (D10); a rejection is returned as-is. Input, tier and capability unchanged |
 | `client/incidents.py` module and `close()` docstrings | "SOAR itself rejects the close if a close-required custom field is empty" | the rejection is surfaced; *which* fields SOAR requires is unverified |
 
 Not product code, left as is: `tests/fake_soar.py` still simulates the baseline reading

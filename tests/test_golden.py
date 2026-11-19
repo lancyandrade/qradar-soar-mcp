@@ -57,7 +57,10 @@ async def tool_manifest(state_dir: Path) -> dict[str, Any]:
         for tool in await server.list_tools():
             spec = TOOL_REGISTRY[tool.name]
             manifest[tool.name] = {
-                "description": tool.description,
+                # Python 3.13 strips docstring indentation at compile time and 3.12 does
+                # not; cleandoc gives both the same text, so G1 pins content, not the
+                # interpreter's whitespace.
+                "description": inspect.cleandoc(tool.description or ""),
                 "tier": int(spec.tier),
                 "capability": spec.capability,
                 "input_schema": tool.input_schema,

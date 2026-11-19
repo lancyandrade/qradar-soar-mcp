@@ -225,8 +225,9 @@ async def soar_close_incident(
     custom_fields: dict[str, Any] | None = None,
 ) -> ToolResult:
     """Close one incident: plan_status, resolution and resolution summary are sent together.
-    Custom fields the org requires at close go in ``custom_fields``; SOAR rejects the close
-    if one is empty and that rejection is returned as-is. Tier 2."""
+    Other custom fields to set in the same change go in ``custom_fields``. Which fields, if
+    any, SOAR requires at close is unverified (D10); if SOAR rejects the close, that
+    rejection is returned as-is. Tier 2."""
     extra: Mapping[str, Any] = dict(custom_fields or {})
     out = await rt.require_client().incidents.close(
         incident_id, resolution=resolution, summary=summary, extra_fields=extra
