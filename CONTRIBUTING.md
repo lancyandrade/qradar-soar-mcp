@@ -56,6 +56,27 @@ uv run mypy
 Open a pull request against `main`. Keep PRs to one ticket where possible and
 name the ticket (`P1-07`) in the commit message.
 
+### Golden files and snapshots (T3)
+
+Expected outputs live in `tests/golden/` (golden files, LAB-03 pilot) and
+`tests/__snapshots__/` (syrupy). A normal test run never rewrites them. To regenerate:
+
+```bash
+uv run pytest -m golden --golden-update
+```
+
+```bash
+uv run pytest --snapshot-update
+```
+
+CI never passes either flag (`tests/test_golden.py` asserts it). A pull request that
+changes any expected file must say why in its description, and a human reads every
+changed expected file before merge. Under REL-03 phase 1 this review is a **manual
+maintainer responsibility, not an enforced control**: the ruleset requires a pull
+request but no approval or code-owner review, so a regenerated expectation can make an
+output regression pass CI. Changes to the tool manifest (G1) are security-relevant and
+go in the changelog.
+
 ## Code of conduct
 
 See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).

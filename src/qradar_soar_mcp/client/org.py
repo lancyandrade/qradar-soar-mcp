@@ -17,7 +17,10 @@ class FieldDef:
     text: str
     input_type: str
     prefix: str | None
-    required: str | None  # None | "always" | "close"
+    # SOAR's raw ``required`` token, unchanged (``always`` and ``close`` were observed on
+    # 51.0.9.0.20848). Its behavioural meaning is unresolved (D10, soar-api-verified.md
+    # §3.2), so nothing here derives a flag from it.
+    required: str | None
     read_only: bool
     internal: bool
     values: tuple[tuple[Any, str], ...]  # (value, label) for select-type fields
@@ -35,10 +38,6 @@ class FieldDef:
     def labels(self) -> tuple[str, ...]:
         return tuple(label for _, label in self.values)
 
-    @property
-    def close_required(self) -> bool:
-        return self.required == "close"
-
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {
             "api_name": self.api_name,
@@ -46,7 +45,6 @@ class FieldDef:
             "input_type": self.input_type,
             "custom": self.in_properties,
             "required": self.required,
-            "close_required": self.close_required,
             "read_only": self.read_only,
         }
         if self.values:

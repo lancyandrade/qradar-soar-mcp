@@ -10,7 +10,11 @@ from pydantic import BaseModel, ConfigDict
 
 from qradar_soar_mcp.errors import SoarValidationError
 from qradar_soar_mcp.security.tiers import Tier
-from qradar_soar_mcp.tools.projection import patch_changes, summarise_incident
+from qradar_soar_mcp.tools.projection import (
+    REQUIRED_SEMANTICS,
+    patch_changes,
+    summarise_incident,
+)
 from qradar_soar_mcp.tools.registry import ToolResult, soar_tool
 from qradar_soar_mcp.tools.runtime import Runtime
 
@@ -114,9 +118,17 @@ async def soar_get_incident(
 @soar_tool(name="soar_describe_incident_fields", tier=Tier.READ)
 async def soar_describe_incident_fields(rt: Runtime) -> ToolResult:
     """The org's incident field definitions: api_name (``properties.<name>`` for custom
-    fields), label, input type, allowed values, whether required at close, read-only."""
+    fields), label, input type, allowed values, read-only, and SOAR's raw ``required``
+    token. No required or close-required flag is derived: the token's meaning is
+    unresolved, and ``required_semantics`` says what is known (as soar_list_fields)."""
     fields = await rt.require_client().org.incident_fields()
-    return ToolResult(data={"count": len(fields), "fields": [f.to_dict() for f in fields]})
+    return ToolResult(
+        data={
+            "count": len(fields),
+            "fields": [f.to_dict() for f in fields],
+            "required_semantics": REQUIRED_SEMANTICS,
+        }
+    )
 
 
 @soar_tool(name="soar_list_users", tier=Tier.READ)

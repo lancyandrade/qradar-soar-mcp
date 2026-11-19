@@ -205,6 +205,8 @@ ALLOWED = [
     ("GET", f"https://{HOST}/rest/session"),
     ("GET", f"https://{HOST}/rest/const"),
     ("GET", f"https://{HOST}/rest/orgs/201/incidents/7"),
+    ("GET", f"https://{HOST}/rest/orgs/201/playbooks/7"),  # a playbook read still passes
+    ("GET", f"https://{HOST}/rest/orgs/201/configurations_note"),  # not the prefix
     ("POST", f"https://{HOST}/rest/orgs/201/incidents/query_paged"),
     ("POST", f"https://{HOST}/rest/orgs/201/playbooks/query_paged"),
 ]
@@ -231,6 +233,18 @@ BLOCKED = [
     ("GET", f"https://{HOST}/rest/users"),
     ("OPTIONS", f"https://{HOST}/rest/session"),
     ("POST", f"https://{HOST}/rest/orgs/201/incidents/query_paged/"),
+    # D26 (b): export creation AND retrieval stay outside the read-only guard. Retrieval
+    # and history are GETs under the org, which an ordinary read would let through.
+    ("POST", f"https://{HOST}/rest/orgs/201/configurations/exports"),
+    ("GET", f"https://{HOST}/rest/orgs/201/configurations/exports"),
+    ("GET", f"https://{HOST}/rest/orgs/201/configurations/exports/5"),
+    ("GET", f"https://{HOST}/rest/orgs/201/configurations/exports/history"),
+    ("GET", f"https://{HOST}/rest/orgs/201/Configurations/Exports/5"),
+    ("GET", f"https://{HOST}/rest/orgs/201/configurations"),
+    ("GET", f"https://{HOST}/rest/orgs/201/configurations/imports/1"),
+    ("POST", f"https://{HOST}/rest/orgs/201/playbooks/exports"),
+    ("GET", f"https://{HOST}/rest/orgs/201/playbooks/exports/5"),
+    ("GET", f"https://{HOST}/rest/orgs/201/playbooks/imports/5"),
 ]
 
 

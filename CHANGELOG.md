@@ -27,6 +27,16 @@ Changes merged after the `v0.2.0` release-readiness audit. They are on `main` bu
   `GET /incidents/{id}/history` and `GET /incidents/{id}/workflow_instances`. Which rules
   or playbooks ran is not observable on the verified API and is not claimed.
 
+### Changed
+
+- **`soar_describe_incident_fields` no longer reports `close_required` (D10 consistency
+  fix, D26 (c)):** it returned `required == "close"` as a
+  boolean, a reading neither documented on 51.0.9.0.20848 nor verified by behaviour, and
+  so contradicted `soar_list_fields`. It now returns SOAR's raw `required` token
+  unchanged and the same `required_semantics` block as `soar_list_fields`. A client
+  that read `close_required` must read `required` and treat its meaning as unresolved.
+  The P2-03 close-required acceptance clause stays **not met**.
+
 ### Build
 
 - **Release workflow (REL-04):** a `vX.Y.Z` tag on a `main` commit with green CI is

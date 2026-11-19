@@ -840,3 +840,45 @@ async def test_a_credential_in_configuration_text_never_leaves_the_pipeline(
     rendered = json.dumps(await ok(rt, tool, **ARGS[tool]))
     assert SENTINEL not in rendered and basic not in rendered
     assert "[REDACTED]" in rendered and fake.requests == []
+
+
+async def test_both_field_tools_state_the_same_token_and_derive_nothing(rt: Runtime):
+    """D10 / D26 (c) regression: ``soar_describe_incident_fields`` (Phase 1) and
+    ``soar_list_fields`` (P2-03) must not disagree about a field's ``required``.
+
+    Before the consistency fix the Phase-1 tool reported ``close_required`` from the
+    unverified reading ``required == "close"`` while ``soar_list_fields`` derived nothing.
+    Both now carry SOAR's raw token, the same ``required_semantics`` and no derived flag.
+    Synthetic fixture: this proves consistency between the tools, not what SOAR enforces.
+    """
+    described = await ok(rt, "soar_describe_incident_fields")
+    listed = await fields_of(rt, "incident")
+    by_api = {f["api_name"]: f for f in described["fields"]}
+    assert set(by_api) == set(listed)
+    for api_name, row in listed.items():
+        assert by_api[api_name]["required"] == row["required"], api_name
+        assert not DERIVED_FLAGS & set(by_api[api_name]), api_name
+        assert not DERIVED_FLAGS & set(row), api_name
+    assert "close" in {r["required"] for r in listed.values()}  # the case D10 is about
+    assert described["required_semantics"] == REQUIRED_SEMANTICS
+    assert described["required_semantics"]["status"] == "unresolved"
+
+
+@pytest.mark.parametrize("token", ["future_token", "close", None])
+async def test_both_field_tools_pass_any_token_through_unchanged(
+    token: str | None, rt: Runtime, fake: FakeSoar
+):
+    """D10 regression, per token: an unseen token, ``close`` and an absent token reach
+    both tools as they are. Synthetic fixture value, not appliance evidence."""
+    target = next(f for f in fake.fields if f["name"] == "description")
+    if token is None:
+        target.pop("required", None)
+    else:
+        target["required"] = token
+    described = {
+        f["api_name"]: f for f in (await ok(rt, "soar_describe_incident_fields"))["fields"]
+    }
+    listed = await fields_of(rt, "incident")
+    assert described["description"]["required"] == listed["description"]["required"] == token
+    assert not DERIVED_FLAGS & set(described["description"])
+    assert not DERIVED_FLAGS & set(listed["description"])

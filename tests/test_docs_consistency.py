@@ -340,9 +340,11 @@ def _phase_one_tools() -> set[str]:
 
 
 def _unreleased_tools() -> set[str]:
-    """Tools added after the v0.2.0 audit: listed under ``## [Unreleased]``, not in 0.2.0
-    (owner decision D23 (d), 08 §35)."""
-    return set(re.findall(r"`(soar_[a-z_]+)`", _block(_read(CHANGELOG), "## [Unreleased]")))
+    """Tools added after the v0.2.0 audit: listed under ``## [Unreleased]`` / ``### Added``,
+    not in 0.2.0 (owner decision D23 (d), 08 §35). Other subsections (``### Changed``) may
+    name an existing tool without making it an unreleased one."""
+    unreleased = _block(_read(CHANGELOG), "## [Unreleased]")
+    return set(re.findall(r"`(soar_[a-z_]+)`", _block(unreleased, "### Added")))
 
 
 def _released_tools() -> set[str]:
@@ -497,9 +499,10 @@ def test_release_doc_limitations_are_true_of_the_code():
     assert invoke.unsupported and int(invoke.tier) == 3
     assert [n for n, s in TOOL_REGISTRY.items() if s.unsupported] == [invoke.name]
     assert [n for n in TOOL_REGISTRY if "content" in n or "extract" in n] == []
-    # LAB-01: only the guarded T4 module exists; no T5/T6 test, so none may be claimed.
+    # LAB-01: only guarded T4 modules exist (the read-only suite and the P2-01 equivalence
+    # scaffold, both ``lab``-marked); no T5/T6 test, so none may be claimed.
     lab = sorted(p.name for p in (ROOT / "tests" / "lab").glob("test_*.py"))
-    assert lab == ["test_t4_read_only.py"], lab
+    assert lab == ["test_catalog_equivalence.py", "test_t4_read_only.py"], lab
     for marker in ("lab_write", "lab_destructive"):
         needle = "pytest.mark." + marker  # built, so this file does not match itself
         assert [
