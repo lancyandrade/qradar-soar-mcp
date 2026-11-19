@@ -27,7 +27,8 @@ Evidence levels used throughout:
   an acceptance criterion met only as far as the evidence allows. Two are NOT
   STARTED: P2-06 (policy scaffold CLI) and P2-07 (historical response analysis).**
   P2-00b is a supplemental research ticket (08 §23) and is not counted among the
-  eight.
+  eight. *(Update, §14: all eight have landed; five meet their AC, P2-00, P2-01 and
+  P2-03 each miss one clause.)*
 - The package version is `0.2.0`, but the tree holds **36 tools: the 20-tool Phase-1
   contract plus 16 Phase-2 discovery tools**. The version number understates what
   ships; a changelog must say so.
@@ -349,7 +350,7 @@ accepted.
 | Release | Verdict | Conditions |
 |---|---|---|
 | **`v0.2.0`** | **CONDITIONAL GO** (alpha: tag + source-code pre-release, no attached build artefacts) | (1) GitHub CI green on the tagged commit; (2) `CHANGELOG.md` with the 36-tool content and every deferral in §7 (REL-02); (3) owner records a waiver of `07 §7.5` T4–T6 for this alpha, or the lab suite is built first; (4) owner accepts the P1-15 and D4 deferrals as release scope; (5) no wheel, sdist or other build artefact is attached or published; distributing one requires REL-06 and REL-04 first (H-5; REL-06 done, §12; REL-04 open); (6) recommended before tagging: protect `main` with the CI checks required (H-3) |
-| **`v0.3.0`** | **NO-GO** | P2-06, P2-07; the partial ACs of P2-00, P2-01, P2-03 accepted or closed by the owner |
+| **`v0.3.0`** | **NO-GO** | P2-06, P2-07; the partial ACs of P2-00, P2-01, P2-03 accepted or closed by the owner. *(Superseded by §14: P2-06 and P2-07 have landed; still NO-GO.)* |
 
 No `v0.2.0` tag, release or version change is made by this PR.
 
@@ -372,7 +373,7 @@ No `v0.2.0` tag, release or version change is made by this PR.
 | 9 | **LAB-01** — `tests/lab/` T4 read-only suite against a lab (`SOAR_TEST_BASE_URL`) | lab access | `07 §7` |
 | 10 | **LAB-02** — mock AppHost + T5 (org 301) for Tier-1/2 writes, closing M-1 | LAB-01, disposable org | |
 | 11 | **P2-00c** — export contract with an export-capable key in a disposable org; then P2-01 dual-backend AC | owner, disposable org | |
-| 12 | **Phase-2 close-out review** → **`v0.3.0`** | 6, 7, 8 (+ 9 if the gate is not waived again) | |
+| 12 | ~~**Phase-2 close-out review**~~ **Done (§14): `v0.3.0` NO-GO, Phase 3 not yet**; closing needs D26, D10 and the lab gate → **`v0.3.0`** | 6, 7, 8 (+ 9 if the gate is not waived again) | |
 | 13 | **P1-INV-01** — manual-action invocation contract (Q4/Q5) research, then T6 against the mock AppHost | LAB-02 | unlocks Tier 3 and the approval flow |
 
 ---
@@ -600,6 +601,87 @@ Recorded in 08 §32 – §33 and `open-questions.md` D14 – D22:
 | Release | Verdict | What is missing |
 |---|---|---|
 | **`v0.2.0`** | **NO-GO** | T4 green against the lab; T5 green in a disposable organisation (org 301); T6 green against a mock AppHost (all `07 §7.4` steps; a denial-only run is partial evidence, D20); T3 golden tests green in CI (D21, LAB-03, D22 open); `qradar-soar-audit verify` clean over that run; a human read of the `security/` diff (07 §7.5). Recommended before tagging: REL-03 applied. The lab work is planned in [`lab-validation-plan.md`](lab-validation-plan.md) (LAB-01). |
-| **`v0.3.0`** | **NO-GO** | unchanged (§10) |
+| **`v0.3.0`** | **NO-GO** | see the Phase-2 close-out review, §14 |
 
 No tag, release, version change or repository setting is made by this change.
+
+---
+
+## 14. Phase-2 close-out review — `v0.3.0` (2026-11-18)
+
+Reviewed on `main` @ `7bf64da` (PR #27 merged). This section is a review, not a
+release: it creates no tag, changes no version, and waives no gate. It supersedes the
+`v0.3.0` row of §10 and §13.3 and the Phase-2 bullet of the §1 summary, which describe
+the tree as it was at the REL-01 audit (P2-06 and P2-07 were not started then).
+
+### 14.1 What is on `main`
+
+- **All eight roadmap tickets have landed** (P2-00 – P2-07; P2-00b is supplemental,
+  08 §23). The registry holds **37 tools**: the 20-tool Phase-1 contract,
+  `soar_refresh_catalog`, five P2-02 tools, four P2-03, four P2-04, two P2-05 and
+  `soar_analyse_incident_response` (P2-07). Every Phase-2 tool is Tier 0 (read-only).
+  P2-06 adds a CLI, `qradar-soar-policy scaffold`, not a tool.
+- `0.2.0` stays the audited 36 tools; P2-06 and P2-07 are under CHANGELOG
+  `[Unreleased]` (D23 (d)).
+- The Phase-2 test files pass offline: 928 tests (`test_catalog_*.py`,
+  `test_discovery_tools.py`, `test_no_script_writes.py`, `test_discovery_types_fields.py`,
+  `test_workflow_summary.py`, `test_discovery_rules_workflows.py`,
+  `test_discovery_playbooks.py`, `test_policy_scaffold.py`, `test_response_analysis.py`),
+  inside the full suite (4375 passed, 25 lab tests skipped, on the REL-04 branch head
+  `ef70db6`, the last commit before the merge).
+- Live evidence is from **one appliance**, `51.0.9.0.20848`, through a read-only key.
+  No lab-marked test has run (`tests/lab/` holds the T4 scaffold, skipped unless
+  enabled).
+
+### 14.2 Acceptance criteria, ticket by ticket
+
+| Ticket | AC (`06`) | Verdict | Evidence | What is not met, exactly |
+|---|---|---|---|---|
+| P2-00 | `soar-api-verified.md` with sanitised responses; **every ⚠️/❓ resolved to ✅ or 🚫**; fixtures; missing endpoints struck | **NOT MET (one clause)** | record and fixtures committed; struck endpoints noted | Still ❓ (record §1): the nesting of a note reply; any workflow beyond the one read; the execution row shape and function results; export contents; action invocation (Q4, Q5); `409` behaviour; closing the last required task of a phase; plus Q2, Q8 and Q14 in `open-questions.md`. Each needs a write, an export-capable key or a disposable org |
+| P2-01 | catalog from a committed fixture with no network; **both backends equivalent for the lab (lab-marked test)**; `soar_refresh_catalog` | **NOT MET (one clause)** | `test_catalog_fixture.py`, `test_catalog_tool.py`; `SOAR_CATALOG_SOURCE` defaults to `collections`; TTL `SOAR_CATALOG_TTL_SECONDS` (300 s); JSON round-trip (`Catalog.to_json`/`from_json`) | the `export` backend is selectable but always `catalog_unavailable` (403 to the research key), so no equivalence test exists or can pass (08 §25.1). Closing it is P2-00c |
+| P2-02 | `soar_get_function` gives input names, types, required-ness; script bodies read-only and truncated with a documented cap; no script write path (grep test) | **MET** | `test_discovery_tools.py`; 20,000-character cap; `test_no_script_writes.py` (AST, mutation-tested) | — (owner choices D9 open, non-blocking) |
+| P2-03 | field listing includes type, required-ness, **close-required** and picklist values | **NOT MET (one clause)** | `soar_list_fields`: `input_type`, select `values` (label, value, enabled, default), SOAR's raw `required` token and `required_semantics`; `test_discovery_types_fields.py` | no close-required flag is derived, because the meaning of the `close` token is neither documented on the appliance nor tested (record §3.2). And the Phase-1 `soar_describe_incident_fields` still reports `close_required` from the unverified reading `required == "close"` (`client/org.py`), so the two tools disagree. D10 (a)–(b) |
+| P2-04 | summary of a real lab workflow lists the functions it calls; raw XML off by default; oversized workflows truncate with a marker | **MET** (one workflow observed) | `test_workflow_summary.py`, `test_discovery_rules_workflows.py`; `include_raw=False` by default; `raw.truncated` | — (D11 open, non-blocking) |
+| P2-05 | works on the lab; activation type/status, trigger conditions, referenced functions; documents supported versions | **MET** (one playbook observed) | `test_discovery_playbooks.py`; `verified_on: 51.0.9.0.20848`; conditions give field and operator, never values | — (D12 open, non-blocking) |
+| P2-06 | scaffold valid against the schema and denies everything; unedited scaffold reaches SOAR for reads and denies every action; never overwrites | **MET** | `test_policy_scaffold.py`; §12.2; 08 §34 | — (D23 (a)–(c) open, non-blocking) |
+| P2-07 | comparative summary for ≥ 5 incidents within the budget; degrades when history endpoints are unavailable | **MET** | `test_response_analysis.py`; §12.3; 08 §35 | the ticket's *description* also asks which rules/playbooks fired; that is not observable on the verified API and is reported as such (D24 (a)–(c) open, non-blocking) |
+
+**Result: five tickets meet their AC, three do not** (P2-00, P2-01, P2-03), each on one
+clause that needs either access the project does not have (a write, an export-capable
+key, a disposable org) or an owner decision. None of the three is a code defect: in
+each case the code refuses to claim what the evidence does not support.
+
+### 14.3 What blocks `v0.3.0`
+
+| # | Blocker | Kind | Closes with |
+|---|---|---|---|
+| B1 | P2-00: open ❓ items | AC | research with a write or export-capable key in a disposable org (P2-00c, P1-INV-01), **or** an owner decision that accepts named items as documented unknowns and amends the AC (D26) |
+| B2 | P2-01: no backend-equivalence test | AC | P2-00c (export contract) then a lab-marked equivalence test, **or** an owner decision that defers the `export` half of the AC (D26) |
+| B3 | P2-03: no close-required flag; `soar_describe_incident_fields` contradicts `soar_list_fields` | AC + consistency | D10: settle the `close` token (a static read of the reference, or a close experiment on a disposable incident), then align both tools; or align `soar_describe_incident_fields` with `soar_list_fields` now and amend the AC (D26) |
+| B4 | the `07 §7.5` release gate: T3 golden tests (D21, D22, LAB-03), T4 against the lab (LAB-01), T5 in org 301 (LAB-02), T6 against a mock AppHost (LAB-04), `qradar-soar-audit verify` over the run, a human read of the `security/` diff | release gate | the lab work in [`lab-validation-plan.md`](lab-validation-plan.md); REL-05 kept this gate with no waiver, and it applies to every release |
+| B5 | `v0.2.0` is not released | ordering | `v0.3.0` follows the `v0.2.0` tag (NO-GO, §13.3); the version is still `0.2.0` |
+
+Not blockers: the non-blocking owner choices (D9, D11, D12, D23 (a)–(c), D24 (a)–(c),
+D25), REL-03 (recommended before any tag), and the one-appliance scope, which every
+document already states.
+
+### 14.4 Verdict
+
+| Release / gate | Verdict | Why |
+|---|---|---|
+| **`v0.3.0`** | **NO-GO** | B1–B5 |
+| **Phase 3 start** (`06` gate rule: "a phase does not start until every ticket in the preceding phase is closed") | **NOT YET** | P2-00, P2-01 and P2-03 are not closed. Phase 3 can start only once each is closed by work or by an owner decision recorded under D26 |
+
+### 14.5 Fastest honest path to closing Phase 2
+
+1. **D26** (owner): for each of B1–B3, close by work or accept with the limitation
+   recorded and the AC amended. Without it, Phase 2 stays open.
+2. **B3** is the smallest code change either way: once D10 (or D26) is settled, align
+   `soar_describe_incident_fields` with `soar_list_fields` (no derived flag, or a
+   verified one) and update its snapshot.
+3. **B4** is independent of B1–B3 and is the long pole: LAB-01 needs lab access,
+   LAB-03 needs D22.
+4. Then a short re-review against this section, a version bump to `0.3.0`, a CHANGELOG
+   section, and the REL-04 tag procedure ([`runbooks/release.md`](runbooks/release.md)).
+
+No tag, release, version change or repository setting is made by this review.
