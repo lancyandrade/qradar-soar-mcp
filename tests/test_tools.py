@@ -251,7 +251,10 @@ async def test_collection_reads_are_projected(rt: Runtime):
     assert [u["display_name"] for u in users["users"]] == ["Analyst One", "Analyst Two"]
     fields = await ok(rt, "soar_describe_incident_fields")
     by_name = {f["api_name"]: f for f in fields["fields"]}
-    assert by_name["properties.root_cause"]["close_required"] is True
+    # D10: the raw token, and no derived flag (as soar_list_fields).
+    assert by_name["properties.root_cause"]["required"] == "close"
+    assert "close_required" not in by_name["properties.root_cause"]
+    assert fields["required_semantics"]["status"] == "unresolved"
     assert by_name["severity_code"]["values"] == ["Low", "Medium", "High"]
     missing = await call(rt, "soar_list_tasks", incident_id=999)
     assert missing["error"]["code"] == "not_found"

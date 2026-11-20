@@ -685,3 +685,21 @@ document already states.
    section, and the REL-04 tag procedure ([`runbooks/release.md`](runbooks/release.md)).
 
 No tag, release, version change or repository setting is made by this review.
+
+### 14.6 Warning: the D10 consistency fix and any `v0.2.0` tag (added 2026-11-19)
+
+The D10 consistency fix (proposed on `docs/phase2-owner-decisions-plan`) changes the
+response of the Tier-0 tool `soar_describe_incident_fields`: `close_required` is removed
+and `required_semantics` is added (D10, D26 (c); [`proposals/PHASE2-CLOSEOUT-PLAN.md`](proposals/PHASE2-CLOSEOUT-PLAN.md)
+§5). The change is recorded under CHANGELOG `[Unreleased]` only. The `0.2.0` CHANGELOG
+section and [`releases/v0.2.0-alpha.md`](releases/v0.2.0-alpha.md) keep describing the
+audited baseline, in which the tool still derives `close_required`, and are deliberately
+left unchanged.
+
+**Any `v0.2.0` tag cut from a commit that contains this fix requires release-note
+reconciliation before it is tagged**: the `0.2.0` known-limitations text, its tool
+description and the contract change must be brought into agreement with the code at
+that commit, and the re-review of the release documents repeated. A tag cut from a
+commit before the fix needs none. This section changes no verdict: `v0.2.0` and `v0.3.0`
+stay **NO-GO**, Phase 3 stays **NOT YET**, and no tag, release, publication or version
+change is made.

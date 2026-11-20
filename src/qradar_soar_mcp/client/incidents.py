@@ -2,9 +2,9 @@
 
 ``apply_patch`` is the helper 00 §1.2 describes: GET → build PatchDTO →
 PATCH → raise on ``success: false``. Closing (05 §1.1) sends ``plan_status``,
-``resolution_id`` and ``resolution_summary`` together; SOAR itself rejects the
-close if a close-required custom field is empty and that rejection is raised,
-never swallowed.
+``resolution_id`` and ``resolution_summary`` together; if SOAR rejects the close
+(the baseline expects it to over an empty field it requires at close; that behaviour
+is not verified on 51.0.9.0.20848, D10), the rejection is raised, never swallowed.
 """
 
 from __future__ import annotations
@@ -200,8 +200,9 @@ class IncidentsClient:
     ) -> PatchOutcome:
         """Close with ``plan_status`` + ``resolution_id`` + ``resolution_summary`` together.
 
-        ``extra_fields`` carries any close-required custom fields the operator
-        must fill; SOAR rejects the close otherwise and that is surfaced.
+        ``extra_fields`` carries any further custom fields the operator chooses to set
+        in the same PATCH (for example ones SOAR may require at close; which fields, if
+        any, is unverified, D10). A rejection by SOAR is surfaced, never swallowed.
         """
         if not resolution.strip() or not summary.strip():
             raise SoarValidationError(

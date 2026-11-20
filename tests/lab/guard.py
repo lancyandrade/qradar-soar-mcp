@@ -253,6 +253,14 @@ class LabWriteBlocked(httpx.TransportError):
 
 # Org-less reads the client makes (client/base.py ``ping``, client/discovery.py).
 _ORGLESS_READS = frozenset({"/rest/session", "/rest/const"})
+# Configuration export and import, and playbook export and import, refused for every
+# method, GET included (D26 (b); docs/proposals/PHASE2-CLOSEOUT-PLAN.md §4.1). Creating
+# an export is a POST the guard already refuses; *retrieving* one (or its history) is a
+# GET that would otherwise pass as an ordinary org read. Export work needs its own,
+# separately authorised transport, never a widening of this one.
+_EXPORT_PATHS = re.compile(
+    r"^/rest/orgs/\d+/(configurations|playbooks/(exports|imports))(/|$)", re.IGNORECASE
+)
 # Percent-encoded dot, slash or backslash: a server that decodes them could resolve a
 # path outside the one checked here.
 _ENCODED_SEPARATOR = re.compile(r"%(2e|2f|5c)", re.IGNORECASE)
@@ -265,9 +273,10 @@ class ReadOnlyTransport(httpx.AsyncBaseTransport):
     on ``/rest/session``, ``/rest/const`` or a path under ``/rest/orgs/<org_id>/``; and
     ``POST`` to the two verified search endpoints (``incidents``/``playbooks``
     ``query_paged``) of ``org_id``. A path with a ``.``/``..`` segment, a backslash or a
-    percent-encoded dot, slash or backslash is refused. Everything else raises
-    :class:`LabWriteBlocked` **before** the inner transport sees it, and is recorded in
-    ``blocked``.
+    percent-encoded dot, slash or backslash is refused, and so is every request under
+    ``configurations/`` or ``playbooks/exports|imports``, whatever its method.
+    Everything else raises :class:`LabWriteBlocked` **before** the inner transport sees
+    it, and is recorded in ``blocked``.
     """
 
     def __init__(
@@ -291,6 +300,8 @@ class ReadOnlyTransport(httpx.AsyncBaseTransport):
         if _ENCODED_SEPARATOR.search(raw_path) or "\\" in path:
             return False
         if any(segment in (".", "..") for segment in path.split("/")):
+            return False
+        if _EXPORT_PATHS.match(path):
             return False
         if request.method in ("GET", "HEAD"):
             return path in _ORGLESS_READS or path.startswith(f"/rest/orgs/{self._org}/")

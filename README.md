@@ -106,7 +106,7 @@ failure.
 | `soar_list_comments` | 0 | — | notes, flattened with `parent_id` |
 | `soar_list_attachments` | 0 | — | attachment **metadata** only; contents are never fetched |
 | `soar_list_users` | 0 | — | users in the org |
-| `soar_describe_incident_fields` | 0 | — | field definitions incl. custom `properties.*` and close-required flags |
+| `soar_describe_incident_fields` | 0 | — | field definitions incl. custom `properties.*` and SOAR's raw `required` token (no derived flag, D10) |
 | `soar_list_incident_actions` | 0 | — | manual actions the incident carries, with their policy classification |
 | `soar_check_approval` | 0 | — | state of an approval reference (broker files; no SOAR call) |
 | `soar_refresh_catalog` | 0 | — | reload the cached catalog of SOAR configuration now; returns source, fetch time, SOAR version and counts, never the objects |
@@ -894,8 +894,9 @@ Two kinds of evidence stand behind the marks, and they are not the same thing:
 - `soar_list_fields` reports a field's `required` as SOAR's raw token and derives no
   close-required flag: `always` and `close` were observed on 51.0.9.0.20848, but what
   they enforce is not documented on the appliance and was not tested
-  (`docs/soar-api-verified.md §3.2`). `soar_describe_incident_fields` still reports
-  `close_required` from the unverified baseline reading (`required == "close"`).
+  (`docs/soar-api-verified.md §3.2`). `soar_describe_incident_fields` does the same
+  (D10 consistency fix): the raw token and `required_semantics`, no `close_required`
+  flag. The P2-03 close-required acceptance clause stays unmet.
 - `soar_get_script` returns at most the first 20,000 characters of a script; there is
   no way to read the rest. Its credential filter is a heuristic: it can replace harmless
   code that looks like a credential (`authorization = settings.value`), always reported

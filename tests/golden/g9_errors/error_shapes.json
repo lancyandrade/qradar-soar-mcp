@@ -1,0 +1,217 @@
+{
+  "SoarAuthError": {
+    "failure_class": "Authentication failed",
+    "to_dict": {
+      "code": "auth_failed",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "auth_failed",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarCatalogUnavailableError": {
+    "failure_class": "Catalog unavailable",
+    "to_dict": {
+      "code": "catalog_unavailable",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "catalog_unavailable",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarConfigError": {
+    "failure_class": "Not configured",
+    "to_dict": {
+      "code": "not_configured",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "not_configured",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarConflictError": {
+    "failure_class": "Conflict",
+    "to_dict": {
+      "code": "conflict",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "conflict",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarConnectionError": {
+    "failure_class": "Connection failure",
+    "to_dict": {
+      "code": "connection",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "connection",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarError": {
+    "failure_class": "SOAR error",
+    "to_dict": {
+      "code": "soar_error",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "soar_error",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarForbiddenError": {
+    "failure_class": "Forbidden",
+    "to_dict": {
+      "code": "forbidden",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "forbidden",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarMalformedResponseError": {
+    "failure_class": "Malformed response",
+    "to_dict": {
+      "code": "malformed_response",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "malformed_response",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarNotFoundError": {
+    "failure_class": "Not found",
+    "to_dict": {
+      "code": "not_found",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "not_found",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarPatchRejectedError": {
+    "failure_class": "Patch rejected",
+    "to_dict": {
+      "code": "patch_rejected",
+      "fields": [
+        "properties.example"
+      ],
+      "http_status": 200,
+      "message": "synthetic message"
+    }
+  },
+  "SoarRateLimitedError": {
+    "failure_class": "Rate limited by SOAR",
+    "to_dict": {
+      "code": "soar_rate_limited",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "soar_rate_limited",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarResponseTooLargeError": {
+    "failure_class": "Response too large",
+    "to_dict": {
+      "code": "response_too_large",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "response_too_large",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarServerError": {
+    "failure_class": "SOAR server error",
+    "to_dict": {
+      "code": "server_error",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "server_error",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarTLSError": {
+    "failure_class": "TLS failure",
+    "to_dict": {
+      "code": "tls",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "tls",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarTimeoutError": {
+    "failure_class": "Timeout",
+    "to_dict": {
+      "code": "timeout",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "timeout",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarUnsupportedError": {
+    "failure_class": "Unsupported",
+    "to_dict": {
+      "code": "unsupported",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "unsupported",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarUnverifiedWriteError": {
+    "failure_class": "Unverified write",
+    "to_dict": {
+      "code": "unverified_write",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "unverified_write",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  },
+  "SoarValidationError": {
+    "failure_class": "Validation failed",
+    "to_dict": {
+      "code": "validation",
+      "message": "synthetic message"
+    },
+    "to_dict_with_status": {
+      "code": "validation",
+      "http_status": 599,
+      "message": "synthetic message"
+    }
+  }
+}

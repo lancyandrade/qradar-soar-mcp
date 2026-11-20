@@ -20,6 +20,22 @@ from tests.fake_soar import API_KEY_ID, API_KEY_SECRET, BASE_URL, ORG_ID, REQUIR
 SENTINEL = API_KEY_SECRET
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    # LAB-03 §7: regenerating golden files is explicit and never done by CI (asserted in
+    # tests/test_golden.py).
+    parser.addoption(
+        "--golden-update",
+        action="store_true",
+        default=False,
+        help="write T3 golden expected files instead of comparing (review every change)",
+    )
+
+
+@pytest.fixture
+def golden_update(request: pytest.FixtureRequest) -> bool:
+    return bool(request.config.getoption("--golden-update"))
+
+
 @pytest.fixture(autouse=True)
 def _scrub_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """The suite must behave identically with or without SOAR_* variables set."""

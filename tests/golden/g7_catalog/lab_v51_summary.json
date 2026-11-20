@@ -1,0 +1,31 @@
+{
+  "counts": {
+    "datatables": 2,
+    "fields": 23,
+    "functions": 2,
+    "groups": 2,
+    "incident_types": 2,
+    "message_destinations": 2,
+    "phases": 2,
+    "playbooks": 2,
+    "rules": 2,
+    "scripts": 2,
+    "workflows": 1
+  },
+  "fetched_at": "2026-09-18T00:00:00+00:00",
+  "not_loaded": {
+    "api_key_permissions": {
+      "count": 0,
+      "reason": "a read-only API key cannot read its own permission set on 51.0.9.0.20848, and successful reads do not show what a key may write",
+      "state": "not_observable"
+    },
+    "installed_apps": {
+      "count": 0,
+      "reason": "no verified read reports installed apps or their versions",
+      "state": "not_observable"
+    }
+  },
+  "org_id": "201",
+  "soar_version": "51.0.9.0.20848",
+  "source": "collections"
+}

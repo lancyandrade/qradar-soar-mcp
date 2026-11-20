@@ -345,10 +345,9 @@ async def test_attachments_metadata_only(client: SoarClient, fake: FakeSoar):
 async def test_incident_fields_and_users(client: SoarClient, fake: FakeSoar):
     fields = await client.org.incident_fields()
     by_api = {f.api_name: f for f in fields}
-    assert (
-        by_api["properties.root_cause"].close_required
-        and by_api["properties.root_cause"].to_dict()["custom"]
-    )
+    root_cause = by_api["properties.root_cause"]
+    assert root_cause.required == "close" and root_cause.to_dict()["custom"]
+    assert "close_required" not in root_cause.to_dict()  # D10: no derived flag
     assert by_api["severity_code"].labels == ("Low", "Medium", "High")
     assert by_api["create_date"].read_only
     assert resolve_field(fields, "threat_source").api_name == "properties.threat_source"
@@ -375,7 +374,7 @@ def test_field_def_tolerates_gaps():
             "values": [{"value": 1}, {"value": 2, "label": "Two", "enabled": False}, "junk"],
         }
     )
-    assert f.text == "x" and f.input_type == "unknown" and f.values == () and not f.close_required
+    assert f.text == "x" and f.input_type == "unknown" and f.values == () and f.required is None
     assert "values" not in f.to_dict()
 
 
